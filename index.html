@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.72</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.73</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -229,7 +229,7 @@
     <div class="control-row"><span class="control-label">Wave Energy</span><input type="range" id="sbWaveEnergy" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbWaveEnergy-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Foil Stability</span><input type="range" id="sbStability" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbStability-val">1.00×</span></div>
     <div class="control-row" style="margin-top:6px;"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="sbFreeCam" onchange="toggleFreeCam(this.checked)" style="width:14px;height:14px;accent-color:#4af;"><span class="control-label" style="flex:1;">Free Camera</span></label></div>
-    <div class="control-row"><span class="control-label">Render Style</span><select id="sbRenderMode" onchange="setRenderMode(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="0">Normal</option><option value="1">Woodcut</option><option value="2">DEM</option><option value="3">Painterly</option></select></div>
+    <div class="control-row"><span class="control-label">Render Style</span><select id="sbRenderMode" onchange="setRenderMode(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="0">Normal</option><option value="1">Woodcut</option><option value="2">DEM</option><option value="3">Painterly</option><option value="4">Tron</option><option value="5">Sumi-e</option><option value="6">Pixel Art</option><option value="7">X-Ray</option></select></div>
   </div>
   <div class="section">
     <div class="section-title">🏝 Background</div>
@@ -1912,7 +1912,263 @@ const oceanMat = new THREE.ShaderMaterial({
         alpha = smoothstep(0.08, 0.35, texture2D(uRiverMask, muv).r);
       }
 
-      if (uRenderMode > 2.5) {
+      if (uRenderMode > 6.5) {
+        // ═══ X-RAY / WIREFRAME PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // ── Grid lines from world-space position ──
+        float gridSize = 1.5 * max(1.0, cd * 0.008);
+        vec2 gUV = vWorldPos.xz / gridSize;
+        vec2 gFrac = abs(fract(gUV - 0.5) - 0.5);
+        float gLine = min(gFrac.x, gFrac.y);
+        float gridAA = 0.02 * max(1.0, cd * 0.005);
+        float grid = 1.0 - smoothstep(0.0, gridAA, gLine);
+
+        // ── Height contour wireframe rings ──
+        float contourSpace = 0.5 * max(1.0, cd * 0.01);
+        float cFrac = fract(vHeight / contourSpace);
+        float contour = 1.0 - smoothstep(0.0, gridAA, cFrac) * smoothstep(0.0, gridAA, 1.0 - cFrac);
+
+        // Combine wireframes
+        float wire = max(grid * 0.6, contour * 0.8);
+
+        // ── Glow color based on height + normal ──
+        float hNorm = clamp((vHeight + 3.0) / 7.0, 0.0, 1.0);
+        vec3 wireColor = mix(vec3(0.1, 0.5, 1.0), vec3(0.3, 1.0, 0.5), hNorm);
+        // Steeper faces glow brighter
+        float steepGlow = (1.0 - N.y) * 2.0;
+        wireColor += vec3(0.3, 0.1, 0.5) * clamp(steepGlow, 0.0, 1.0);
+
+        // ── Transparent body with Fresnel edge glow ──
+        float fr = pow(1.0 - max(dot(N, V), 0.0), 4.0);
+        vec3 bodyColor = vec3(0.02, 0.04, 0.08); // near-black body
+        vec3 edgeGlow = wireColor * 0.3;
+
+        // Composite: dark body + wireframe + edge glow
+        vec3 col = mix(bodyColor, bodyColor + edgeGlow, fr * 0.5);
+        col += wireColor * wire * (0.8 + 0.2 * sin(uTime * 2.0 + vHeight * 3.0));
+
+        // Foam as bright white wireframe flash
+        col += vec3(1.0) * smoothstep(0.3, 0.7, vFoam) * 0.4;
+
+        // ── Specular flash ──
+        vec3 H = normalize(L + V);
+        float spec = pow(max(dot(N, H), 0.0), 128.0);
+        col += wireColor * spec * 2.0;
+
+        // ── Dark fog ──
+        float fog = 1.0 - exp(-cd * 0.0015);
+        col = mix(col, vec3(0.02, 0.03, 0.06), fog);
+
+        // Semi-transparent: more opaque where wireframe, translucent between
+        float bodyAlpha = mix(0.25, 0.9, wire) * alpha;
+        gl_FragColor = vec4(col, bodyAlpha);
+
+      } else if (uRenderMode > 5.5) {
+        // ═══ PIXEL ART / RETRO PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // ── Pixelate world coordinates ──
+        // Snap world position to a grid to create chunky pixels
+        float pixelSize = 0.8 * max(1.0, cd * 0.006);
+        vec2 pixUV = floor(vWorldPos.xz / pixelSize) * pixelSize;
+
+        // ── Limited color palette (16 colors) ──
+        // Compute base color from height + slope
+        float hNorm = clamp((vHeight + 3.0) / 7.0, 0.0, 1.0);
+        float NdotL = max(dot(N, L), 0.0);
+        float shade = 0.4 + 0.6 * NdotL;
+
+        // Retro water palette: 4 blues + highlights
+        vec3 col;
+        float hQ = floor(hNorm * 5.0) / 5.0; // quantize height to 5 bands
+        float sQ = floor(shade * 3.0) / 3.0;  // quantize shade to 3 levels
+        if (hQ < 0.2) col = vec3(0.05, 0.10, 0.30);       // deep dark blue
+        else if (hQ < 0.4) col = vec3(0.10, 0.22, 0.50);   // dark blue
+        else if (hQ < 0.6) col = vec3(0.15, 0.35, 0.65);   // medium blue
+        else if (hQ < 0.8) col = vec3(0.25, 0.55, 0.75);   // light blue
+        else col = vec3(0.45, 0.75, 0.85);                   // pale blue crest
+
+        // Apply quantized shading
+        col *= sQ * 0.5 + 0.5;
+
+        // ── Dithering pattern ──
+        // 2x2 Bayer dither to simulate more colors with fewer
+        vec2 ditherUV = floor(mod(vWorldPos.xz / (pixelSize * 0.5), 2.0));
+        float dither = (ditherUV.x + ditherUV.y * 2.0) / 4.0;
+        // Use dither to choose between adjacent color bands
+        float hAdj = hNorm + (dither - 0.5) * 0.12;
+        if (hAdj > 0.85) col = mix(col, vec3(0.65, 0.88, 0.95), 0.3);
+
+        // ── Specular highlight (single bright pixel clusters) ──
+        vec3 H = normalize(L + V);
+        float spec = pow(max(dot(N, H), 0.0), 32.0);
+        float specQ = step(0.5, spec); // binary: on or off
+        col += vec3(0.9, 0.95, 1.0) * specQ * 0.6;
+
+        // ── Foam as white pixel blocks ──
+        float foamQ = step(0.4, vFoam);
+        col = mix(col, vec3(0.85, 0.90, 0.95), foamQ * 0.7);
+
+        // ── Pixel grid outline (subtle) ──
+        vec2 pFrac = abs(fract(vWorldPos.xz / pixelSize) - 0.5);
+        float pEdge = step(0.45, max(pFrac.x, pFrac.y));
+        col *= 1.0 - pEdge * 0.12;
+
+        // ── Retro fog (banded) ──
+        float fog = 1.0 - exp(-cd * 0.0012);
+        float fogQ = floor(fog * 6.0) / 6.0; // quantize fog too
+        vec3 fogCol = vec3(0.30, 0.35, 0.55);
+        col = mix(col, fogCol, fogQ);
+
+        gl_FragColor = vec4(col, alpha);
+
+      } else if (uRenderMode > 4.5) {
+        // ═══ INK WASH / SUMI-E PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // ── Paper base ──
+        vec3 paperColor = vec3(0.95, 0.93, 0.88); // warm rice paper
+        vec3 inkColor = vec3(0.05, 0.05, 0.08);    // sumi ink
+
+        // ── Ink concentration based on depth (troughs = dark pools) ──
+        float hNorm = smoothstep(-2.5, 3.0, vHeight);
+        float inkPool = 1.0 - hNorm; // low = more ink
+        inkPool = pow(inkPool, 1.5); // concentrate in troughs
+
+        // ── Wet ink bleeding effect ──
+        // Organic noise creates the look of ink seeping into wet paper
+        float bleed1 = fbm(vWorldPos.xz * 0.3 + uTime * 0.04);
+        float bleed2 = noise(vWorldPos.xz * 0.8 + uTime * 0.06 + bleed1 * 1.5);
+        float bleedAmount = smoothstep(-0.2, 0.4, bleed1) * 0.3;
+        inkPool += bleedAmount * (1.0 - hNorm * 0.5);
+        inkPool = clamp(inkPool, 0.0, 1.0);
+
+        // ── Brush stroke texture ──
+        // Directional strokes following wave flow
+        vec2 grad = vec2(N.x, N.z);
+        float gradLen = length(grad);
+        vec2 flowDir = gradLen > 0.001 ? grad / gradLen : vec2(1.0, 0.0);
+        float strokeProj = dot(vWorldPos.xz, flowDir);
+        float strokeTex = noise(vec2(strokeProj * 3.0, dot(vWorldPos.xz, vec2(-flowDir.y, flowDir.x)) * 0.5) + uTime * 0.03);
+        // Streak pattern: thin lines of ink along flow
+        float streak = smoothstep(0.1, 0.4, strokeTex) * smoothstep(0.9, 0.6, strokeTex);
+        float steepness = clamp((1.0 - N.y) * 3.0, 0.0, 1.0);
+        float strokeInk = streak * steepness * 0.5;
+
+        // ── Edge darkening (outlines where slope changes sharply) ──
+        float edgeDark = clamp((1.0 - N.y) * 4.0 - 1.0, 0.0, 1.0);
+        edgeDark *= 0.4;
+
+        // Combine all ink sources
+        float totalInk = clamp(inkPool * 0.6 + strokeInk + edgeDark, 0.0, 0.95);
+
+        // ── Subtle warm/cool tone variation ──
+        // Ink is not pure black — slight blue-grey tone shift
+        vec3 inkTone = mix(inkColor, vec3(0.12, 0.10, 0.18), bleed2 * 0.5 + 0.2);
+
+        vec3 col = mix(paperColor, inkTone, totalInk);
+
+        // ── Foam as negative space (paper showing through) ──
+        float foamReveal = smoothstep(0.2, 0.6, vFoam);
+        col = mix(col, paperColor, foamReveal * 0.7);
+
+        // ── Subtle sun warmth on paper ──
+        float NdotL = max(dot(N, L), 0.0);
+        col += vec3(0.03, 0.02, 0.0) * NdotL;
+
+        // ── Paper-toned fog ──
+        float fog = 1.0 - exp(-cd * 0.001);
+        vec3 fogCol = vec3(0.92, 0.90, 0.85);
+        col = mix(col, fogCol, fog);
+        col = mix(col, fogCol, smoothstep(250.0, 600.0, cd) * 0.5);
+
+        gl_FragColor = vec4(col, alpha);
+
+      } else if (uRenderMode > 3.5) {
+        // ═══ TRON / NEON GRID PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // ── Neon grid lines ──
+        float gridSize = 2.0 * max(1.0, cd * 0.006);
+        vec2 gUV = vWorldPos.xz / gridSize;
+        vec2 gFrac = abs(fract(gUV - 0.5) - 0.5);
+        float gLine = min(gFrac.x, gFrac.y);
+        float gridAA = 0.015 * max(1.0, cd * 0.004);
+        float grid = 1.0 - smoothstep(0.0, gridAA, gLine);
+
+        // Major grid lines every 5 cells (thicker, brighter)
+        float majorSize = gridSize * 5.0;
+        vec2 mUV = vWorldPos.xz / majorSize;
+        vec2 mFrac = abs(fract(mUV - 0.5) - 0.5);
+        float mLine = min(mFrac.x, mFrac.y);
+        float majorGrid = 1.0 - smoothstep(0.0, gridAA * 1.5, mLine);
+
+        // ── Height contour rings (neon) ──
+        float contourSpace = 1.0 * max(1.0, cd * 0.008);
+        float cFrac = fract(vHeight / contourSpace);
+        float contour = 1.0 - smoothstep(0.0, gridAA, cFrac) * smoothstep(0.0, gridAA, 1.0 - cFrac);
+
+        // ── Neon color cycling ──
+        // Grid color pulses between cyan and magenta based on height + time
+        float pulse = sin(vHeight * 2.0 + uTime * 1.5) * 0.5 + 0.5;
+        vec3 neonCyan = vec3(0.0, 0.9, 1.0);
+        vec3 neonMagenta = vec3(1.0, 0.0, 0.8);
+        vec3 neonBlue = vec3(0.2, 0.3, 1.0);
+        vec3 gridColor = mix(neonCyan, neonMagenta, pulse);
+        vec3 majorColor = mix(neonBlue, vec3(1.0, 0.4, 0.0), pulse); // blue↔orange for major
+        vec3 contourColor = mix(neonMagenta, neonCyan, 1.0 - pulse);
+
+        // ── Dark arena floor ──
+        vec3 floorColor = vec3(0.01, 0.015, 0.04);
+        // Subtle height tint on floor
+        float hNorm = clamp((vHeight + 3.0) / 7.0, 0.0, 1.0);
+        floorColor += vec3(0.0, 0.02, 0.04) * hNorm;
+
+        // ── Composite glow ──
+        vec3 col = floorColor;
+        // Grid glow (with bloom-like falloff)
+        col += gridColor * grid * 0.7;
+        col += majorColor * majorGrid * 1.2;
+        col += contourColor * contour * 0.9;
+
+        // ── Energy pulse along grid ──
+        // Travelling wave of brightness along the grid
+        float wavePulse = sin(vWorldPos.x * 0.3 + vWorldPos.z * 0.2 + uTime * 3.0) * 0.5 + 0.5;
+        col += gridColor * grid * wavePulse * 0.4;
+
+        // ── Fresnel edge glow ──
+        float fr = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+        col += mix(neonCyan, neonMagenta, fr) * fr * 0.3;
+
+        // ── Foam as white-cyan flash ──
+        col += vec3(0.7, 0.95, 1.0) * smoothstep(0.3, 0.6, vFoam) * 0.5;
+
+        // ── Specular — bright concentrated flash ──
+        vec3 H = normalize(L + V);
+        float spec = pow(max(dot(N, H), 0.0), 256.0);
+        col += vec3(1.0) * spec * 3.0;
+
+        // ── Dark fog with distant glow ──
+        float fog = 1.0 - exp(-cd * 0.0015);
+        vec3 fogCol = vec3(0.02, 0.03, 0.08);
+        col = mix(col, fogCol, fog);
+
+        gl_FragColor = vec4(col, alpha);
+
+      } else if (uRenderMode > 2.5) {
         // ═══ PAINTERLY / PSYCHEDELIC PATH ═══
         vec3 N = normalize(vNormal);
         vec3 V = normalize(uCamPos - vWorldPos);
@@ -2941,20 +3197,36 @@ function animate(){
       fu.uCamPos.value.copy(camera.position);
       // Match distant water color to ocean wave tops
       const rm = oceanMat.uniforms.uRenderMode.value;
-      if (rm > 2.5) {
-        // Painterly mode: dreamy purple-teal
+      if (rm > 6.5) {
+        // X-Ray: near-black
+        fu.uWaterColor.value.set(0.02, 0.03, 0.06);
+        fu.uFogColor.value.set(0.02, 0.03, 0.06);
+      } else if (rm > 5.5) {
+        // Pixel Art: retro dark blue
+        fu.uWaterColor.value.set(0.05, 0.10, 0.30);
+        fu.uFogColor.value.set(0.30, 0.35, 0.55);
+      } else if (rm > 4.5) {
+        // Sumi-e: rice paper
+        fu.uWaterColor.value.set(0.92, 0.90, 0.85);
+        fu.uFogColor.value.set(0.92, 0.90, 0.85);
+      } else if (rm > 3.5) {
+        // Tron: dark arena
+        fu.uWaterColor.value.set(0.01, 0.015, 0.04);
+        fu.uFogColor.value.set(0.02, 0.03, 0.08);
+      } else if (rm > 2.5) {
+        // Painterly: dreamy purple-teal
         fu.uWaterColor.value.set(0.25, 0.15, 0.45);
         fu.uFogColor.value.set(0.50, 0.35, 0.60);
       } else if (rm > 1.5) {
-        // DEM mode: deep blue for lowest elevation
+        // DEM: deep blue
         fu.uWaterColor.value.set(0.0, 0.05, 0.35);
         fu.uFogColor.value.set(0.45, 0.55, 0.70);
       } else if (rm > 0.5) {
-        // Woodcut mode: sepia paper tone
+        // Woodcut: sepia paper
         fu.uWaterColor.value.set(0.85, 0.78, 0.68);
         fu.uFogColor.value.set(0.85, 0.78, 0.68);
       } else {
-        // Normal mode: match shallow (wave-top) color from ocean shader
+        // Normal: match wave-top color
         fu.uWaterColor.value.copy(u.uShallowColor.value);
         fu.uFogColor.value.set(0.55, 0.7, 0.85);
       }

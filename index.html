@@ -135,7 +135,9 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.57</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.58</div>
+<!-- FPS counter: updated every 500ms in the animation loop -->
+<div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
 <!-- Gear button hidden — use Tab key to toggle controls panel -->
 <button id="controls-toggle" style="display:none" onclick="toggleControls()">⚙</button>
@@ -2223,8 +2225,22 @@ const clock=new THREE.Clock();
 let pumpPhase=0,sprayT=0;
 let prevSunAngle=-1,prevSunDir=-1;
 
+// FPS counter — tracks frames and updates the DOM label every 500ms
+let fpsFrames=0, fpsLastTime=performance.now();
+const fpsLabel=document.getElementById('fps-label');
+
 function animate(){
   requestAnimationFrame(animate);
+
+  // FPS measurement
+  fpsFrames++;
+  const fpsNow=performance.now();
+  if(fpsNow-fpsLastTime>=500){
+    const fps=Math.round(fpsFrames/((fpsNow-fpsLastTime)/1000));
+    fpsLabel.textContent=fps+' fps';
+    fpsFrames=0; fpsLastTime=fpsNow;
+  }
+
   const dt=Math.min(clock.getDelta(),.05);
   const t=clock.getElapsedTime();
   const u=oceanMat.uniforms;

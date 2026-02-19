@@ -115,14 +115,44 @@
   }
 
   #hud-pocket {
-    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    position: fixed; top: 28%; left: 50%; transform: translate(-50%,-50%);
     z-index: 60; pointer-events: none;
-    font-size: 24px; font-weight: 600; color: #5effa0;
-    text-shadow: 0 0 20px rgba(80,255,160,0.5), 0 2px 8px rgba(0,0,0,0.4);
+    font-size: 32px; font-weight: 600; color: #5effa0;
+    text-shadow: 0 0 24px rgba(80,255,160,0.6), 0 2px 10px rgba(0,0,0,0.5);
     opacity: 0; transition: opacity 0.25s;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
   }
   #hud-pocket.show { opacity: 1; }
+
+  /* Shallow water warning overlay */
+  #shallow-warning {
+    position: fixed; top: 38%; left: 50%; transform: translate(-50%,-50%);
+    z-index: 70; pointer-events: none;
+    font-size: 36px; font-weight: 700; color: #ff4040;
+    text-shadow: 0 0 30px rgba(255,50,50,0.7), 0 2px 10px rgba(0,0,0,0.6);
+    opacity: 0; transition: opacity 0.3s;
+    letter-spacing: 2px;
+  }
+  #shallow-warning.show { opacity: 1; }
+
+  /* Restart button after ground collision */
+  #restart-btn {
+    position: fixed; top: 52%; left: 50%; transform: translate(-50%,-50%);
+    z-index: 70; padding: 12px 32px;
+    font-family: 'DM Sans', sans-serif; font-size: 18px; font-weight: 600;
+    color: #fff; background: rgba(255,60,60,0.8); border: 2px solid rgba(255,100,100,0.6);
+    border-radius: 8px; cursor: pointer; display: none;
+    transition: background 0.2s;
+  }
+  #restart-btn:hover { background: rgba(255,80,80,0.95); }
+
+  /* Wave chart strip at bottom */
+  #wave-chart {
+    position: fixed; bottom: 0; left: 0; right: 0; height: 80px;
+    z-index: 50; pointer-events: none;
+    background: rgba(0,0,0,0.55);
+    border-top: 1px solid rgba(255,255,255,0.1);
+  }
 
   @media (max-width: 480px) {
     #controls-panel { width: calc(100vw - 32px); max-height: 55vh; }
@@ -135,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.59</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.60</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -242,6 +272,11 @@
 </div>
 
 <div id="hud-pocket">🤙 In the Pocket!</div>
+<div id="shallow-warning">⚠️ Shallow Water!</div>
+<button id="restart-btn" onclick="restartLevel()">↻ Restart</button>
+
+<!-- Wave height & slope chart — scrolling strip at bottom of screen -->
+<canvas id="wave-chart" width="800" height="80"></canvas>
 
 <!-- Ride controls hidden — keyboard only for now (A/D turn, W pump, S power, Space boost) -->
 <div id="ride-controls" style="display:none;">
@@ -2220,6 +2255,94 @@ renderer.domElement.addEventListener('touchmove',e=>{
 renderer.domElement.addEventListener('touchend',()=>{cam.drag=false;cam.panning=false;});
 
 // ═══════════════════════════
+// SHALLOW WATER COLLISION & RESTART
+// ═══════════════════════════
+let shallowTimer = 0;       // seconds since collision (0 = no collision)
+let shallowStalled = false;  // true while in shallow water stall
+const shallowWarningEl = document.getElementById('shallow-warning');
+const restartBtnEl = document.getElementById('restart-btn');
+
+function restartLevel() {
+  shallowTimer = 0;
+  shallowStalled = false;
+  shallowWarningEl.classList.remove('show');
+  restartBtnEl.style.display = 'none';
+  const startPos = findRiverStartPosition();
+  foil.x = startPos.x; foil.z = startPos.z; foil.heading = startPos.heading;
+  foil.speed = 3; foil.rideH = 0; foil.pitch = 0; foil.roll = 0;
+  foil.energy = 1;
+}
+
+// ═══════════════════════════
+// WAVE CHART — scrolling height & slope strip
+// ═══════════════════════════
+const waveChartCanvas = document.getElementById('wave-chart');
+const waveChartCtx = waveChartCanvas.getContext('2d');
+const CHART_W = 800, CHART_H = 80;
+const waveChartData = [];   // ring buffer of { height, slope } samples
+const CHART_MAX_SAMPLES = CHART_W; // one pixel per sample
+
+function updateWaveChart(waveH, slopeVal) {
+  waveChartData.push({ h: waveH, s: slopeVal });
+  if (waveChartData.length > CHART_MAX_SAMPLES) waveChartData.shift();
+
+  // Resize canvas to screen width if needed
+  const w = window.innerWidth;
+  if (waveChartCanvas.width !== w) { waveChartCanvas.width = w; }
+
+  const ctx = waveChartCtx;
+  const cw = waveChartCanvas.width, ch = CHART_H;
+  ctx.clearRect(0, 0, cw, ch);
+
+  // Auto-scale: find range of recent data
+  let hMin = Infinity, hMax = -Infinity, sMin = Infinity, sMax = -Infinity;
+  for (const d of waveChartData) {
+    if (d.h < hMin) hMin = d.h; if (d.h > hMax) hMax = d.h;
+    if (d.s < sMin) sMin = d.s; if (d.s > sMax) sMax = d.s;
+  }
+  const hRange = Math.max(hMax - hMin, 0.5);
+  const sRange = Math.max(sMax - sMin, 0.1);
+
+  const n = waveChartData.length;
+  const xStep = cw / CHART_MAX_SAMPLES;
+
+  // Draw zero line for slope
+  const sZeroY = ch/2 + ((0 - (sMin+sMax)/2) / sRange) * (ch * 0.35);
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, sZeroY); ctx.lineTo(cw, sZeroY); ctx.stroke();
+
+  // Draw wave height (cyan)
+  ctx.strokeStyle = '#00e5ff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const x = (CHART_MAX_SAMPLES - n + i) * xStep;
+    const y = ch - 8 - ((waveChartData[i].h - hMin) / hRange) * (ch - 16);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Draw slope (yellow-orange)
+  ctx.strokeStyle = '#ffaa00';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const x = (CHART_MAX_SAMPLES - n + i) * xStep;
+    const y = ch/2 - ((waveChartData[i].s - (sMin+sMax)/2) / sRange) * (ch * 0.35);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Labels
+  ctx.font = '10px DM Sans, sans-serif';
+  ctx.fillStyle = '#00e5ff';
+  ctx.fillText('Height', 6, 12);
+  ctx.fillStyle = '#ffaa00';
+  ctx.fillText('Slope', 6, 24);
+}
+
+// ═══════════════════════════
 // MAIN LOOP
 // ═══════════════════════════
 const clock=new THREE.Clock();
@@ -2432,15 +2555,26 @@ function animate(){
 
   foil.x+=mx*foil.speed*dt;foil.z+=mz*foil.speed*dt;
 
-  // Land collision (Gorge HD) — stall if foil hits shore
+  // Land / shallow water collision — show warning and stall
   if (realTerrainMesh && realTerrainHeightData) {
     const terrH = getRealTerrainHeight(foil.x, foil.z);
     if (terrH !== null && terrH > RT_WATER_Y() + 3) {
-      // On land — push back and kill speed
+      // Shallow water — push back and kill speed
       foil.x -= mx * foil.speed * dt;
       foil.z -= mz * foil.speed * dt;
-      foil.speed *= 0.1; // stall
+      foil.speed *= 0.1;
+      if (!shallowStalled) {
+        shallowStalled = true;
+        shallowTimer = 0;
+        shallowWarningEl.classList.add('show');
+      }
     }
+  }
+  // Shallow water timer: show warning for 5s, restart button after 10s
+  if (shallowStalled) {
+    shallowTimer += dt;
+    if (shallowTimer >= 5) shallowWarningEl.classList.remove('show');
+    if (shallowTimer >= 10) restartBtnEl.style.display = 'block';
   }
 
   // Move ocean mesh to follow the foil so you never ride off the edge.
@@ -2593,6 +2727,9 @@ function animate(){
 
   // Audio feedback
   updateAudio(slopeForce, normSwell, foil.speed);
+
+  // Wave chart: record height and slope at foil position
+  updateWaveChart(wH, slopeDot);
 
   foil.prevWH=wH;
 

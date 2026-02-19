@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.60</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.61</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -1021,6 +1021,7 @@ let realTerrainReady = false;
 let realTerrainHeightData = null;
 let realTerrainSatTex = null;
 let realTerrainHmImg = null;
+let waterFillPlane = null;  // large flat plane to fill water areas beyond the ocean mesh
 let realTerrainRiverMask = null; // THREE.CanvasTexture — white=water, black=land
 let _terrainReadyCallback = null; // callback for async terrain loading
 
@@ -1632,10 +1633,26 @@ function buildRealTerrain(onReady) {
   // Store height data for potential physics interaction
   realTerrainHeightData = { pixels, width: canvas.width, height: canvas.height };
 
-  console.log('Real terrain built:', (geoSegX+1)*(geoSegZ+1), 'vertices', 'mesh in scene:', scene.children.includes(realTerrainMesh));
+  console.log('Real terrain built:', (geoSegX+1)*(geoSegZ+1), 'vertices');
+
+  // Create a large flat water fill plane to cover areas beyond the ocean mesh.
+  // Rendered below the animated ocean so distant water areas aren't empty.
+  if (waterFillPlane) { scene.remove(waterFillPlane); waterFillPlane.geometry.dispose(); waterFillPlane.material.dispose(); }
+  const fillSize = Math.max(RT_WORLD_W(), RT_WORLD_D()) * 3; // oversized to cover all visible water
+  const fillGeo = new THREE.PlaneGeometry(fillSize, fillSize);
+  fillGeo.rotateX(-Math.PI / 2);
+  const fillMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(0.01, 0.04, 0.10),  // matches deep ocean color
+    transparent: true, opacity: 0.95,
+    depthWrite: false
+  });
+  waterFillPlane = new THREE.Mesh(fillGeo, fillMat);
+  waterFillPlane.position.y = RT_WATER_Y() - 0.15; // just below water surface so ocean renders on top
+  waterFillPlane.renderOrder = -1; // render before ocean mesh
+  scene.add(waterFillPlane);
 
   // Notify caller that terrain is ready (handles async asset loading)
-  if (_terrainReadyCallback) { console.log('Calling terrainReady callback'); const cb = _terrainReadyCallback; _terrainReadyCallback = null; cb(); }
+  if (_terrainReadyCallback) { const cb = _terrainReadyCallback; _terrainReadyCallback = null; cb(); }
 }
 
 // Find a good starting position in the water
@@ -1699,6 +1716,12 @@ function removeRealTerrain() {
     scene.remove(realTerrainMesh);
     if (realTerrainMesh.geometry) realTerrainMesh.geometry.dispose();
     realTerrainMesh = null;
+  }
+  if (waterFillPlane) {
+    scene.remove(waterFillPlane);
+    if (waterFillPlane.geometry) waterFillPlane.geometry.dispose();
+    if (waterFillPlane.material) waterFillPlane.material.dispose();
+    waterFillPlane = null;
   }
 }
 

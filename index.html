@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.67</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.68</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -1658,6 +1658,7 @@ function buildRealTerrain(onReady) {
         -RT_WORLD_W()/2, -RT_WORLD_D()/2, RT_WORLD_W()/2, RT_WORLD_D()/2
       )},
       uFogColor: { value: new THREE.Color(0.55, 0.7, 0.85) },
+      uWaterColor: { value: new THREE.Color(0.30, 0.48, 0.58) },
       uCamPos: { value: new THREE.Vector3() }
     },
     vertexShader: `
@@ -1672,7 +1673,7 @@ function buildRealTerrain(onReady) {
       uniform sampler2D uRiverMask;
       uniform float uUseRiverMask;
       uniform vec4 uTerrainBounds; // minX, minZ, maxX, maxZ
-      uniform vec3 uFogColor, uCamPos;
+      uniform vec3 uFogColor, uWaterColor, uCamPos;
       varying vec3 vWorldPos;
       void main() {
         // Discard if inside the ocean mesh bounds (ocean handles that area)
@@ -1691,11 +1692,10 @@ function buildRealTerrain(onReady) {
           }
         }
 
-        // Light wave-top blue color with distance fog
-        vec3 baseCol = vec3(0.30, 0.48, 0.58);
+        // Water color matches ocean wave tops, with distance fog
         float dist = length(vWorldPos - uCamPos);
         float fogF = 1.0 - exp(-dist * 0.00015);
-        vec3 col = mix(baseCol, uFogColor, fogF);
+        vec3 col = mix(uWaterColor, uFogColor, fogF);
 
         gl_FragColor = vec4(col, 0.92);
       }`,
@@ -2455,7 +2455,7 @@ const waveChartData = [];   // ring buffer of { height, slope, energy } samples
 const CHART_MAX_SAMPLES = CHART_W; // one pixel per sample
 
 function updateWaveChart(waveH, slopeVal, energyVal) {
-  waveChartData.push({ h: waveH, s: slopeVal, e: energyVal });
+  waveChartData.push({ h: waveH, s: slopeVal, e: energyVal * 2 });
   if (waveChartData.length > CHART_MAX_SAMPLES) waveChartData.shift();
 
   // Resize canvas to screen width if needed
@@ -2487,16 +2487,16 @@ function updateWaveChart(waveH, slopeVal, energyVal) {
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, eZeroY); ctx.lineTo(cw, eZeroY); ctx.stroke();
 
-  // Draw wave height (cyan)
-  ctx.strokeStyle = '#00e5ff';
+  // Draw wave height — cyan when energy >= 0, red when energy < 0
   ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (let i = 0; i < n; i++) {
-    const x = (CHART_MAX_SAMPLES - n + i) * xStep;
-    const y = ch - 8 - ((waveChartData[i].h - hMin) / hRange) * (ch - 16);
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  for (let i = 1; i < n; i++) {
+    const x0 = (CHART_MAX_SAMPLES - n + i - 1) * xStep;
+    const x1 = (CHART_MAX_SAMPLES - n + i) * xStep;
+    const y0 = ch - 8 - ((waveChartData[i-1].h - hMin) / hRange) * (ch - 16);
+    const y1 = ch - 8 - ((waveChartData[i].h - hMin) / hRange) * (ch - 16);
+    ctx.strokeStyle = waveChartData[i].e >= 0 ? '#00e5ff' : '#ff3333';
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
   }
-  ctx.stroke();
 
   // Draw slope (yellow-orange)
   ctx.strokeStyle = '#ffaa00';
@@ -2792,6 +2792,16 @@ function animate(){
       fu.uOceanMin.value.set(oceanMesh.position.x - half, oceanMesh.position.z - half);
       fu.uOceanMax.value.set(oceanMesh.position.x + half, oceanMesh.position.z + half);
       fu.uCamPos.value.copy(camera.position);
+      // Match distant water color to ocean wave tops
+      if (oceanMat.uniforms.uWoodcut.value > 0.5) {
+        // Woodcut mode: sepia paper tone
+        fu.uWaterColor.value.set(0.85, 0.78, 0.68);
+        fu.uFogColor.value.set(0.85, 0.78, 0.68);
+      } else {
+        // Realistic mode: match shallow (wave-top) color from ocean shader
+        fu.uWaterColor.value.copy(u.uShallowColor.value);
+        fu.uFogColor.value.set(0.55, 0.7, 0.85);
+      }
     }
   }
 

@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.63</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.64</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -1685,7 +1685,7 @@ function buildRealTerrain(onReady) {
         }
 
         // Light wave-top blue color with distance fog
-        vec3 baseCol = vec3(0.18, 0.32, 0.42);
+        vec3 baseCol = vec3(0.30, 0.48, 0.58);
         float dist = length(vWorldPos - uCamPos);
         float fogF = 1.0 - exp(-dist * 0.00015);
         vec3 col = mix(baseCol, uFogColor, fogF);

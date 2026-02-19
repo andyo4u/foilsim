@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.70</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.71</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -229,7 +229,7 @@
     <div class="control-row"><span class="control-label">Wave Energy</span><input type="range" id="sbWaveEnergy" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbWaveEnergy-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Foil Stability</span><input type="range" id="sbStability" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbStability-val">1.00×</span></div>
     <div class="control-row" style="margin-top:6px;"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="sbFreeCam" onchange="toggleFreeCam(this.checked)" style="width:14px;height:14px;accent-color:#4af;"><span class="control-label" style="flex:1;">Free Camera</span></label></div>
-    <div class="control-row"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="sbWoodcut" onchange="toggleWoodcut(this.checked)" style="width:14px;height:14px;accent-color:#4af;"><span class="control-label" style="flex:1;">Woodcut Style</span></label></div>
+    <div class="control-row"><span class="control-label">Render Style</span><select id="sbRenderMode" onchange="setRenderMode(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="0">Normal</option><option value="1">Woodcut</option><option value="2">DEM</option></select></div>
   </div>
   <div class="section">
     <div class="section-title">🏝 Background</div>
@@ -1842,7 +1842,7 @@ const oceanMat = new THREE.ShaderMaterial({
     uFogColor:{value:new THREE.Color(.55,.7,.85)},uFogSunColor:{value:new THREE.Color(.8,.75,.6)},
     uRiverMask:{value:null},uUseRiverMask:{value:0},
     uRiverBounds:{value:new THREE.Vector4(-RT_WORLD_W()/2, -RT_WORLD_D()/2, RT_WORLD_W()/2, RT_WORLD_D()/2)},
-    uWoodcut:{value:0},
+    uRenderMode:{value:0},
   },
   vertexShader: `
     precision highp float;
@@ -1883,7 +1883,7 @@ const oceanMat = new THREE.ShaderMaterial({
     }`,
   fragmentShader: `
     precision highp float;
-    uniform float uTime;uniform float uWoodcut;
+    uniform float uTime;uniform float uRenderMode;
     uniform vec3 uSunDir,uCamPos,uDeepColor,uShallowColor,uFoamColor,uFogColor,uFogSunColor;
     uniform sampler2D uRiverMask;uniform float uUseRiverMask;uniform vec4 uRiverBounds;
     varying vec3 vWorldPos,vNormal;varying float vFoam,vHeight;
@@ -1912,7 +1912,55 @@ const oceanMat = new THREE.ShaderMaterial({
         alpha = smoothstep(0.08, 0.35, texture2D(uRiverMask, muv).r);
       }
 
-      if (uWoodcut > 0.5) {
+      if (uRenderMode > 1.5) {
+        // ═══ DEM (Digital Elevation Model) PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // Normalize height to 0..1 range for color ramp
+        // Typical wave range: -3m to +4m
+        float hNorm = clamp((vHeight + 3.0) / 7.0, 0.0, 1.0);
+
+        // Classic DEM hypsometric color ramp (deep blue → cyan → green → yellow → red → white)
+        vec3 col;
+        if (hNorm < 0.15) {
+          col = mix(vec3(0.0, 0.05, 0.35), vec3(0.0, 0.25, 0.65), hNorm / 0.15);
+        } else if (hNorm < 0.30) {
+          col = mix(vec3(0.0, 0.25, 0.65), vec3(0.0, 0.65, 0.65), (hNorm - 0.15) / 0.15);
+        } else if (hNorm < 0.45) {
+          col = mix(vec3(0.0, 0.65, 0.65), vec3(0.15, 0.72, 0.20), (hNorm - 0.30) / 0.15);
+        } else if (hNorm < 0.60) {
+          col = mix(vec3(0.15, 0.72, 0.20), vec3(0.85, 0.85, 0.15), (hNorm - 0.45) / 0.15);
+        } else if (hNorm < 0.80) {
+          col = mix(vec3(0.85, 0.85, 0.15), vec3(0.90, 0.30, 0.10), (hNorm - 0.60) / 0.20);
+        } else {
+          col = mix(vec3(0.90, 0.30, 0.10), vec3(1.0, 0.95, 0.90), (hNorm - 0.80) / 0.20);
+        }
+
+        // Subtle hillshade from surface normal + sun direction
+        float NdotL = max(dot(N, L), 0.0);
+        float shade = 0.55 + 0.45 * NdotL;
+        col *= shade;
+
+        // Contour lines at 0.5m intervals
+        float contourSpacing = 0.5 * max(1.0, cd * 0.01);
+        float cFrac = fract(vHeight / contourSpacing);
+        float cLine = 1.0 - smoothstep(0.0, 0.06, cFrac) * smoothstep(0.0, 0.06, 1.0 - cFrac);
+        col = mix(col, col * 0.3, cLine * 0.6);
+
+        // Foam as white highlights
+        col = mix(col, vec3(1.0), smoothstep(0.3, 0.7, vFoam) * 0.5);
+
+        // Distance fog
+        float fog = 1.0 - exp(-cd * 0.0012);
+        vec3 fogCol = vec3(0.45, 0.55, 0.70);
+        col = mix(col, fogCol, fog);
+        col = mix(col, fogCol, smoothstep(200.0, 500.0, cd) * 0.4);
+
+        gl_FragColor = vec4(col, alpha);
+
+      } else if (uRenderMode > 0.5) {
         // ═══ WOODCUT / ENGRAVING PATH ═══
         vec3 N = normalize(vNormal);
         vec3 V = normalize(uCamPos - vWorldPos);
@@ -1997,7 +2045,7 @@ const oceanMat = new THREE.ShaderMaterial({
         gl_FragColor = vec4(col, alpha);
 
       } else {
-        // ═══ REALISTIC PBR PATH (unchanged) ═══
+        // ═══ NORMAL / REALISTIC PBR PATH ═══
         vec3 N=normalize(vNormal),V=normalize(uCamPos-vWorldPos),L=normalize(uSunDir);
         float e=.5;vec2 p=vWorldPos.xz;
         N=normalize(N+vec3(noise(p*.8+uTime*.3+vec2(e,0))-noise(p*.8+uTime*.3-vec2(e,0)),0,noise(p*.8+uTime*.3+vec2(0,e))-noise(p*.8+uTime*.3-vec2(0,e)))*.12);
@@ -2353,8 +2401,8 @@ function toggleFreeCam(on) {
   cam.free = on;
   if (!on) { cam.panX = 0; cam.panY = 0; cam.panZ = 0; }
 }
-function toggleWoodcut(on) {
-  oceanMat.uniforms.uWoodcut.value = on ? 1 : 0;
+function setRenderMode(val) {
+  oceanMat.uniforms.uRenderMode.value = parseFloat(val);
 }
 function updateCamera(){
   if (cam.free) {
@@ -2804,12 +2852,17 @@ function animate(){
       fu.uOceanMax.value.set(oceanMesh.position.x + half, oceanMesh.position.z + half);
       fu.uCamPos.value.copy(camera.position);
       // Match distant water color to ocean wave tops
-      if (oceanMat.uniforms.uWoodcut.value > 0.5) {
+      const rm = oceanMat.uniforms.uRenderMode.value;
+      if (rm > 0.5 && rm < 1.5) {
         // Woodcut mode: sepia paper tone
         fu.uWaterColor.value.set(0.85, 0.78, 0.68);
         fu.uFogColor.value.set(0.85, 0.78, 0.68);
+      } else if (rm > 1.5) {
+        // DEM mode: deep blue for lowest elevation
+        fu.uWaterColor.value.set(0.0, 0.05, 0.35);
+        fu.uFogColor.value.set(0.45, 0.55, 0.70);
       } else {
-        // Realistic mode: match shallow (wave-top) color from ocean shader
+        // Normal mode: match shallow (wave-top) color from ocean shader
         fu.uWaterColor.value.copy(u.uShallowColor.value);
         fu.uFogColor.value.set(0.55, 0.7, 0.85);
       }

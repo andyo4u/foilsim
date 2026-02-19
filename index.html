@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.68</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.69</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -2451,11 +2451,11 @@ function restartLevel() {
 const waveChartCanvas = document.getElementById('wave-chart');
 const waveChartCtx = waveChartCanvas.getContext('2d');
 const CHART_W = 800, CHART_H = 80;
-const waveChartData = [];   // ring buffer of { height, slope, energy } samples
+const waveChartData = [];   // ring buffer of { height, slope, energy } — energy colors the height line
 const CHART_MAX_SAMPLES = CHART_W; // one pixel per sample
 
 function updateWaveChart(waveH, slopeVal, energyVal) {
-  waveChartData.push({ h: waveH, s: slopeVal, e: energyVal * 2 });
+  waveChartData.push({ h: waveH, s: slopeVal, e: energyVal });
   if (waveChartData.length > CHART_MAX_SAMPLES) waveChartData.shift();
 
   // Resize canvas to screen width if needed
@@ -2468,33 +2468,29 @@ function updateWaveChart(waveH, slopeVal, energyVal) {
 
   // Auto-scale: find range of recent data
   let hMin = Infinity, hMax = -Infinity, sMin = Infinity, sMax = -Infinity;
-  let eMin = Infinity, eMax = -Infinity;
+  let eAbsMax = 0;
   for (const d of waveChartData) {
     if (d.h < hMin) hMin = d.h; if (d.h > hMax) hMax = d.h;
     if (d.s < sMin) sMin = d.s; if (d.s > sMax) sMax = d.s;
-    if (d.e < eMin) eMin = d.e; if (d.e > eMax) eMax = d.e;
+    const ae = Math.abs(d.e); if (ae > eAbsMax) eAbsMax = ae;
   }
   const hRange = Math.max(hMax - hMin, 0.5);
   const sRange = Math.max(sMax - sMin, 0.1);
-  const eRange = Math.max(eMax - eMin, 0.1);
+  // Threshold for "near neutral" — 10% of the peak energy magnitude
+  const neutralThresh = Math.max(eAbsMax * 0.10, 0.05);
 
   const n = waveChartData.length;
   const xStep = cw / CHART_MAX_SAMPLES;
 
-  // Draw zero line for energy (positive = accelerating, negative = decelerating)
-  const eZeroY = ch/2 + ((0 - (eMin+eMax)/2) / eRange) * (ch * 0.35);
-  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, eZeroY); ctx.lineTo(cw, eZeroY); ctx.stroke();
-
-  // Draw wave height — cyan when energy >= 0, red when energy < 0
+  // Draw wave height — color encodes energy: green=accel, red=decel, cyan=neutral
   ctx.lineWidth = 2;
   for (let i = 1; i < n; i++) {
     const x0 = (CHART_MAX_SAMPLES - n + i - 1) * xStep;
     const x1 = (CHART_MAX_SAMPLES - n + i) * xStep;
     const y0 = ch - 8 - ((waveChartData[i-1].h - hMin) / hRange) * (ch - 16);
     const y1 = ch - 8 - ((waveChartData[i].h - hMin) / hRange) * (ch - 16);
-    ctx.strokeStyle = waveChartData[i].e >= 0 ? '#00e5ff' : '#ff3333';
+    const ev = waveChartData[i].e;
+    ctx.strokeStyle = ev > neutralThresh ? '#44ff88' : ev < -neutralThresh ? '#ff3333' : '#00e5ff';
     ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
   }
 
@@ -2509,25 +2505,16 @@ function updateWaveChart(waveH, slopeVal, energyVal) {
   }
   ctx.stroke();
 
-  // Draw wave energy (green — positive = push, negative = drag)
-  ctx.strokeStyle = '#44ff88';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  for (let i = 0; i < n; i++) {
-    const x = (CHART_MAX_SAMPLES - n + i) * xStep;
-    const y = ch/2 - ((waveChartData[i].e - (eMin+eMax)/2) / eRange) * (ch * 0.35);
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-  }
-  ctx.stroke();
-
   // Labels
   ctx.font = '10px DM Sans, sans-serif';
+  ctx.fillStyle = '#44ff88';
+  ctx.fillText('Accel', 6, 12);
   ctx.fillStyle = '#00e5ff';
-  ctx.fillText('Height', 6, 12);
+  ctx.fillText('Neutral', 38, 12);
+  ctx.fillStyle = '#ff3333';
+  ctx.fillText('Decel', 82, 12);
   ctx.fillStyle = '#ffaa00';
   ctx.fillText('Slope', 6, 24);
-  ctx.fillStyle = '#44ff88';
-  ctx.fillText('Energy', 6, 36);
 }
 
 // ═══════════════════════════

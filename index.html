@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.66</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.67</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -2451,11 +2451,11 @@ function restartLevel() {
 const waveChartCanvas = document.getElementById('wave-chart');
 const waveChartCtx = waveChartCanvas.getContext('2d');
 const CHART_W = 800, CHART_H = 80;
-const waveChartData = [];   // ring buffer of { height, slope } samples
+const waveChartData = [];   // ring buffer of { height, slope, energy } samples
 const CHART_MAX_SAMPLES = CHART_W; // one pixel per sample
 
-function updateWaveChart(waveH, slopeVal) {
-  waveChartData.push({ h: waveH, s: slopeVal });
+function updateWaveChart(waveH, slopeVal, energyVal) {
+  waveChartData.push({ h: waveH, s: slopeVal, e: energyVal });
   if (waveChartData.length > CHART_MAX_SAMPLES) waveChartData.shift();
 
   // Resize canvas to screen width if needed
@@ -2468,21 +2468,24 @@ function updateWaveChart(waveH, slopeVal) {
 
   // Auto-scale: find range of recent data
   let hMin = Infinity, hMax = -Infinity, sMin = Infinity, sMax = -Infinity;
+  let eMin = Infinity, eMax = -Infinity;
   for (const d of waveChartData) {
     if (d.h < hMin) hMin = d.h; if (d.h > hMax) hMax = d.h;
     if (d.s < sMin) sMin = d.s; if (d.s > sMax) sMax = d.s;
+    if (d.e < eMin) eMin = d.e; if (d.e > eMax) eMax = d.e;
   }
   const hRange = Math.max(hMax - hMin, 0.5);
   const sRange = Math.max(sMax - sMin, 0.1);
+  const eRange = Math.max(eMax - eMin, 0.1);
 
   const n = waveChartData.length;
   const xStep = cw / CHART_MAX_SAMPLES;
 
-  // Draw zero line for slope
-  const sZeroY = ch/2 + ((0 - (sMin+sMax)/2) / sRange) * (ch * 0.35);
+  // Draw zero line for energy (positive = accelerating, negative = decelerating)
+  const eZeroY = ch/2 + ((0 - (eMin+eMax)/2) / eRange) * (ch * 0.35);
   ctx.strokeStyle = 'rgba(255,255,255,0.15)';
   ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, sZeroY); ctx.lineTo(cw, sZeroY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, eZeroY); ctx.lineTo(cw, eZeroY); ctx.stroke();
 
   // Draw wave height (cyan)
   ctx.strokeStyle = '#00e5ff';
@@ -2506,12 +2509,25 @@ function updateWaveChart(waveH, slopeVal) {
   }
   ctx.stroke();
 
+  // Draw wave energy (green — positive = push, negative = drag)
+  ctx.strokeStyle = '#44ff88';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const x = (CHART_MAX_SAMPLES - n + i) * xStep;
+    const y = ch/2 - ((waveChartData[i].e - (eMin+eMax)/2) / eRange) * (ch * 0.35);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
   // Labels
   ctx.font = '10px DM Sans, sans-serif';
   ctx.fillStyle = '#00e5ff';
   ctx.fillText('Height', 6, 12);
   ctx.fillStyle = '#ffaa00';
   ctx.fillText('Slope', 6, 24);
+  ctx.fillStyle = '#44ff88';
+  ctx.fillText('Energy', 6, 36);
 }
 
 // ═══════════════════════════
@@ -2921,8 +2937,8 @@ function animate(){
   // Audio feedback
   updateAudio(slopeForce, normSwell, foil.speed);
 
-  // Wave chart: record height and slope at foil position
-  updateWaveChart(wH, slopeDot);
+  // Wave chart: record height, slope and wave energy at foil position
+  updateWaveChart(wH, slopeDot, slopeForce);
 
   foil.prevWH=wH;
 

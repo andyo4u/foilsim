@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.64</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.65</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -221,7 +221,9 @@
     <div class="control-row"><span class="control-label">Turn Speed</span><input type="range" id="sbTurnSpeed" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbTurnSpeed-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Top Speed</span><input type="range" id="sbTopSpeed" min="8" max="40" value="22" step="1" oninput="updateVal(this)"><span class="control-value" id="sbTopSpeed-val">22 kts</span></div>
     <div class="control-row"><span class="control-label">Stall Speed</span><input type="range" id="sbStallSpeed" min="0" max="10" value="5" step="0.5" oninput="updateVal(this)"><span class="control-value" id="sbStallSpeed-val">5.0 kts</span></div>
-    <div class="control-row"><span class="control-label">Wind Drag</span><input type="range" id="sbDrag" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbDrag-val">1.00×</span></div>
+    <div class="control-row"><span class="control-label">Wind Speed</span><input type="range" id="sbWindSpeed" min="0" max="40" value="12" step="1" oninput="updateVal(this)"><span class="control-value" id="sbWindSpeed-val">12 kts</span></div>
+    <div class="control-row"><span class="control-label">Wind Dir</span><input type="range" id="sbWindDir" min="0" max="360" value="270" step="1" oninput="updateVal(this)"><span class="control-value" id="sbWindDir-val">270°</span></div>
+    <div class="control-row"><span class="control-label">Drag</span><input type="range" id="sbDrag" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbDrag-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Battery Cap</span><input type="range" id="sbBatteryCap" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbBatteryCap-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Battery Drain</span><input type="range" id="sbBatteryDrain" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbBatteryDrain-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Wave Energy</span><input type="range" id="sbWaveEnergy" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbWaveEnergy-val">1.00×</span></div>
@@ -299,8 +301,9 @@ function updateVal(el) {
   const id = el.id, v = parseFloat(el.value);
   cachedParams[id] = v; // update cache on slider change
   const span = document.getElementById(id + '-val');
-  if (id === 'sbTopSpeed') span.textContent = v + ' kts';
+  if (id === 'sbTopSpeed' || id === 'sbWindSpeed') span.textContent = v + ' kts';
   else if (id === 'sbStallSpeed') span.textContent = v.toFixed(1) + ' kts';
+  else if (id === 'sbWindDir') span.textContent = v + '°';
   else if (id.startsWith('sb')) span.textContent = v.toFixed(2) + '×';
   else if (id === 'cloudCover') span.textContent = Math.round(v * 100) + '%';
   else if (id.includes('Dir') || id.includes('Angle')) span.textContent = v + '°';
@@ -322,6 +325,7 @@ function cacheAllSliders() {
    'swell2Height','swell2Period','swell2Dir',
    'swell3Height','swell3Period','swell3Dir',
    'sbGlide','sbPumpPower','sbTurnSpeed','sbTopSpeed','sbStallSpeed',
+   'sbWindSpeed','sbWindDir',
    'sbBatteryCap','sbBatteryDrain','sbWaveEnergy','sbStability','sbDrag'].forEach(id => {
     cachedParams[id] = parseFloat(document.getElementById(id).value);
   });
@@ -482,6 +486,7 @@ const presets = {
     swell2Height:0.7, swell2Period:4.5, swell2Dir:347,
     swell3Height:0.5, swell3Period:6, swell3Dir:268,
     sbGlide:0.8, sbPumpPower:1, sbTurnSpeed:1, sbTopSpeed:22, sbStallSpeed:5,
+    sbWindSpeed:12, sbWindDir:270,
     sbBatteryCap:1, sbBatteryDrain:1, sbWaveEnergy:1, sbStability:1, sbDrag:1
   }
 };
@@ -510,6 +515,7 @@ function getAllSettings() {
     'swell2Height','swell2Period','swell2Dir',
     'swell3Height','swell3Period','swell3Dir'];
   const sandboxIds = ['sbGlide','sbPumpPower','sbTurnSpeed','sbTopSpeed','sbStallSpeed',
+    'sbWindSpeed','sbWindDir',
     'sbBatteryCap','sbBatteryDrain','sbWaveEnergy','sbStability','sbDrag'];
 
   const ocean = {};
@@ -2613,10 +2619,22 @@ function animate(){
     pf -= 2.0; // drag from raised nose
   }
 
-  // Glide reduces drag when foiling; Water Drag is a direct multiplier on all drag
+  // Glide reduces drag when foiling; Drag is a direct multiplier on all drag
   const baseDrag = isF ? .35 : .7;
   const drag = baseDrag * getVal('sbDrag') / getVal('sbGlide');
-  foil.speed+=(slopeForce+pf)*dt;
+
+  // Wind force: tailwind pushes, headwind drags
+  // Wind direction is "coming FROM" (compass degrees), convert to radians going TO
+  const windSpeedMs = getVal('sbWindSpeed') / 1.94384; // knots → m/s
+  const windDirRad = (getVal('sbWindDir') + 180) * Math.PI / 180; // flip: "from" → "to"
+  const windX = Math.sin(windDirRad) * windSpeedMs;
+  const windZ = Math.cos(windDirRad) * windSpeedMs;
+  // Project wind onto foil heading: positive = tailwind, negative = headwind
+  const windDot = mx * windX + mz * windZ;
+  // Wind force scales with exposed area — more when foiling (rider up), less in water
+  const windForce = windDot * (isF ? 0.06 : 0.03);
+
+  foil.speed+=(slopeForce+pf+windForce)*dt;
   foil.speed-=drag*dt;
   foil.speed=Math.max(0,Math.min(foil.speed, getVal('sbTopSpeed')));
 

@@ -135,7 +135,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.58</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.59</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -184,18 +184,18 @@
     <div class="control-row"><span class="control-label">Period</span><input type="range" id="swell3Period" min="4" max="22" value="16" step="0.5" oninput="updateVal(this)"><span class="control-value" id="swell3Period-val">16.0s</span></div>
     <div class="control-row"><span class="control-label">Direction</span><input type="range" id="swell3Dir" min="0" max="360" value="200" step="1" oninput="updateVal(this)"><span class="control-value" id="swell3Dir-val">200°</span></div>
   </div>
-  <!-- Sandbox controls hidden — values still set by presets via applyPreset() -->
-  <div class="section" style="display:none;">
+  <div class="section">
     <div class="section-title">🏄 Sandbox</div>
     <div class="control-row"><span class="control-label">Glide</span><input type="range" id="sbGlide" min="0.1" max="2.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbGlide-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Pump Power</span><input type="range" id="sbPumpPower" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbPumpPower-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Turn Speed</span><input type="range" id="sbTurnSpeed" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbTurnSpeed-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Top Speed</span><input type="range" id="sbTopSpeed" min="8" max="40" value="22" step="1" oninput="updateVal(this)"><span class="control-value" id="sbTopSpeed-val">22 kts</span></div>
+    <div class="control-row"><span class="control-label">Stall Speed</span><input type="range" id="sbStallSpeed" min="0" max="10" value="5" step="0.5" oninput="updateVal(this)"><span class="control-value" id="sbStallSpeed-val">5.0 kts</span></div>
+    <div class="control-row"><span class="control-label">Wind Drag</span><input type="range" id="sbDrag" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbDrag-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Battery Cap</span><input type="range" id="sbBatteryCap" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbBatteryCap-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Battery Drain</span><input type="range" id="sbBatteryDrain" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbBatteryDrain-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Wave Energy</span><input type="range" id="sbWaveEnergy" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbWaveEnergy-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Foil Stability</span><input type="range" id="sbStability" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbStability-val">1.00×</span></div>
-    <div class="control-row"><span class="control-label">Water Drag</span><input type="range" id="sbDrag" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbDrag-val">1.00×</span></div>
     <div class="control-row" style="margin-top:6px;"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="sbFreeCam" onchange="toggleFreeCam(this.checked)" style="width:14px;height:14px;accent-color:#4af;"><span class="control-label" style="flex:1;">Free Camera</span></label></div>
   </div>
   <div class="section">
@@ -265,6 +265,7 @@ function updateVal(el) {
   cachedParams[id] = v; // update cache on slider change
   const span = document.getElementById(id + '-val');
   if (id === 'sbTopSpeed') span.textContent = v + ' kts';
+  else if (id === 'sbStallSpeed') span.textContent = v.toFixed(1) + ' kts';
   else if (id.startsWith('sb')) span.textContent = v.toFixed(2) + '×';
   else if (id === 'cloudCover') span.textContent = Math.round(v * 100) + '%';
   else if (id.includes('Dir') || id.includes('Angle')) span.textContent = v + '°';
@@ -285,7 +286,7 @@ function cacheAllSliders() {
    'swell1Height','swell1Period','swell1Dir',
    'swell2Height','swell2Period','swell2Dir',
    'swell3Height','swell3Period','swell3Dir',
-   'sbGlide','sbPumpPower','sbTurnSpeed','sbTopSpeed',
+   'sbGlide','sbPumpPower','sbTurnSpeed','sbTopSpeed','sbStallSpeed',
    'sbBatteryCap','sbBatteryDrain','sbWaveEnergy','sbStability','sbDrag'].forEach(id => {
     cachedParams[id] = parseFloat(document.getElementById(id).value);
   });
@@ -445,7 +446,7 @@ const presets = {
     swell1Height:2.3, swell1Period:5, swell1Dir:297,
     swell2Height:0.7, swell2Period:4.5, swell2Dir:347,
     swell3Height:0.5, swell3Period:6, swell3Dir:268,
-    sbGlide:0.8, sbPumpPower:1, sbTurnSpeed:1, sbTopSpeed:22,
+    sbGlide:0.8, sbPumpPower:1, sbTurnSpeed:1, sbTopSpeed:22, sbStallSpeed:5,
     sbBatteryCap:1, sbBatteryDrain:1, sbWaveEnergy:1, sbStability:1, sbDrag:1
   }
 };
@@ -473,7 +474,7 @@ function getAllSettings() {
     'swell1Height','swell1Period','swell1Dir',
     'swell2Height','swell2Period','swell2Dir',
     'swell3Height','swell3Period','swell3Dir'];
-  const sandboxIds = ['sbGlide','sbPumpPower','sbTurnSpeed','sbTopSpeed',
+  const sandboxIds = ['sbGlide','sbPumpPower','sbTurnSpeed','sbTopSpeed','sbStallSpeed',
     'sbBatteryCap','sbBatteryDrain','sbWaveEnergy','sbStability','sbDrag'];
 
   const ocean = {};
@@ -2363,7 +2364,10 @@ function animate(){
   }
 
   // Is foiling?
-  const isF = foil.speed > 3.5;
+  // Foiling state: speed must exceed stall speed to stay on foil
+  const stallKts = getVal('sbStallSpeed');
+  const stallMs = stallKts / 1.94384; // convert knots to m/s
+  const isF = foil.speed > stallMs;
 
   // Pitch (auto-settle, slight nose down at speed for realism)
   const autoPitch = isF ? -0.05 : 0;
@@ -2423,7 +2427,8 @@ function animate(){
 
   const tgtRH=isF?.6+foil.pitch*.5:0;
   foil.rideH=lerp(foil.rideH,tgtRH,dt*3);
-  if(foil.speed<2.5)foil.rideH=lerp(foil.rideH,0,dt*5);
+  // Below stall speed: foil drops back into the water
+  if(!isF)foil.rideH=lerp(foil.rideH,0,dt*5);
 
   foil.x+=mx*foil.speed*dt;foil.z+=mz*foil.speed*dt;
 

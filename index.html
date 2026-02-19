@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.69</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.70</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -267,7 +267,7 @@
     <div id="hud-energy-bar" style="width:100%;height:100%;background:linear-gradient(90deg,#4ae88a,#5ef0a0);border-radius:4px;transition:width 0.15s,background 0.3s;"></div>
   </div>
   <div id="hud-energy-text" style="font-size:10px;color:#6a94c0;margin-top:2px;">100%</div>
-  <div class="label" style="margin-top:8px">Wave Power</div>
+  <div class="label" style="margin-top:8px">Wave Energy</div>
   <div style="width:100px;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;margin-top:3px;position:relative;">
     <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:rgba(255,255,255,0.2);"></div>
     <div id="hud-swell-bar" style="position:absolute;top:0;height:100%;border-radius:4px;transition:left 0.1s,width 0.1s,background 0.15s;width:0;left:50%;background:#4ae88a;"></div>
@@ -337,7 +337,7 @@ document.addEventListener('DOMContentLoaded', cacheAllSliders);
 cacheAllSliders();
 
 // ═══════════════════════════
-// AUDIO — Wave Power Sound
+// AUDIO — Wave Energy Sound
 // ═══════════════════════════
 let audioCtx = null, audioInited = false;
 let noiseGain, toneOsc, toneGain, toneFilter, masterGain;
@@ -2088,6 +2088,26 @@ function getWaveSlope(px,pz,t){
     dhdz:(getWaveHeight(px,pz+e,t)-getWaveHeight(px,pz-e,t))/(2*e)
   };
 }
+// Swell-only height (no chop, no fbm noise) — used for wave energy calculation
+function getSwellHeight(px,pz,t){
+  let h=0;
+  const s1d=degToDir(getVal('swell1Dir')),s1p=getVal('swell1Period'),s1h=getVal('swell1Height');
+  const s2d=degToDir(getVal('swell2Dir')),s2p=getVal('swell2Period'),s2h=getVal('swell2Height');
+  const s3d=degToDir(getVal('swell3Dir')),s3p=getVal('swell3Period'),s3h=getVal('swell3Height');
+  h+=gerstnerY(px,pz,s1d.x,s1d.y,s1p,s1h,t);
+  h+=gerstnerY(px,pz,s1d.x*1.07,s1d.y*1.07,s1p*.7,s1h*.22,t*1.05);
+  h+=gerstnerY(px,pz,s2d.x,s2d.y,s2p,s2h,t);
+  h+=gerstnerY(px,pz,s2d.x*.95,s2d.y*.95,s2p*.65,s2h*.2,t*.98);
+  h+=gerstnerY(px,pz,s3d.x,s3d.y,s3p,s3h,t);
+  return h;
+}
+function getSwellSlope(px,pz,t){
+  const e=.5;
+  return{
+    dhdx:(getSwellHeight(px+e,pz,t)-getSwellHeight(px-e,pz,t))/(2*e),
+    dhdz:(getSwellHeight(px,pz+e,t)-getSwellHeight(px,pz-e,t))/(2*e)
+  };
+}
 
 // ═══════════════════════════
 // HYDROFOIL MODEL
@@ -2651,14 +2671,18 @@ function animate(){
   const slopeDot=mx*slope.dhdx+mz*slope.dhdz;
   // Cross-slope: perpendicular component of slope relative to travel
   const crossSlope=Math.abs(-mz*slope.dhdx+mx*slope.dhdz);
+  // Wave energy from swells only (no windchop or noise)
+  const swellSlope=getSwellSlope(foil.x,foil.z,t);
+  const swellSlopeDot=mx*swellSlope.dhdx+mz*swellSlope.dhdz;
+  const swellCrossSlope=Math.abs(-mz*swellSlope.dhdx+mx*swellSlope.dhdz);
   // Base slope force (scaled by wave energy transfer)
   const waveE = getVal('sbWaveEnergy');
-  let slopeForce=-slopeDot*3.25*waveE;
+  let slopeForce=-swellSlopeDot*3.25*waveE;
   // Turn bonus: carving across the wave face generates extra push
   // Scales with actual roll angle for smooth ramp-up rather than binary on/off
   const rollFactor = Math.abs(foil.roll) / maxRoll; // 0..1
   if(rollFactor > 0.05){
-    slopeForce+=crossSlope*2.35*waveE*rollFactor*Math.min(1,foil.speed/5);
+    slopeForce+=swellCrossSlope*2.35*waveE*rollFactor*Math.min(1,foil.speed/5);
   }
 
   // Is foiling?
@@ -2895,18 +2919,16 @@ function animate(){
     eTxt.style.color = '#e06060';
   }
 
-  // Wave power meter — dynamic normalization based on current conditions
-  // Estimate max possible slope force from swell heights & periods
+  // Wave energy meter — dynamic normalization based on current conditions
+  // Estimate max possible slope force from swell heights & periods (no chop)
   const s1h = getVal('swell1Height'), s1p = getVal('swell1Period');
   const s2h = getVal('swell2Height'), s2p = getVal('swell2Period');
   const s3h = getVal('swell3Height'), s3p = getVal('swell3Period');
-  const chH = getVal('chopHeight');
   // Max slope ≈ height * 2π / wavelength, wavelength = 1.56 * period²
   function maxSlope(h, p) { return h > 0.01 ? h * 6.2832 / (1.56 * p * p) : 0; }
   const maxSlopeSum = (maxSlope(s1h,s1p) + maxSlope(s1h*0.22,s1p*0.7)
     + maxSlope(s2h,s2p) + maxSlope(s2h*0.2,s2p*0.65)
-    + maxSlope(s3h,s3p)
-    + maxSlope(chH*0.5,3) + maxSlope(chH*0.35,2.2)) * 3.25; // matches slopeForce multiplier
+    + maxSlope(s3h,s3p)) * 3.25; // matches slopeForce multiplier (swells only)
   const dynamicMax = Math.max(0.3, maxSlopeSum * 0.85); // slight headroom so it can hit max
 
   const swBar = document.getElementById('hud-swell-bar');

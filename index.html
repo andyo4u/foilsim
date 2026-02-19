@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.62</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.63</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -1635,20 +1635,69 @@ function buildRealTerrain(onReady) {
 
   console.log('Real terrain built:', (geoSegX+1)*(geoSegZ+1), 'vertices');
 
-  // Create a large flat water fill plane to cover areas beyond the ocean mesh.
-  // Rendered below the animated ocean so distant water areas aren't empty.
+  // Create a large flat water fill plane visible only OUTSIDE the ocean mesh.
+  // Uses a shader to discard fragments inside the ocean bounds and over land.
   if (waterFillPlane) { scene.remove(waterFillPlane); waterFillPlane.geometry.dispose(); waterFillPlane.material.dispose(); }
-  const fillSize = Math.max(RT_WORLD_W(), RT_WORLD_D()) * 3; // oversized to cover all visible water
+  const fillSize = Math.max(RT_WORLD_W(), RT_WORLD_D()) * 3;
   const fillGeo = new THREE.PlaneGeometry(fillSize, fillSize);
   fillGeo.rotateX(-Math.PI / 2);
-  const fillMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(0.04, 0.12, 0.28),  // ocean blue, visible in distance
-    transparent: true, opacity: 0.95,
+  const fillMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uOceanMin: { value: new THREE.Vector2(0, 0) },  // updated each frame
+      uOceanMax: { value: new THREE.Vector2(0, 0) },  // updated each frame
+      uRiverMask: { value: realTerrainRiverMask },
+      uUseRiverMask: { value: activeTerrainCfg.useRiverMask ? 1.0 : 0.0 },
+      uTerrainBounds: { value: new THREE.Vector4(
+        -RT_WORLD_W()/2, -RT_WORLD_D()/2, RT_WORLD_W()/2, RT_WORLD_D()/2
+      )},
+      uFogColor: { value: new THREE.Color(0.55, 0.7, 0.85) },
+      uCamPos: { value: new THREE.Vector3() }
+    },
+    vertexShader: `
+      varying vec3 vWorldPos;
+      void main() {
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vWorldPos = wp.xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      uniform vec2 uOceanMin, uOceanMax;
+      uniform sampler2D uRiverMask;
+      uniform float uUseRiverMask;
+      uniform vec4 uTerrainBounds; // minX, minZ, maxX, maxZ
+      uniform vec3 uFogColor, uCamPos;
+      varying vec3 vWorldPos;
+      void main() {
+        // Discard if inside the ocean mesh bounds (ocean handles that area)
+        if (vWorldPos.x > uOceanMin.x && vWorldPos.x < uOceanMax.x &&
+            vWorldPos.z > uOceanMin.y && vWorldPos.z < uOceanMax.y) discard;
+
+        // Discard if over land (using river mask)
+        if (uUseRiverMask > 0.5) {
+          vec2 tuv = vec2(
+            (vWorldPos.x - uTerrainBounds.x) / (uTerrainBounds.z - uTerrainBounds.x),
+            1.0 - (vWorldPos.z - uTerrainBounds.y) / (uTerrainBounds.w - uTerrainBounds.y)
+          );
+          if (tuv.x >= 0.0 && tuv.x <= 1.0 && tuv.y >= 0.0 && tuv.y <= 1.0) {
+            float mask = texture2D(uRiverMask, tuv).r;
+            if (mask < 0.3) discard; // land
+          }
+        }
+
+        // Light wave-top blue color with distance fog
+        vec3 baseCol = vec3(0.18, 0.32, 0.42);
+        float dist = length(vWorldPos - uCamPos);
+        float fogF = 1.0 - exp(-dist * 0.00015);
+        vec3 col = mix(baseCol, uFogColor, fogF);
+
+        gl_FragColor = vec4(col, 0.92);
+      }`,
+    transparent: true,
     depthWrite: false
   });
   waterFillPlane = new THREE.Mesh(fillGeo, fillMat);
-  waterFillPlane.position.y = RT_WATER_Y() - 0.15; // just below water surface so ocean renders on top
-  waterFillPlane.renderOrder = -1; // render before ocean mesh
+  waterFillPlane.position.y = RT_WATER_Y() - 0.05;
+  waterFillPlane.renderOrder = -1;
   scene.add(waterFillPlane);
 
   // Notify caller that terrain is ready (handles async asset loading)
@@ -2607,6 +2656,15 @@ function animate(){
     oceanMesh.position.x = Math.round(foil.x / SNAP) * SNAP;
     oceanMesh.position.z = Math.round(foil.z / SNAP) * SNAP;
     oceanMesh.position.y = realTerrainMesh ? RT_WATER_Y() : 0;
+
+    // Update water fill plane ocean cutout bounds each frame
+    if (waterFillPlane) {
+      const half = OCEAN_SIZE / 2;
+      const fu = waterFillPlane.material.uniforms;
+      fu.uOceanMin.value.set(oceanMesh.position.x - half, oceanMesh.position.z - half);
+      fu.uOceanMax.value.set(oceanMesh.position.x + half, oceanMesh.position.z + half);
+      fu.uCamPos.value.copy(camera.position);
+    }
   }
 
   // Terrain ring follows player with larger SNAP grid for parallax

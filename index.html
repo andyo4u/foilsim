@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.71</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.72</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -229,7 +229,7 @@
     <div class="control-row"><span class="control-label">Wave Energy</span><input type="range" id="sbWaveEnergy" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbWaveEnergy-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Foil Stability</span><input type="range" id="sbStability" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbStability-val">1.00×</span></div>
     <div class="control-row" style="margin-top:6px;"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="sbFreeCam" onchange="toggleFreeCam(this.checked)" style="width:14px;height:14px;accent-color:#4af;"><span class="control-label" style="flex:1;">Free Camera</span></label></div>
-    <div class="control-row"><span class="control-label">Render Style</span><select id="sbRenderMode" onchange="setRenderMode(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="0">Normal</option><option value="1">Woodcut</option><option value="2">DEM</option></select></div>
+    <div class="control-row"><span class="control-label">Render Style</span><select id="sbRenderMode" onchange="setRenderMode(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="0">Normal</option><option value="1">Woodcut</option><option value="2">DEM</option><option value="3">Painterly</option></select></div>
   </div>
   <div class="section">
     <div class="section-title">🏝 Background</div>
@@ -1912,7 +1912,95 @@ const oceanMat = new THREE.ShaderMaterial({
         alpha = smoothstep(0.08, 0.35, texture2D(uRiverMask, muv).r);
       }
 
-      if (uRenderMode > 1.5) {
+      if (uRenderMode > 2.5) {
+        // ═══ PAINTERLY / PSYCHEDELIC PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // ── Swirling UV distortion (the "acid" effect) ──
+        // Multiple layers of noise at different scales/speeds create organic swirls
+        vec2 uv = vWorldPos.xz;
+        float swirl1 = fbm(uv * 0.08 + uTime * 0.12);
+        float swirl2 = fbm(uv * 0.15 - uTime * 0.08 + swirl1 * 2.0);
+        float swirl3 = fbm(uv * 0.03 + vec2(swirl2, swirl1) * 1.5 + uTime * 0.05);
+        // Distorted coordinates for color lookup
+        vec2 distUV = uv + vec2(swirl1, swirl2) * 3.0;
+
+        // ── Iridescent color palette ──
+        // Phase shifts through hue based on height + swirl + time
+        float phase = vHeight * 0.8 + swirl3 * 2.5 + uTime * 0.15;
+        // Rainbow cycle with rich saturated colors
+        vec3 col1 = vec3(
+          0.5 + 0.5 * sin(phase * 3.0),
+          0.5 + 0.5 * sin(phase * 3.0 + 2.094),
+          0.5 + 0.5 * sin(phase * 3.0 + 4.189)
+        );
+        // Second shifted palette for depth
+        vec3 col2 = vec3(
+          0.5 + 0.5 * sin(phase * 2.0 + 1.0),
+          0.5 + 0.5 * sin(phase * 2.0 + 3.094),
+          0.5 + 0.5 * sin(phase * 2.0 + 5.189)
+        );
+        // Blend palettes based on swirl patterns
+        float blend = smoothstep(-0.3, 0.3, swirl1);
+        vec3 col = mix(col1, col2, blend);
+
+        // ── Painterly brush strokes ──
+        // Directional noise that mimics oil paint brush strokes
+        vec2 grad = vec2(N.x, N.z);
+        float gradLen = length(grad);
+        vec2 brushDir = gradLen > 0.001 ? grad / gradLen : vec2(1.0, 0.0);
+        float brushProj = dot(distUV, brushDir);
+        float brushTex = noise(vec2(brushProj * 4.0, dot(distUV, vec2(-brushDir.y, brushDir.x)) * 0.8) + uTime * 0.1);
+        // Thick paint texture variation
+        col *= 0.85 + 0.15 * brushTex;
+
+        // ── Dreamy reflections ──
+        // Exaggerated Fresnel with color shift
+        float fr = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+        vec3 reflColor = vec3(
+          0.6 + 0.4 * sin(uTime * 0.3 + vWorldPos.x * 0.02),
+          0.5 + 0.5 * sin(uTime * 0.25 + vWorldPos.z * 0.03 + 1.5),
+          0.7 + 0.3 * sin(uTime * 0.35 + swirl2 * 3.0 + 3.0)
+        );
+        col = mix(col, reflColor, fr * 0.6);
+
+        // ── Sun sparkle (oversaturated, prismatic) ──
+        vec3 H = normalize(L + V);
+        float spec = pow(max(dot(N, H), 0.0), 64.0);
+        // Prismatic sparkle — splits into rainbow near highlights
+        vec3 sparkle = vec3(
+          spec * (1.0 + 0.5 * sin(vWorldPos.x * 2.0 + uTime)),
+          spec * (1.0 + 0.5 * sin(vWorldPos.z * 2.0 + uTime + 2.0)),
+          spec * (1.0 + 0.5 * sin((vWorldPos.x + vWorldPos.z) * 1.5 + uTime + 4.0))
+        );
+        col += sparkle * 1.5;
+
+        // ── Foam as glowing white/pink ──
+        vec3 foamGlow = vec3(1.0, 0.9, 0.95);
+        float foamAmt = smoothstep(0.2, 0.6, vFoam) * 0.7;
+        col = mix(col, foamGlow, foamAmt);
+
+        // ── Saturation boost ──
+        float lum = dot(col, vec3(0.299, 0.587, 0.114));
+        col = mix(vec3(lum), col, 1.6); // oversaturate
+        col = clamp(col, 0.0, 1.0);
+
+        // ── Dreamy fog (purple/pink haze) ──
+        float fog = 1.0 - exp(-cd * 0.001);
+        float sunDot = max(dot(normalize(vWorldPos - uCamPos), L), 0.0);
+        vec3 fogCol = mix(
+          vec3(0.50, 0.35, 0.60),
+          vec3(0.85, 0.60, 0.50),
+          pow(sunDot, 3.0)
+        );
+        col = mix(col, fogCol, fog);
+
+        gl_FragColor = vec4(col, alpha);
+
+      } else if (uRenderMode > 1.5) {
         // ═══ DEM (Digital Elevation Model) PATH ═══
         vec3 N = normalize(vNormal);
         vec3 L = normalize(uSunDir);
@@ -2853,14 +2941,18 @@ function animate(){
       fu.uCamPos.value.copy(camera.position);
       // Match distant water color to ocean wave tops
       const rm = oceanMat.uniforms.uRenderMode.value;
-      if (rm > 0.5 && rm < 1.5) {
-        // Woodcut mode: sepia paper tone
-        fu.uWaterColor.value.set(0.85, 0.78, 0.68);
-        fu.uFogColor.value.set(0.85, 0.78, 0.68);
+      if (rm > 2.5) {
+        // Painterly mode: dreamy purple-teal
+        fu.uWaterColor.value.set(0.25, 0.15, 0.45);
+        fu.uFogColor.value.set(0.50, 0.35, 0.60);
       } else if (rm > 1.5) {
         // DEM mode: deep blue for lowest elevation
         fu.uWaterColor.value.set(0.0, 0.05, 0.35);
         fu.uFogColor.value.set(0.45, 0.55, 0.70);
+      } else if (rm > 0.5) {
+        // Woodcut mode: sepia paper tone
+        fu.uWaterColor.value.set(0.85, 0.78, 0.68);
+        fu.uFogColor.value.set(0.85, 0.78, 0.68);
       } else {
         // Normal mode: match shallow (wave-top) color from ocean shader
         fu.uWaterColor.value.copy(u.uShallowColor.value);

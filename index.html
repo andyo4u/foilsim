@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.82</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.80</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -1700,10 +1700,9 @@ function buildRealTerrain(onReady) {
         float dOutside = max(max(dLeft, dRight), max(dBack, dFront));
         // Distance inside bounds (0 if outside)
         float dInside = -min(min(-dLeft, -dRight), min(-dBack, -dFront));
-        // Smooth blend: fully transparent inside ocean, fade in outside
-        // Transition zone: 0m (ocean edge) to +80m (fully opaque)
-        float signedDist = dOutside > 0.0 ? dOutside : -dInside;
-        float blendAlpha = smoothstep(0.0, 80.0, signedDist);
+        // Smooth blend: fully transparent deep inside ocean, fully opaque well outside
+        // Transition zone: -20m (inside overlap) to +60m (outside)
+        float blendAlpha = smoothstep(-20.0, 60.0, dOutside > 0.0 ? dOutside : -dInside);
 
         if (blendAlpha < 0.01) discard; // fully inside ocean bounds — skip
 
@@ -3444,12 +3443,10 @@ function animate(){
   foil.speed-=drag*dt;
   foil.speed=Math.max(0,Math.min(foil.speed, getVal('sbTopSpeed')));
 
-  // Board sits slightly above wave surface (0.08m) when not foiling to
-  // prevent the transparent ocean shader from rendering over the deck.
-  const tgtRH=isF?.6+foil.pitch*.5:0.08;
+  const tgtRH=isF?.6+foil.pitch*.5:0;
   foil.rideH=lerp(foil.rideH,tgtRH,dt*3);
-  // Below stall speed: foil settles onto the water (not into it)
-  if(!isF)foil.rideH=lerp(foil.rideH,0.08,dt*5);
+  // Below stall speed: foil drops back into the water
+  if(!isF)foil.rideH=lerp(foil.rideH,0,dt*5);
 
   foil.x+=mx*foil.speed*dt;foil.z+=mz*foil.speed*dt;
 

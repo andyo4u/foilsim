@@ -17,9 +17,21 @@
 //        score / achievements. Unlock new locations and new
 //        render mode styles as achievement rewards.
 //
+//  TODO: Spinning globe picker — Three.js Earth sphere with
+//        location pins that light up as you unlock them. Spin
+//        to browse, click a pin → zoom-in transition → ride.
+//        Could use a low-res earth texture + country outlines.
+//
 //  TODO: More locations — add new terrainConfigs entries for
 //        real-world spots (Jaws/Peahi, Nazaré, Tahiti, etc.)
 //        each with their own heightmap + satellite assets.
+//
+//  TODO: HELL — the ultimate final location. Unlocked after
+//        completing all achievements. Lava ocean (Hot Lava
+//        render mode forced), fire/ember sky, demon-horn cliff
+//        silhouettes, red fog, screaming wind audio. The
+//        terrainConfig would use a volcanic crater heightmap
+//        with a molten-rock satellite texture. Because why not.
 //
 //  TODO: Strava integration — the mini-map already records a
 //        Strava-style red-glow GPS trail. Extend this to:
@@ -27,6 +39,9 @@
 //        • Capture a screenshot at ride end for the activity photo
 //        • Upload via Strava API (OAuth2 flow, virtual activity)
 //        • Make this an unlockable achievement reward
+//        • Map the ride onto a fun real-world waterway so it
+//          shows up on your Strava feed somewhere epic — eFoil
+//          across Lake Geneva, down the Amazon, around Alcatraz…
 
 import { state, OCEAN_SIZE } from './state.js';
 import { lerp, smoothstep, getVal, applyPreset, cacheAllSliders, degToDir } from './helpers.js';

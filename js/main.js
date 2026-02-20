@@ -18,6 +18,11 @@
 // ║    modes / visualization styles as rewards                   ║
 // ║  • Jumping: ramp objects or wave-launch mechanic, air time   ║
 // ║    tricks, landing physics                                   ║
+// ║  • Spinning globe location picker: 3D Earth that the player  ║
+// ║    spins to choose a location — pins light up as you unlock  ║
+// ║    new spots. Click a pin → zoom in → start riding.          ║
+// ║  • HELL: the final unlockable location. Lava ocean, fire     ║
+// ║    sky, demon cliffs. You've earned it. 🔥                   ║
 // ║                                                              ║
 // ║  PHYSICS / CONTROLS                                          ║
 // ║  • Lean-back brake turn: leaning back = tighter turn radius  ║
@@ -38,6 +43,9 @@
 // ║  • Strava upload: unlockable feature — after a ride, export  ║
 // ║    the GPS-style track + screenshot and upload to Strava     ║
 // ║    as a virtual eFoil activity (use Strava API OAuth flow)   ║
+// ║    Map the ride to a fun real-world location so it shows up  ║
+// ║    on your Strava feed somewhere ridiculous (eFoiling across ║
+// ║    Lake Geneva? Down the Amazon? Around Alcatraz?)           ║
 // ║  • Save progress: persist achievements, unlocked locations,  ║
 // ║    unlocked render modes, and best scores to localStorage    ║
 // ║    (or cloud save via a simple backend / Firebase)           ║

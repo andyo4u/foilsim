@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.76</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.77</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -1044,7 +1044,7 @@ const terrainConfigs = {
     elevMax: 1090.1,
     worldW: 14382,   // meters east-west
     worldD: 11054,   // meters north-south
-    waterY: 6.0,     // ~30m real elevation → 6m in scene
+    waterY: 8.0,     // ~30m real elevation → 8m in scene (raised for shallow visibility)
     waterThresh: 12,  // heightmap pixel ≤ this = water
     useRiverMask: true,
     preset: 'gorge',

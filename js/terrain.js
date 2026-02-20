@@ -5,6 +5,21 @@
 //  (heightmap + satellite), panoramic photo backdrops, mini-map,
 //  terrain presets / configs, shallow-water restart logic.
 // ──────────────────────────────────────────────────────────────
+//
+//  TODO: Brighten satellite texture — mountain features are too
+//        dark in the current terrain fragment shader. Options:
+//        • Add a brightness/gamma uniform and boost diffuse color
+//        • Apply levels adjustment (lift shadows, boost mids)
+//        • Increase ambient term so shaded slopes are more visible
+//
+//  TODO: Game loop & location select — turn this into a proper
+//        game flow: splash screen → choose location → ride →
+//        score / achievements. Unlock new locations and new
+//        render mode styles as achievement rewards.
+//
+//  TODO: More locations — add new terrainConfigs entries for
+//        real-world spots (Jaws/Peahi, Nazaré, Tahiti, etc.)
+//        each with their own heightmap + satellite assets.
 
 import { state, OCEAN_SIZE } from './state.js';
 import { lerp, smoothstep, getVal, applyPreset, cacheAllSliders, degToDir } from './helpers.js';

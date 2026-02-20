@@ -5,6 +5,14 @@
 //  writes properties on it.  This replaces the dozens of global
 //  variables that lived in the original monolithic index.html.
 // ──────────────────────────────────────────────────────────────
+//
+//  TODO: Game state — add properties for:
+//        • achievements: { unlocked: Set, progress: Map }
+//        • powerUps: [] (active power-up instances in the scene)
+//        • gamePhase: 'menu' | 'riding' | 'score' | 'paused'
+//        • score: { distance, airTime, tricks, total }
+//        • unlockedLocations: Set
+//        • unlockedRenderModes: Set
 
 /* ── Constants ─────────────────────────────────────────────── */
 

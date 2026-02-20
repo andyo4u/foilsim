@@ -5,6 +5,36 @@
 //  Calls init functions from each module.
 //  Contains the animate() loop and window.* bridge.
 // ──────────────────────────────────────────────────────────────
+//
+// ╔═══════════════════════════════════════════════════════════════╗
+// ║                    FUTURE IDEAS / ROADMAP                    ║
+// ╠═══════════════════════════════════════════════════════════════╣
+// ║                                                              ║
+// ║  GAMEPLAY                                                    ║
+// ║  • Power-ups: collectible items floating on the water that   ║
+// ║    you ride over (speed boost, energy refill, score mult…)   ║
+// ║  • Game loop: location-select menu → ride → score screen     ║
+// ║  • Achievements system: unlock new locations, new render     ║
+// ║    modes / visualization styles as rewards                   ║
+// ║  • Jumping: ramp objects or wave-launch mechanic, air time   ║
+// ║    tricks, landing physics                                   ║
+// ║                                                              ║
+// ║  PHYSICS / CONTROLS                                          ║
+// ║  • Lean-back brake turn: leaning back = tighter turn radius  ║
+// ║    but lower speed (risk/reward carving mechanic)            ║
+// ║  • Fix foil riding too high above the water – adjust         ║
+// ║    rideH clamp / visual offset so board sits closer to       ║
+// ║    the surface at normal speeds                              ║
+// ║                                                              ║
+// ║  VISUALS                                                     ║
+// ║  • Distant water: blend the flat far-plane water into the    ║
+// ║    3-D wave mesh more seamlessly (LOD rings, horizon fade,   ║
+// ║    or shader-based distant wave approximation)               ║
+// ║  • Brighten satellite terrain texture so mountain features   ║
+// ║    are more visible (adjust gamma / levels in the terrain    ║
+// ║    fragment shader, or multiply diffuse by a boost factor)   ║
+// ║                                                              ║
+// ╚═══════════════════════════════════════════════════════════════╝
 
 import { state, OCEAN_SIZE } from './state.js';
 import { updateVal, toggleControls, getVal, cacheAllSliders, applyPreset, showToast,

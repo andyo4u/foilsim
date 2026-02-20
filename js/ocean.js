@@ -6,6 +6,14 @@
 //  Everything that was a bare global now lives on the shared
 //  `state` object, or is module-local where appropriate.
 // ──────────────────────────────────────────────────────────────
+//
+//  TODO: Distant water blending — the flat far-plane water
+//        doesn't match the 3D wave mesh at the boundary. Options:
+//        • LOD rings that progressively flatten towards the horizon
+//        • Shader-based distant wave approximation on a far plane
+//        • Horizon fog/fade to hide the seam
+//        • Vertex displacement on a second larger plane that
+//          samples simplified wave functions
 
 import { state, OCEAN_SIZE, SEGMENTS } from './state.js';
 import { getVal, degToDir, lerp, smoothstep } from './helpers.js';

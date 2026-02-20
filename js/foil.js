@@ -5,6 +5,22 @@
 //  spray particle system, wake trail, wingtip streamers,
 //  input handlers, and camera controls.
 // ──────────────────────────────────────────────────────────────
+//
+//  TODO: Fix foil visual height — board appears too far above the
+//        water at normal ride speeds. Clamp rideH or add a visual
+//        offset so the board skims just above the surface.
+//
+//  TODO: Lean-back brake turn — when braking + turning, apply a
+//        tighter turn radius at the cost of more drag. Gives a
+//        risk/reward carving mechanic.
+//
+//  TODO: Jumping — detect launch conditions (steep wave face +
+//        speed), apply ballistic arc, air-time scoring, and
+//        landing impact physics (splash, speed penalty if bad).
+//
+//  TODO: Power-up collisions — check foil position against
+//        floating power-up objects each frame; trigger effects
+//        (speed boost, energy refill, score multiplier, etc.).
 
 import { state } from './state.js';
 import { lerp, toggleControls } from './helpers.js';

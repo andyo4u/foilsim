@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.80</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.79</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -1657,9 +1657,8 @@ function buildRealTerrain(onReady) {
       uTerrainBounds: { value: new THREE.Vector4(
         -RT_WORLD_W()/2, -RT_WORLD_D()/2, RT_WORLD_W()/2, RT_WORLD_D()/2
       )},
-      uRenderMode: { value: 0.0 },
-      uSunDir: { value: new THREE.Vector3(0, 0.4, -1).normalize() },
-      uShallowColor: { value: new THREE.Color(0, 0.15, 0.3) },
+      uFogColor: { value: new THREE.Color(0.55, 0.7, 0.85) },
+      uWaterColor: { value: new THREE.Color(0.30, 0.48, 0.58) },
       uCamPos: { value: new THREE.Vector3() }
     },
     vertexShader: `
@@ -1673,11 +1672,14 @@ function buildRealTerrain(onReady) {
       uniform vec2 uOceanMin, uOceanMax;
       uniform sampler2D uRiverMask;
       uniform float uUseRiverMask;
-      uniform vec4 uTerrainBounds;
-      uniform float uRenderMode;
-      uniform vec3 uSunDir, uShallowColor, uCamPos;
+      uniform vec4 uTerrainBounds; // minX, minZ, maxX, maxZ
+      uniform vec3 uFogColor, uWaterColor, uCamPos;
       varying vec3 vWorldPos;
       void main() {
+        // Discard if inside the ocean mesh bounds (ocean handles that area)
+        if (vWorldPos.x > uOceanMin.x && vWorldPos.x < uOceanMax.x &&
+            vWorldPos.z > uOceanMin.y && vWorldPos.z < uOceanMax.y) discard;
+
         // Discard if over land (using river mask)
         if (uUseRiverMask > 0.5) {
           vec2 tuv = vec2(
@@ -1686,90 +1688,22 @@ function buildRealTerrain(onReady) {
           );
           if (tuv.x >= 0.0 && tuv.x <= 1.0 && tuv.y >= 0.0 && tuv.y <= 1.0) {
             float mask = texture2D(uRiverMask, tuv).r;
-            if (mask < 0.3) discard;
+            if (mask < 0.3) discard; // land
           }
         }
 
-        // Soft alpha blend at ocean mesh boundary (no hard seam)
-        // Compute signed distance to ocean bounds (negative = inside, positive = outside)
-        float dLeft  = uOceanMin.x - vWorldPos.x;
-        float dRight = vWorldPos.x - uOceanMax.x;
-        float dBack  = uOceanMin.y - vWorldPos.z;
-        float dFront = vWorldPos.z - uOceanMax.y;
-        // Distance outside bounds (0 if inside)
-        float dOutside = max(max(dLeft, dRight), max(dBack, dFront));
-        // Distance inside bounds (0 if outside)
-        float dInside = -min(min(-dLeft, -dRight), min(-dBack, -dFront));
-        // Smooth blend: fully transparent deep inside ocean, fully opaque well outside
-        // Transition zone: -20m (inside overlap) to +60m (outside)
-        float blendAlpha = smoothstep(-20.0, 60.0, dOutside > 0.0 ? dOutside : -dInside);
-
-        if (blendAlpha < 0.01) discard; // fully inside ocean bounds — skip
-
-        // Per-mode base color and fog color (matches each ocean shader path)
+        // Water color matches ocean wave tops, with distance fog
         float dist = length(vWorldPos - uCamPos);
-        vec3 L = normalize(uSunDir);
-        float sunDot = max(dot(normalize(vWorldPos - uCamPos), L), 0.0);
-        vec3 baseCol, fogCol;
+        float fogF = 1.0 - exp(-dist * 0.00015);
+        vec3 col = mix(uWaterColor, uFogColor, fogF);
 
-        if (uRenderMode > 9.5) {        // Fur
-          baseCol = vec3(0.30, 0.20, 0.10);
-          fogCol = mix(vec3(0.55, 0.45, 0.35), vec3(0.70, 0.55, 0.40), pow(sunDot, 3.0));
-        } else if (uRenderMode > 8.5) { // Lava
-          baseCol = vec3(0.10, 0.04, 0.02);
-          fogCol = mix(vec3(0.12, 0.06, 0.04), vec3(0.25, 0.10, 0.05), pow(sunDot, 3.0));
-        } else if (uRenderMode > 7.5) { // Plastic
-          baseCol = vec3(0.06, 0.30, 0.55);
-          fogCol = mix(vec3(0.55, 0.65, 0.78), vec3(0.75, 0.72, 0.68), pow(sunDot, 4.0));
-        } else if (uRenderMode > 6.5) { // X-Ray
-          baseCol = vec3(0.02, 0.03, 0.06);
-          fogCol = vec3(0.02, 0.03, 0.06);
-        } else if (uRenderMode > 5.5) { // Pixel Art
-          baseCol = vec3(0.05, 0.10, 0.30);
-          fogCol = vec3(0.30, 0.35, 0.55);
-        } else if (uRenderMode > 4.5) { // Sumi-e
-          baseCol = vec3(0.92, 0.90, 0.85);
-          fogCol = vec3(0.92, 0.90, 0.85);
-        } else if (uRenderMode > 3.5) { // Tron
-          baseCol = vec3(0.01, 0.015, 0.04);
-          fogCol = vec3(0.02, 0.03, 0.08);
-        } else if (uRenderMode > 2.5) { // Painterly
-          baseCol = vec3(0.25, 0.15, 0.45);
-          fogCol = mix(vec3(0.50, 0.35, 0.60), vec3(0.85, 0.60, 0.50), pow(sunDot, 3.0));
-        } else if (uRenderMode > 1.5) { // DEM
-          baseCol = vec3(0.0, 0.05, 0.35);
-          fogCol = vec3(0.45, 0.55, 0.70);
-        } else if (uRenderMode > 0.5) { // Woodcut
-          baseCol = vec3(0.85, 0.78, 0.68);
-          fogCol = mix(vec3(0.85, 0.78, 0.68), vec3(0.95, 0.85, 0.65), pow(sunDot, 4.0));
-        } else {                          // Normal
-          baseCol = uShallowColor;
-          fogCol = mix(vec3(0.55, 0.70, 0.85), vec3(0.80, 0.75, 0.60), pow(sunDot, 4.0));
-        }
-
-        // Fog — same rate as ocean shader (0.0012)
-        float fog = 1.0 - exp(-dist * 0.0012);
-        vec3 col = mix(baseCol, fogCol, fog);
-
-        // River mask soft alpha at edges
-        float maskAlpha = 1.0;
-        if (uUseRiverMask > 0.5) {
-          vec2 tuv = vec2(
-            (vWorldPos.x - uTerrainBounds.x) / (uTerrainBounds.z - uTerrainBounds.x),
-            1.0 - (vWorldPos.z - uTerrainBounds.y) / (uTerrainBounds.w - uTerrainBounds.y)
-          );
-          if (tuv.x >= 0.0 && tuv.x <= 1.0 && tuv.y >= 0.0 && tuv.y <= 1.0) {
-            maskAlpha = smoothstep(0.3, 0.5, texture2D(uRiverMask, tuv).r);
-          }
-        }
-
-        gl_FragColor = vec4(col, blendAlpha * maskAlpha * 0.92);
+        gl_FragColor = vec4(col, 0.92);
       }`,
     transparent: true,
     depthWrite: false
   });
   waterFillPlane = new THREE.Mesh(fillGeo, fillMat);
-  waterFillPlane.position.y = RT_WATER_Y();
+  waterFillPlane.position.y = RT_WATER_Y() - 0.05;
   waterFillPlane.renderOrder = -1;
   scene.add(waterFillPlane);
 
@@ -3480,16 +3414,60 @@ function animate(){
     oceanMesh.position.z = Math.round(foil.z / SNAP) * SNAP;
     oceanMesh.position.y = realTerrainMesh ? RT_WATER_Y() : 0;
 
-    // Update water fill plane uniforms each frame
+    // Update water fill plane ocean cutout bounds each frame
     if (waterFillPlane) {
       const half = OCEAN_SIZE / 2;
       const fu = waterFillPlane.material.uniforms;
       fu.uOceanMin.value.set(oceanMesh.position.x - half, oceanMesh.position.z - half);
       fu.uOceanMax.value.set(oceanMesh.position.x + half, oceanMesh.position.z + half);
       fu.uCamPos.value.copy(camera.position);
-      fu.uSunDir.value.copy(u.uSunDir.value);
-      fu.uRenderMode.value = u.uRenderMode.value;
-      fu.uShallowColor.value.copy(u.uShallowColor.value);
+      // Match distant water color to ocean wave tops
+      const rm = oceanMat.uniforms.uRenderMode.value;
+      if (rm > 9.5) {
+        // Fur: warm brown
+        fu.uWaterColor.value.set(0.30, 0.20, 0.10);
+        fu.uFogColor.value.set(0.55, 0.45, 0.35);
+      } else if (rm > 8.5) {
+        // Lava: dark cooled crust
+        fu.uWaterColor.value.set(0.10, 0.04, 0.02);
+        fu.uFogColor.value.set(0.12, 0.06, 0.04);
+      } else if (rm > 7.5) {
+        // Plastic: match teal plastic base
+        fu.uWaterColor.value.set(0.06, 0.30, 0.55);
+        fu.uFogColor.value.set(0.55, 0.65, 0.78);
+      } else if (rm > 6.5) {
+        // X-Ray: near-black
+        fu.uWaterColor.value.set(0.02, 0.03, 0.06);
+        fu.uFogColor.value.set(0.02, 0.03, 0.06);
+      } else if (rm > 5.5) {
+        // Pixel Art: retro dark blue
+        fu.uWaterColor.value.set(0.05, 0.10, 0.30);
+        fu.uFogColor.value.set(0.30, 0.35, 0.55);
+      } else if (rm > 4.5) {
+        // Sumi-e: rice paper
+        fu.uWaterColor.value.set(0.92, 0.90, 0.85);
+        fu.uFogColor.value.set(0.92, 0.90, 0.85);
+      } else if (rm > 3.5) {
+        // Tron: dark arena
+        fu.uWaterColor.value.set(0.01, 0.015, 0.04);
+        fu.uFogColor.value.set(0.02, 0.03, 0.08);
+      } else if (rm > 2.5) {
+        // Painterly: dreamy purple-teal
+        fu.uWaterColor.value.set(0.25, 0.15, 0.45);
+        fu.uFogColor.value.set(0.50, 0.35, 0.60);
+      } else if (rm > 1.5) {
+        // DEM: deep blue
+        fu.uWaterColor.value.set(0.0, 0.05, 0.35);
+        fu.uFogColor.value.set(0.45, 0.55, 0.70);
+      } else if (rm > 0.5) {
+        // Woodcut: sepia paper
+        fu.uWaterColor.value.set(0.85, 0.78, 0.68);
+        fu.uFogColor.value.set(0.85, 0.78, 0.68);
+      } else {
+        // Normal: match wave-top color
+        fu.uWaterColor.value.copy(u.uShallowColor.value);
+        fu.uFogColor.value.set(0.55, 0.7, 0.85);
+      }
     }
   }
 

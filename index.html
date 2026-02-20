@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.74</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.75</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -229,7 +229,7 @@
     <div class="control-row"><span class="control-label">Wave Energy</span><input type="range" id="sbWaveEnergy" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbWaveEnergy-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Foil Stability</span><input type="range" id="sbStability" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbStability-val">1.00×</span></div>
     <div class="control-row" style="margin-top:6px;"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="sbFreeCam" onchange="toggleFreeCam(this.checked)" style="width:14px;height:14px;accent-color:#4af;"><span class="control-label" style="flex:1;">Free Camera</span></label></div>
-    <div class="control-row"><span class="control-label">Render Style</span><select id="sbRenderMode" onchange="setRenderMode(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="0">Normal</option><option value="1">Woodcut</option><option value="2">DEM</option><option value="3">Painterly</option><option value="4">Tron</option><option value="5">Sumi-e</option><option value="6">Pixel Art</option><option value="7">X-Ray</option><option value="8">Plastic</option></select></div>
+    <div class="control-row"><span class="control-label">Render Style</span><select id="sbRenderMode" onchange="setRenderMode(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="0">Normal</option><option value="1">Woodcut</option><option value="2">DEM</option><option value="3">Painterly</option><option value="4">Tron</option><option value="5">Sumi-e</option><option value="6">Pixel Art</option><option value="7">X-Ray</option><option value="8">Plastic</option><option value="9">Lava</option></select></div>
   </div>
   <div class="section">
     <div class="section-title">🏝 Background</div>
@@ -1912,7 +1912,91 @@ const oceanMat = new THREE.ShaderMaterial({
         alpha = smoothstep(0.08, 0.35, texture2D(uRiverMask, muv).r);
       }
 
-      if (uRenderMode > 7.5) {
+      if (uRenderMode > 8.5) {
+        // ═══ HOT LAVA PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // ── Cooling crust vs molten core ──
+        // Height maps to temperature: troughs = hottest molten, crests = cooling crust
+        float hNorm = clamp((vHeight + 3.0) / 7.0, 0.0, 1.0);
+
+        // ── Molten lava color ramp (black → red → orange → yellow → white-hot) ──
+        float temp = 1.0 - hNorm; // invert: low = hot, high = cooled
+        // Add animated convection currents
+        float conv1 = fbm(vWorldPos.xz * 0.15 + uTime * 0.08);
+        float conv2 = noise(vWorldPos.xz * 0.4 + uTime * 0.12 + conv1 * 1.5);
+        temp += conv1 * 0.25 + conv2 * 0.1;
+        temp = clamp(temp, 0.0, 1.0);
+
+        vec3 lavaCol;
+        if (temp < 0.25) {
+          // Cooled black crust
+          lavaCol = mix(vec3(0.05, 0.03, 0.02), vec3(0.15, 0.04, 0.02), temp / 0.25);
+        } else if (temp < 0.5) {
+          // Dark red, starting to glow
+          lavaCol = mix(vec3(0.15, 0.04, 0.02), vec3(0.65, 0.10, 0.02), (temp - 0.25) / 0.25);
+        } else if (temp < 0.75) {
+          // Hot orange
+          lavaCol = mix(vec3(0.65, 0.10, 0.02), vec3(1.0, 0.45, 0.05), (temp - 0.5) / 0.25);
+        } else {
+          // White-hot yellow
+          lavaCol = mix(vec3(1.0, 0.45, 0.05), vec3(1.0, 0.85, 0.3), (temp - 0.75) / 0.25);
+        }
+
+        // ── Crust cracks (dark lines revealing molten underneath) ──
+        // Use the wave gradient direction to orient cracks
+        vec2 grad = vec2(N.x, N.z);
+        float gradLen = length(grad);
+        vec2 crackDir = gradLen > 0.001 ? grad / gradLen : vec2(1.0, 0.0);
+        float crackProj = dot(vWorldPos.xz, crackDir);
+        float crack1 = noise(vec2(crackProj * 3.0, dot(vWorldPos.xz, vec2(-crackDir.y, crackDir.x)) * 2.0) + uTime * 0.02);
+        float crack2 = noise(vWorldPos.xz * 1.5 + uTime * 0.03);
+        // Cracks appear where crust is cooler
+        float crackMask = smoothstep(0.35, 0.55, crack1) * smoothstep(0.85, 0.65, crack1);
+        crackMask += smoothstep(0.4, 0.5, crack2) * smoothstep(0.75, 0.65, crack2) * 0.5;
+        crackMask *= (1.0 - temp) * 2.0; // more cracks on cooler crust
+        crackMask = clamp(crackMask, 0.0, 1.0);
+        // Cracks reveal the hot molten layer beneath
+        vec3 crackGlow = mix(vec3(0.8, 0.20, 0.02), vec3(1.0, 0.6, 0.1), crackMask);
+        lavaCol = mix(lavaCol, crackGlow, crackMask * 0.8);
+
+        // ── Surface lighting (dim — lava is mostly emissive) ──
+        float NdotL = max(dot(N, L), 0.0);
+        // Cool crust gets some diffuse; hot areas are self-lit
+        float diffuse = mix(0.3 + 0.5 * NdotL, 1.0, temp);
+        vec3 col = lavaCol * diffuse;
+
+        // ── Emissive glow (hot areas glow independently of light) ──
+        float emissive = smoothstep(0.3, 0.8, temp) * 1.2;
+        col += lavaCol * emissive;
+
+        // ── Specular on crust (wet-look glassy surface) ──
+        vec3 H = normalize(L + V);
+        float spec = pow(max(dot(N, H), 0.0), 64.0);
+        col += vec3(1.0, 0.7, 0.3) * spec * 0.5 * (1.0 - temp); // only on cooled crust
+
+        // ── Foam as bright ember sparks ──
+        float foamAmt = smoothstep(0.2, 0.5, vFoam);
+        col = mix(col, vec3(1.0, 0.8, 0.2), foamAmt * 0.6);
+        col += vec3(1.0, 0.4, 0.0) * foamAmt * 0.3; // extra orange bloom
+
+        // ── Heat shimmer (subtle color oscillation) ──
+        col += vec3(0.1, 0.02, 0.0) * sin(vWorldPos.x * 1.5 + uTime * 4.0) * temp * 0.3;
+
+        // ── Smoky dark fog ──
+        float fog = 1.0 - exp(-cd * 0.0015);
+        vec3 fogCol = mix(vec3(0.12, 0.06, 0.04), vec3(0.25, 0.10, 0.05), pow(max(dot(normalize(vWorldPos - uCamPos), L), 0.0), 3.0));
+        col = mix(col, fogCol, fog);
+
+        // HDR clamp
+        col = min(col, vec3(1.5));
+
+        gl_FragColor = vec4(col, alpha);
+
+      } else if (uRenderMode > 7.5) {
         // ═══ PLASTIC PATH ═══
         vec3 N = normalize(vNormal);
         vec3 V = normalize(uCamPos - vWorldPos);
@@ -3256,7 +3340,11 @@ function animate(){
       fu.uCamPos.value.copy(camera.position);
       // Match distant water color to ocean wave tops
       const rm = oceanMat.uniforms.uRenderMode.value;
-      if (rm > 7.5) {
+      if (rm > 8.5) {
+        // Lava: dark cooled crust
+        fu.uWaterColor.value.set(0.10, 0.04, 0.02);
+        fu.uFogColor.value.set(0.12, 0.06, 0.04);
+      } else if (rm > 7.5) {
         // Plastic: match teal plastic base
         fu.uWaterColor.value.set(0.06, 0.30, 0.55);
         fu.uFogColor.value.set(0.55, 0.65, 0.78);

@@ -175,7 +175,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.81</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.82</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -1053,6 +1053,10 @@ const terrainConfigs = {
     label: 'Columbia River Gorge',
     heightmap: 'terrain-data/gorge_heightmap_1024.png',
     satellite: 'terrain-data/gorge_satellite_2048.jpg',
+    mapImage: 'terrain-data/gorge_map_box.png',
+    // Map image covers the river corridor (full E-W, center N-S band)
+    // World-coord bounding box: [minX(west), minZ(south), maxX(east), maxZ(north)]
+    mapBounds: [-7191, -2374, 7191, 2374],
     elevMin: 24.0,
     elevMax: 1090.1,
     worldW: 14382,   // meters east-west
@@ -3185,7 +3189,7 @@ function updateWaveChart(waveH, slopeVal, energyVal) {
 const miniMapCanvas = document.getElementById('mini-map');
 const miniMapCtx = miniMapCanvas.getContext('2d');
 const MMAP_W = 280, MMAP_H = 360;
-const MMAP_PAD = 12;
+const MMAP_PAD = 8;
 
 const miniMapPath = [];
 const MMAP_MAX_POINTS = 4000;
@@ -3194,10 +3198,14 @@ let miniMapBgImage = null;
 let miniMapDirty = true;
 let miniMapFrameCounter = 0;
 
+// Map image bounds in world coords [minX(west), minZ(south), maxX(east), maxZ(north)]
+let mmapBounds = null;
+
 // World → canvas coords (East at top, North on left)
 function worldToMiniMap(wx, wz) {
-  const nx = (wx / RT_WORLD_W()) + 0.5;  // 0=west, 1=east
-  const nz = (wz / RT_WORLD_D()) + 0.5;  // 0=south, 1=north
+  if (!mmapBounds) return { x: MMAP_W / 2, y: MMAP_H / 2 };
+  const nx = (wx - mmapBounds[0]) / (mmapBounds[2] - mmapBounds[0]); // 0=west, 1=east
+  const nz = (wz - mmapBounds[1]) / (mmapBounds[3] - mmapBounds[1]); // 0=south, 1=north
   const usableW = MMAP_W - 2 * MMAP_PAD;
   const usableH = MMAP_H - 2 * MMAP_PAD;
   return {
@@ -3211,65 +3219,90 @@ function headingToMapAngle(heading) {
 }
 
 function buildMiniMapBackground() {
-  if (!realTerrainHeightData) return;
-  const d = realTerrainHeightData;
-  const WATER_THRESH = activeTerrainCfg.waterThresh || 12;
+  // Use Mapbox image if available, otherwise fall back to heightmap
+  const cfg = activeTerrainCfg;
+  mmapBounds = cfg.mapBounds || [
+    -RT_WORLD_W() / 2, -RT_WORLD_D() / 2,
+     RT_WORLD_W() / 2,  RT_WORLD_D() / 2
+  ];
 
-  const offscreen = document.createElement('canvas');
-  offscreen.width = MMAP_W;
-  offscreen.height = MMAP_H;
-  const octx = offscreen.getContext('2d');
+  if (cfg.mapImage) {
+    const img = new Image();
+    img.onload = function() {
+      const offscreen = document.createElement('canvas');
+      offscreen.width = MMAP_W;
+      offscreen.height = MMAP_H;
+      const octx = offscreen.getContext('2d');
 
-  // Dark background fill
-  octx.fillStyle = '#0a1628';
-  octx.fillRect(0, 0, MMAP_W, MMAP_H);
+      // Dark background
+      octx.fillStyle = '#0a1628';
+      octx.fillRect(0, 0, MMAP_W, MMAP_H);
 
-  // Draw terrain from heightmap
-  const usableW = MMAP_W - 2 * MMAP_PAD;
-  const usableH = MMAP_H - 2 * MMAP_PAD;
-  const imgData = octx.createImageData(usableW, usableH);
+      // The map image is landscape (wide E-W). On our canvas, East is at top,
+      // so we rotate the image 90° CW: image width→canvas height, image height→canvas width.
+      const usableW = MMAP_W - 2 * MMAP_PAD;
+      const usableH = MMAP_H - 2 * MMAP_PAD;
 
-  for (let my = 0; my < usableH; my++) {
-    for (let mx = 0; mx < usableW; mx++) {
-      // Map pixel → normalized world (reverse of worldToMiniMap)
-      const nx = 1 - my / usableH;       // canvasY→east-west
-      const nz = 1 - mx / usableW;       // canvasX→north-south
+      octx.save();
+      // Translate to center of usable area, rotate 90° CW, then draw centered
+      octx.translate(MMAP_PAD + usableW / 2, MMAP_PAD + usableH / 2);
+      octx.rotate(Math.PI / 2);
+      // After 90° CW rotation: image X→canvas Y(down), image Y→canvas X(left)
+      // Draw image centered: it will fill usableH wide × usableW tall (in rotated space)
+      octx.drawImage(img, -usableH / 2, -usableW / 2, usableH, usableW);
+      octx.restore();
 
-      // Normalized → heightmap pixel
-      const hmU = nx;
-      const hmV = 1 - nz;
-      const hpx = Math.min(d.width - 1, Math.max(0, Math.floor(hmU * (d.width - 1))));
-      const hpy = Math.min(d.height - 1, Math.max(0, Math.floor(hmV * (d.height - 1))));
-      const idx = (hpy * d.width + hpx) * 4;
-      const elev = d.pixels[idx];
+      miniMapBgImage = octx.getImageData(0, 0, MMAP_W, MMAP_H);
+      miniMapDirty = true;
+      miniMapCanvas.style.display = 'block';
+    };
+    img.src = cfg.mapImage;
+  } else if (realTerrainHeightData) {
+    // Fallback: generate from heightmap
+    const d = realTerrainHeightData;
+    const WATER_THRESH = cfg.waterThresh || 12;
 
-      const pixIdx = (my * usableW + mx) * 4;
-      if (elev <= WATER_THRESH) {
-        // Water — dark navy
-        imgData.data[pixIdx]     = 15;
-        imgData.data[pixIdx + 1] = 25;
-        imgData.data[pixIdx + 2] = 50;
-        imgData.data[pixIdx + 3] = 255;
-      } else {
-        // Land — elevation-tinted dark terrain
-        const t = Math.min(1, (elev - WATER_THRESH) / (200 - WATER_THRESH));
-        imgData.data[pixIdx]     = Math.floor(20 + t * 30);
-        imgData.data[pixIdx + 1] = Math.floor(30 + t * 25);
-        imgData.data[pixIdx + 2] = Math.floor(25 + t * 15);
-        imgData.data[pixIdx + 3] = 255;
+    const offscreen = document.createElement('canvas');
+    offscreen.width = MMAP_W;
+    offscreen.height = MMAP_H;
+    const octx = offscreen.getContext('2d');
+
+    octx.fillStyle = '#0a1628';
+    octx.fillRect(0, 0, MMAP_W, MMAP_H);
+
+    const usableW = MMAP_W - 2 * MMAP_PAD;
+    const usableH = MMAP_H - 2 * MMAP_PAD;
+    const imgData = octx.createImageData(usableW, usableH);
+
+    for (let my = 0; my < usableH; my++) {
+      for (let mx = 0; mx < usableW; mx++) {
+        const nx = 1 - my / usableH;
+        const nz = 1 - mx / usableW;
+        const hmU = nx;
+        const hmV = 1 - nz;
+        const hpx = Math.min(d.width - 1, Math.max(0, Math.floor(hmU * (d.width - 1))));
+        const hpy = Math.min(d.height - 1, Math.max(0, Math.floor(hmV * (d.height - 1))));
+        const idx = (hpy * d.width + hpx) * 4;
+        const elev = d.pixels[idx];
+
+        const pixIdx = (my * usableW + mx) * 4;
+        if (elev <= WATER_THRESH) {
+          imgData.data[pixIdx] = 15; imgData.data[pixIdx+1] = 25;
+          imgData.data[pixIdx+2] = 50; imgData.data[pixIdx+3] = 255;
+        } else {
+          const t = Math.min(1, (elev - WATER_THRESH) / (200 - WATER_THRESH));
+          imgData.data[pixIdx] = Math.floor(20 + t * 30);
+          imgData.data[pixIdx+1] = Math.floor(30 + t * 25);
+          imgData.data[pixIdx+2] = Math.floor(25 + t * 15);
+          imgData.data[pixIdx+3] = 255;
+        }
       }
     }
+    octx.putImageData(imgData, MMAP_PAD, MMAP_PAD);
+    miniMapBgImage = octx.getImageData(0, 0, MMAP_W, MMAP_H);
+    miniMapDirty = true;
+    miniMapCanvas.style.display = 'block';
   }
-  octx.putImageData(imgData, MMAP_PAD, MMAP_PAD);
-
-  // Subtle rounded-rect border inside the padding area
-  octx.strokeStyle = 'rgba(60, 100, 160, 0.15)';
-  octx.lineWidth = 1;
-  octx.strokeRect(MMAP_PAD - 0.5, MMAP_PAD - 0.5, usableW + 1, usableH + 1);
-
-  miniMapBgImage = octx.getImageData(0, 0, MMAP_W, MMAP_H);
-  miniMapDirty = true;
-  miniMapCanvas.style.display = 'block';
 }
 
 function updateMiniMap() {

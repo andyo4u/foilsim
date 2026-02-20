@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.79</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.80</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -3279,7 +3279,8 @@ function animate(){
   // In our coordinate system sin(heading) = X movement, so increasing heading
   // turns toward +X which is RIGHT from the camera. Therefore we negate:
   // positive roll (left bank) must DECREASE heading to turn left visually.
-  const turnFromRoll = foil.roll * 2.2 * getVal('sbTurnSpeed') * Math.min(1, foil.speed / 4);
+  const turnBoost = (input.down && Math.abs(foil.roll) > 0.01) ? 1.2 : 1.0;
+  const turnFromRoll = foil.roll * 2.2 * getVal('sbTurnSpeed') * Math.min(1, foil.speed / 4) * turnBoost;
   foil.heading -= turnFromRoll * dt;
 
   let wH=getWaveHeight(foil.x,foil.z,t);

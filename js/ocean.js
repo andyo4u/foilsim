@@ -1,0 +1,1059 @@
+// ──────────────────────────────────────────────────────────────
+//  ocean.js  –  Ocean shader, CPU wave functions, env map,
+//               wave chart, and render mode
+//
+//  Extracted from the monolithic index.html.
+//  Everything that was a bare global now lives on the shared
+//  `state` object, or is module-local where appropriate.
+// ──────────────────────────────────────────────────────────────
+
+import { state, OCEAN_SIZE, SEGMENTS } from './state.js';
+import { getVal, degToDir, lerp, smoothstep } from './helpers.js';
+
+/* ── Module-local helpers (terrain accessors) ──────────────── */
+function RT_WORLD_W() { return state.activeTerrainCfg ? state.activeTerrainCfg.worldW : 14382; }
+function RT_WORLD_D() { return state.activeTerrainCfg ? state.activeTerrainCfg.worldD : 11054; }
+
+/* ── Wave chart (module-local) ─────────────────────────────── */
+let waveChartCanvas = null;
+let waveChartCtx    = null;
+const CHART_W = 800, CHART_H = 80;
+const waveChartData = [];
+const CHART_MAX_SAMPLES = CHART_W;
+
+// ═══════════════════════════
+// ENVIRONMENT MAP
+// ═══════════════════════════
+
+function updateEnvMap() {
+  // Render just the sky (not clouds/ocean) into a cubemap for reflections
+  const envScene = new THREE.Scene();
+  const envSky = new THREE.Sky();
+  envSky.scale.setScalar(1000);
+  const eu = envSky.material.uniforms;
+  eu['turbidity'].value = state.skyUniforms['turbidity'].value;
+  eu['rayleigh'].value = state.skyUniforms['rayleigh'].value;
+  eu['mieCoefficient'].value = state.skyUniforms['mieCoefficient'].value;
+  eu['mieDirectionalG'].value = state.skyUniforms['mieDirectionalG'].value;
+  eu['sunPosition'].value.copy(state.skyUniforms['sunPosition'].value);
+  envScene.add(envSky);
+  if (state.envMap) state.envMap.dispose();
+  state.envMap = state.pmremGenerator.fromScene(envScene).texture;
+  state.scene.environment = state.envMap;
+  envSky.material.dispose();
+  envSky.geometry.dispose();
+}
+
+// ═══════════════════════════
+// OCEAN SHADER
+// ═══════════════════════════
+
+function initOcean() {
+  // ── PMREMGenerator ──────────────────────────────────────
+  state.pmremGenerator = new THREE.PMREMGenerator(state.renderer);
+  state.pmremGenerator.compileCubemapShader();
+
+  // ── Geometry ────────────────────────────────────────────
+  const oceanGeo = new THREE.PlaneGeometry(OCEAN_SIZE, OCEAN_SIZE, SEGMENTS, SEGMENTS);
+  oceanGeo.rotateX(-Math.PI / 2);
+  state.oceanGeo = oceanGeo;
+
+  // ── ShaderMaterial ──────────────────────────────────────
+  const oceanMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime:{value:0},uSunDir:{value:new THREE.Vector3(0,.4,-1).normalize()},uCamPos:{value:new THREE.Vector3()},
+      uChopHeight:{value:.4},uChopDir:{value:new THREE.Vector2(.707,.707)},
+      uSwell1:{value:new THREE.Vector4(-1,0,12,2)},uSwell2:{value:new THREE.Vector4(-.707,.707,8,.8)},uSwell3:{value:new THREE.Vector4(.34,-.94,16,.3)},
+      uDeepColor:{value:new THREE.Color(0,.04,.12)},uShallowColor:{value:new THREE.Color(0,.15,.3)},uFoamColor:{value:new THREE.Color(.85,.9,.95)},
+      uFogColor:{value:new THREE.Color(.55,.7,.85)},uFogSunColor:{value:new THREE.Color(.8,.75,.6)},
+      uRiverMask:{value:null},uUseRiverMask:{value:0},
+      uRiverBounds:{value:new THREE.Vector4(-RT_WORLD_W()/2, -RT_WORLD_D()/2, RT_WORLD_W()/2, RT_WORLD_D()/2)},
+      uRenderMode:{value:0},
+    },
+    vertexShader: `
+    precision highp float;
+    uniform float uTime;uniform float uChopHeight;uniform vec2 uChopDir;
+    uniform vec4 uSwell1,uSwell2,uSwell3;
+    varying vec3 vWorldPos;varying vec3 vNormal;varying float vFoam;varying float vHeight;
+    vec2 hash2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
+    float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);return mix(mix(dot(hash2(i),f),dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)),dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
+    float fbm(vec2 p){float v=0.,a=.5;mat2 r=mat2(.8,.6,-.6,.8);for(int i=0;i<6;i++){v+=a*noise(p);p=r*p*2.03;a*=.48;}return v;}
+    vec3 gw(vec2 pos,vec2 dir,float per,float ht,float t,out vec3 T,out vec3 B){
+      float wl=1.56*per*per,k=6.28318/wl,spd=sqrt(9.81/k),st=min(ht*k/2.,.4);
+      float ph=k*dot(dir,pos)-spd*t*k,s=sin(ph),c=cos(ph),a=ht*.5;
+      T=vec3(1.-st*dir.x*dir.x*c,st*dir.x*s,-st*dir.x*dir.y*c);
+      B=vec3(-st*dir.x*dir.y*c,st*dir.y*s,1.-st*dir.y*dir.y*c);
+      return vec3(-dir.x*a*st*s,a*c,-dir.y*a*st*s);
+    }
+    void main(){
+      vec3 pos=(modelMatrix*vec4(position,1.0)).xyz;
+      vec3 d=vec3(0),T=vec3(1,0,0),B_=vec3(0,0,1),t1,b1;
+      if(uSwell1.w>.01){d+=gw(pos.xz,uSwell1.xy,uSwell1.z,uSwell1.w,uTime,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,uSwell1.xy*1.07,uSwell1.z*.7,uSwell1.w*.22,uTime*1.05,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+      if(uSwell2.w>.01){d+=gw(pos.xz,uSwell2.xy,uSwell2.z,uSwell2.w,uTime,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,uSwell2.xy*.95,uSwell2.z*.65,uSwell2.w*.2,uTime*.98,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+      if(uSwell3.w>.01){d+=gw(pos.xz,uSwell3.xy,uSwell3.z,uSwell3.w,uTime,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+      if(uChopHeight>.01){float ch=uChopHeight;vec2 cd=uChopDir;
+        d+=gw(pos.xz,cd,3.,ch*.5,uTime,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,vec2(cd.y,-cd.x)*.8+cd*.6,2.2,ch*.35,uTime*1.1,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,cd*.7+vec2(-cd.y,cd.x)*.7,1.8,ch*.25,uTime*1.3,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,cd*.9+vec2(cd.y,-cd.x)*.4,1.3,ch*.18,uTime*.9,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+      float det=fbm(pos.xz*mix(.08,.02,smoothstep(50.,400.,length(pos.xz)))+uTime*.15)*.3+fbm(pos.xz*.03-uTime*.08)*.15;
+      d.y+=det*(uChopHeight+.2);
+      pos+=d;
+      vNormal=normalize(cross(B_,T));if(vNormal.y<0.)vNormal=-vNormal;
+      float jac=T.x*B_.z-T.z*B_.x;vFoam=smoothstep(.3,-.1,jac)*.8;
+      vFoam+=smoothstep(.4,.8,fbm(pos.xz*.15+uTime*.2))*.2*uChopHeight;vFoam=clamp(vFoam,0.,1.);
+      vWorldPos=pos;vHeight=d.y;
+      gl_Position=projectionMatrix*viewMatrix*vec4(pos,1.0);
+    }`,
+    fragmentShader: `
+    precision highp float;
+    uniform float uTime;uniform float uRenderMode;
+    uniform vec3 uSunDir,uCamPos,uDeepColor,uShallowColor,uFoamColor,uFogColor,uFogSunColor;
+    uniform sampler2D uRiverMask;uniform float uUseRiverMask;uniform vec4 uRiverBounds;
+    varying vec3 vWorldPos,vNormal;varying float vFoam,vHeight;
+    vec2 hash2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
+    float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);return mix(mix(dot(hash2(i),f),dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)),dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
+    float fbm(vec2 p){float v=0.,a=.5;mat2 r=mat2(.8,.6,-.6,.8);for(int i=0;i<5;i++){v+=a*noise(p);p=r*p*2.03;a*=.48;}return v;}
+    void main(){
+      // River mask: discard fragments outside the river
+      if (uUseRiverMask > 0.5) {
+        vec2 muv = vec2(
+          (vWorldPos.x - uRiverBounds.x) / (uRiverBounds.z - uRiverBounds.x),
+          1.0 - (vWorldPos.z - uRiverBounds.y) / (uRiverBounds.w - uRiverBounds.y)
+        );
+        if (muv.x < 0.0 || muv.x > 1.0 || muv.y < 0.0 || muv.y > 1.0) discard;
+        float mask = texture2D(uRiverMask, muv).r;
+        if (mask < 0.08) discard;
+      }
+
+      // Soft shoreline edge alpha (used by both paths)
+      float alpha = 1.0;
+      if (uUseRiverMask > 0.5) {
+        vec2 muv = vec2(
+          (vWorldPos.x - uRiverBounds.x) / (uRiverBounds.z - uRiverBounds.x),
+          1.0 - (vWorldPos.z - uRiverBounds.y) / (uRiverBounds.w - uRiverBounds.y)
+        );
+        alpha = smoothstep(0.08, 0.35, texture2D(uRiverMask, muv).r);
+      }
+
+      if (uRenderMode > 9.5) {
+        // ═══ FUR PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // ── Fur base color (warm animal tones with height variation) ──
+        float hNorm = clamp((vHeight + 3.0) / 7.0, 0.0, 1.0);
+        vec3 undercoat = mix(vec3(0.18, 0.10, 0.05), vec3(0.35, 0.22, 0.10), hNorm);
+        vec3 tipColor  = mix(vec3(0.45, 0.30, 0.15), vec3(0.70, 0.55, 0.30), hNorm);
+
+        // ── Fur strand pattern ──
+        // Strands follow the wave gradient (like fur combed by flow)
+        vec2 grad = vec2(N.x, N.z);
+        float gradLen = length(grad);
+        vec2 furDir = gradLen > 0.001 ? grad / gradLen : vec2(1.0, 0.0);
+        // Perpendicular to flow = across the strands
+        vec2 furPerp = vec2(-furDir.y, furDir.x);
+
+        // High-frequency strand lines across the fur direction
+        float strandFreq = 15.0 / max(1.0, cd * 0.008);
+        float strandProj = dot(vWorldPos.xz, furPerp);
+        float strandRaw = fract(strandProj * strandFreq);
+        // Noise perturbs each strand for organic irregularity
+        float strandNoise = noise(vWorldPos.xz * 8.0 + uTime * 0.05) * 0.3;
+        strandRaw = fract(strandRaw + strandNoise);
+        // Strand shape: thin bright tips with darker gaps between
+        float strand = smoothstep(0.0, 0.25, strandRaw) * smoothstep(1.0, 0.55, strandRaw);
+
+        // ── Multiple fur layers (depth illusion) ──
+        // Second layer at different frequency for density
+        float strand2Proj = dot(vWorldPos.xz, furPerp * 1.3 + furDir * 0.4);
+        float strand2Raw = fract(strand2Proj * strandFreq * 0.7 + noise(vWorldPos.xz * 5.0) * 0.4);
+        float strand2 = smoothstep(0.0, 0.3, strand2Raw) * smoothstep(1.0, 0.5, strand2Raw);
+
+        // Combine layers
+        float furDensity = max(strand * 0.8, strand2 * 0.5);
+
+        // ── Steepness affects fur lay direction ──
+        // Steep faces = fur standing up (shows more undercoat/roots)
+        float steepness = clamp((1.0 - N.y) * 2.5, 0.0, 1.0);
+        // Flat = smooth fur tips; steep = ruffled showing roots
+        float tipMix = mix(0.7, 0.2, steepness);
+
+        // ── Color: blend undercoat ↔ tips based on strand + steepness ──
+        vec3 furCol = mix(undercoat, tipColor, furDensity * tipMix);
+
+        // ── Subtle color variation (natural fur has highlights/lowlights) ──
+        float colorVar = noise(vWorldPos.xz * 1.2 + 42.0);
+        furCol *= 0.85 + 0.3 * colorVar;
+
+        // ── Anisotropic fur lighting ──
+        // Kajiya-Kay style: light scattering along strand direction
+        vec3 T = normalize(vec3(furDir.x, 0.0, furDir.y)); // tangent along fur
+        float TdotH = dot(T, normalize(L + V));
+        float anisoSpec = pow(sqrt(max(0.0, 1.0 - TdotH * TdotH)), 24.0);
+        // Diffuse wraps softly for fluffy look
+        float NdotL = max(dot(N, L), 0.0);
+        float diffuse = 0.35 + 0.55 * NdotL;
+        // Rim light catching the fur tips from behind
+        float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+
+        vec3 col = furCol * diffuse;
+        col += tipColor * anisoSpec * 0.6;  // strand specular highlight
+        col += tipColor * rim * 0.25;        // backlit fur rim
+
+        // ── Wind ruffling (animate strand offset slowly) ──
+        float windRuffle = noise(vWorldPos.xz * 0.3 + uTime * 0.4) * 0.15;
+        col *= 1.0 + windRuffle;
+
+        // ── Foam as white fluffy tufts ──
+        float foamAmt = smoothstep(0.2, 0.6, vFoam);
+        vec3 fluffWhite = vec3(0.90, 0.88, 0.82) * (0.5 + 0.5 * diffuse);
+        col = mix(col, fluffWhite, foamAmt * 0.65);
+
+        // ── Warm hazy fog ──
+        float fog = 1.0 - exp(-cd * 0.0012);
+        vec3 fogCol = mix(vec3(0.55, 0.45, 0.35), vec3(0.70, 0.55, 0.40), pow(max(dot(normalize(vWorldPos - uCamPos), L), 0.0), 3.0));
+        col = mix(col, fogCol, fog);
+
+        gl_FragColor = vec4(col, alpha);
+
+      } else if (uRenderMode > 8.5) {
+        // ═══ HOT LAVA PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // ── Cooling crust vs molten core ──
+        // Height maps to temperature: troughs = hottest molten, crests = cooling crust
+        float hNorm = clamp((vHeight + 3.0) / 7.0, 0.0, 1.0);
+
+        // ── Molten lava color ramp (black → red → orange → yellow → white-hot) ──
+        float temp = 1.0 - hNorm; // invert: low = hot, high = cooled
+        // Add animated convection currents
+        float conv1 = fbm(vWorldPos.xz * 0.15 + uTime * 0.08);
+        float conv2 = noise(vWorldPos.xz * 0.4 + uTime * 0.12 + conv1 * 1.5);
+        temp += conv1 * 0.25 + conv2 * 0.1;
+        temp = clamp(temp, 0.0, 1.0);
+
+        vec3 lavaCol;
+        if (temp < 0.25) {
+          // Cooled black crust
+          lavaCol = mix(vec3(0.05, 0.03, 0.02), vec3(0.15, 0.04, 0.02), temp / 0.25);
+        } else if (temp < 0.5) {
+          // Dark red, starting to glow
+          lavaCol = mix(vec3(0.15, 0.04, 0.02), vec3(0.65, 0.10, 0.02), (temp - 0.25) / 0.25);
+        } else if (temp < 0.75) {
+          // Hot orange
+          lavaCol = mix(vec3(0.65, 0.10, 0.02), vec3(1.0, 0.45, 0.05), (temp - 0.5) / 0.25);
+        } else {
+          // White-hot yellow
+          lavaCol = mix(vec3(1.0, 0.45, 0.05), vec3(1.0, 0.85, 0.3), (temp - 0.75) / 0.25);
+        }
+
+        // ── Crust cracks (dark lines revealing molten underneath) ──
+        // Use the wave gradient direction to orient cracks
+        vec2 grad = vec2(N.x, N.z);
+        float gradLen = length(grad);
+        vec2 crackDir = gradLen > 0.001 ? grad / gradLen : vec2(1.0, 0.0);
+        float crackProj = dot(vWorldPos.xz, crackDir);
+        float crack1 = noise(vec2(crackProj * 3.0, dot(vWorldPos.xz, vec2(-crackDir.y, crackDir.x)) * 2.0) + uTime * 0.02);
+        float crack2 = noise(vWorldPos.xz * 1.5 + uTime * 0.03);
+        // Cracks appear where crust is cooler
+        float crackMask = smoothstep(0.35, 0.55, crack1) * smoothstep(0.85, 0.65, crack1);
+        crackMask += smoothstep(0.4, 0.5, crack2) * smoothstep(0.75, 0.65, crack2) * 0.5;
+        crackMask *= (1.0 - temp) * 2.0; // more cracks on cooler crust
+        crackMask = clamp(crackMask, 0.0, 1.0);
+        // Cracks reveal the hot molten layer beneath
+        vec3 crackGlow = mix(vec3(0.8, 0.20, 0.02), vec3(1.0, 0.6, 0.1), crackMask);
+        lavaCol = mix(lavaCol, crackGlow, crackMask * 0.8);
+
+        // ── Surface lighting (dim — lava is mostly emissive) ──
+        float NdotL = max(dot(N, L), 0.0);
+        // Cool crust gets some diffuse; hot areas are self-lit
+        float diffuse = mix(0.3 + 0.5 * NdotL, 1.0, temp);
+        vec3 col = lavaCol * diffuse;
+
+        // ── Emissive glow (hot areas glow independently of light) ──
+        float emissive = smoothstep(0.3, 0.8, temp) * 1.2;
+        col += lavaCol * emissive;
+
+        // ── Specular on crust (wet-look glassy surface) ──
+        vec3 H = normalize(L + V);
+        float spec = pow(max(dot(N, H), 0.0), 64.0);
+        col += vec3(1.0, 0.7, 0.3) * spec * 0.5 * (1.0 - temp); // only on cooled crust
+
+        // ── Foam as bright ember sparks ──
+        float foamAmt = smoothstep(0.2, 0.5, vFoam);
+        col = mix(col, vec3(1.0, 0.8, 0.2), foamAmt * 0.6);
+        col += vec3(1.0, 0.4, 0.0) * foamAmt * 0.3; // extra orange bloom
+
+        // ── Heat shimmer (subtle color oscillation) ──
+        col += vec3(0.1, 0.02, 0.0) * sin(vWorldPos.x * 1.5 + uTime * 4.0) * temp * 0.3;
+
+        // ── Smoky dark fog ──
+        float fog = 1.0 - exp(-cd * 0.0015);
+        vec3 fogCol = mix(vec3(0.12, 0.06, 0.04), vec3(0.25, 0.10, 0.05), pow(max(dot(normalize(vWorldPos - uCamPos), L), 0.0), 3.0));
+        col = mix(col, fogCol, fog);
+
+        // HDR clamp
+        col = min(col, vec3(1.5));
+
+        gl_FragColor = vec4(col, alpha);
+
+      } else if (uRenderMode > 7.5) {
+        // ═══ PLASTIC PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // ── Smooth plastic base color ──
+        // Saturated blue-teal with height variation (like molded plastic)
+        float hNorm = clamp((vHeight + 3.0) / 7.0, 0.0, 1.0);
+        vec3 plasticBase = mix(
+          vec3(0.04, 0.22, 0.55),  // deep blue in troughs
+          vec3(0.10, 0.50, 0.65),  // teal on crests
+          hNorm
+        );
+
+        // ── Lambertian diffuse (smooth, no texture noise) ──
+        float NdotL = max(dot(N, L), 0.0);
+        float diffuse = 0.35 + 0.65 * NdotL;
+        vec3 col = plasticBase * diffuse;
+
+        // ── Strong glossy specular (plastic hallmark) ──
+        vec3 H = normalize(L + V);
+        float spec1 = pow(max(dot(N, H), 0.0), 256.0); // tight highlight
+        float spec2 = pow(max(dot(N, H), 0.0), 48.0);  // broad sheen
+        vec3 specColor = vec3(1.0, 0.98, 0.95);         // slightly warm white
+        col += specColor * (spec1 * 2.5 + spec2 * 0.35);
+
+        // ── Plastic Fresnel rim ──
+        // Hard, bright rim like light catching a plastic edge
+        float fr = pow(1.0 - max(dot(N, V), 0.0), 5.0);
+        vec3 rimColor = mix(vec3(0.6, 0.85, 1.0), vec3(1.0), fr);
+        col += rimColor * fr * 0.4;
+
+        // ── Environment reflection (simplified, plastic-like) ──
+        // Plastic reflects a blurred, tinted version of the sky
+        vec3 R = reflect(-V, N);
+        float skyGrad = smoothstep(-0.1, 0.8, R.y);
+        vec3 envRefl = mix(vec3(0.25, 0.35, 0.50), vec3(0.70, 0.80, 0.90), skyGrad);
+        col = mix(col, envRefl, fr * 0.25);
+
+        // ── Subsurface-like translucency ──
+        // Thin plastic lets some light through from behind
+        float sss = pow(max(dot(V, -L + N * 0.4), 0.0), 3.0) * 0.2;
+        col += plasticBase * sss * 1.5;
+
+        // ── Foam as white plastic bumps ──
+        float foamAmt = smoothstep(0.2, 0.6, vFoam);
+        vec3 foamPlastic = vec3(0.90, 0.92, 0.95) * (0.4 + 0.6 * NdotL);
+        foamPlastic += specColor * spec1 * 1.5; // foam also catches specular
+        col = mix(col, foamPlastic, foamAmt * 0.7);
+
+        // ── Smooth, slightly hazy fog ──
+        float fog = 1.0 - exp(-cd * 0.0012);
+        vec3 fogCol = mix(vec3(0.55, 0.65, 0.78), vec3(0.75, 0.72, 0.68), pow(max(dot(normalize(vWorldPos - uCamPos), L), 0.0), 4.0));
+        col = mix(col, fogCol, fog);
+
+        gl_FragColor = vec4(col, alpha);
+
+      } else if (uRenderMode > 6.5) {
+        // ═══ X-RAY / WIREFRAME PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // ── Grid lines from world-space position ──
+        float gridSize = 1.5 * max(1.0, cd * 0.008);
+        vec2 gUV = vWorldPos.xz / gridSize;
+        vec2 gFrac = abs(fract(gUV - 0.5) - 0.5);
+        float gLine = min(gFrac.x, gFrac.y);
+        float gridAA = 0.02 * max(1.0, cd * 0.005);
+        float grid = 1.0 - smoothstep(0.0, gridAA, gLine);
+
+        // ── Height contour wireframe rings ──
+        float contourSpace = 0.5 * max(1.0, cd * 0.01);
+        float cFrac = fract(vHeight / contourSpace);
+        float contour = 1.0 - smoothstep(0.0, gridAA, cFrac) * smoothstep(0.0, gridAA, 1.0 - cFrac);
+
+        // Combine wireframes
+        float wire = max(grid * 0.6, contour * 0.8);
+
+        // ── Glow color based on height + normal ──
+        float hNorm = clamp((vHeight + 3.0) / 7.0, 0.0, 1.0);
+        vec3 wireColor = mix(vec3(0.1, 0.5, 1.0), vec3(0.3, 1.0, 0.5), hNorm);
+        // Steeper faces glow brighter
+        float steepGlow = (1.0 - N.y) * 2.0;
+        wireColor += vec3(0.3, 0.1, 0.5) * clamp(steepGlow, 0.0, 1.0);
+
+        // ── Transparent body with Fresnel edge glow ──
+        float fr = pow(1.0 - max(dot(N, V), 0.0), 4.0);
+        vec3 bodyColor = vec3(0.02, 0.04, 0.08); // near-black body
+        vec3 edgeGlow = wireColor * 0.3;
+
+        // Composite: dark body + wireframe + edge glow
+        vec3 col = mix(bodyColor, bodyColor + edgeGlow, fr * 0.5);
+        col += wireColor * wire * (0.8 + 0.2 * sin(uTime * 2.0 + vHeight * 3.0));
+
+        // Foam as bright white wireframe flash
+        col += vec3(1.0) * smoothstep(0.3, 0.7, vFoam) * 0.4;
+
+        // ── Specular flash ──
+        vec3 H = normalize(L + V);
+        float spec = pow(max(dot(N, H), 0.0), 128.0);
+        col += wireColor * spec * 2.0;
+
+        // ── Dark fog ──
+        float fog = 1.0 - exp(-cd * 0.0015);
+        col = mix(col, vec3(0.02, 0.03, 0.06), fog);
+
+        // Semi-transparent: more opaque where wireframe, translucent between
+        float bodyAlpha = mix(0.25, 0.9, wire) * alpha;
+        gl_FragColor = vec4(col, bodyAlpha);
+
+      } else if (uRenderMode > 5.5) {
+        // ═══ PIXEL ART / RETRO PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // ── Pixelate world coordinates ──
+        // Snap world position to a grid to create chunky pixels
+        float pixelSize = 0.8 * max(1.0, cd * 0.006);
+        vec2 pixUV = floor(vWorldPos.xz / pixelSize) * pixelSize;
+
+        // ── Limited color palette (16 colors) ──
+        // Compute base color from height + slope
+        float hNorm = clamp((vHeight + 3.0) / 7.0, 0.0, 1.0);
+        float NdotL = max(dot(N, L), 0.0);
+        float shade = 0.4 + 0.6 * NdotL;
+
+        // Retro water palette: 4 blues + highlights
+        vec3 col;
+        float hQ = floor(hNorm * 5.0) / 5.0; // quantize height to 5 bands
+        float sQ = floor(shade * 3.0) / 3.0;  // quantize shade to 3 levels
+        if (hQ < 0.2) col = vec3(0.05, 0.10, 0.30);       // deep dark blue
+        else if (hQ < 0.4) col = vec3(0.10, 0.22, 0.50);   // dark blue
+        else if (hQ < 0.6) col = vec3(0.15, 0.35, 0.65);   // medium blue
+        else if (hQ < 0.8) col = vec3(0.25, 0.55, 0.75);   // light blue
+        else col = vec3(0.45, 0.75, 0.85);                   // pale blue crest
+
+        // Apply quantized shading
+        col *= sQ * 0.5 + 0.5;
+
+        // ── Dithering pattern ──
+        // 2x2 Bayer dither to simulate more colors with fewer
+        vec2 ditherUV = floor(mod(vWorldPos.xz / (pixelSize * 0.5), 2.0));
+        float dither = (ditherUV.x + ditherUV.y * 2.0) / 4.0;
+        // Use dither to choose between adjacent color bands
+        float hAdj = hNorm + (dither - 0.5) * 0.12;
+        if (hAdj > 0.85) col = mix(col, vec3(0.65, 0.88, 0.95), 0.3);
+
+        // ── Specular highlight (single bright pixel clusters) ──
+        vec3 H = normalize(L + V);
+        float spec = pow(max(dot(N, H), 0.0), 32.0);
+        float specQ = step(0.5, spec); // binary: on or off
+        col += vec3(0.9, 0.95, 1.0) * specQ * 0.6;
+
+        // ── Foam as white pixel blocks ──
+        float foamQ = step(0.4, vFoam);
+        col = mix(col, vec3(0.85, 0.90, 0.95), foamQ * 0.7);
+
+        // ── Pixel grid outline (subtle) ──
+        vec2 pFrac = abs(fract(vWorldPos.xz / pixelSize) - 0.5);
+        float pEdge = step(0.45, max(pFrac.x, pFrac.y));
+        col *= 1.0 - pEdge * 0.12;
+
+        // ── Retro fog (banded) ──
+        float fog = 1.0 - exp(-cd * 0.0012);
+        float fogQ = floor(fog * 6.0) / 6.0; // quantize fog too
+        vec3 fogCol = vec3(0.30, 0.35, 0.55);
+        col = mix(col, fogCol, fogQ);
+
+        gl_FragColor = vec4(col, alpha);
+
+      } else if (uRenderMode > 4.5) {
+        // ═══ INK WASH / SUMI-E PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // ── Paper base ──
+        vec3 paperColor = vec3(0.95, 0.93, 0.88); // warm rice paper
+        vec3 inkColor = vec3(0.05, 0.05, 0.08);    // sumi ink
+
+        // ── Ink concentration based on depth (troughs = dark pools) ──
+        float hNorm = smoothstep(-2.5, 3.0, vHeight);
+        float inkPool = 1.0 - hNorm; // low = more ink
+        inkPool = pow(inkPool, 1.5); // concentrate in troughs
+
+        // ── Wet ink bleeding effect ──
+        // Organic noise creates the look of ink seeping into wet paper
+        float bleed1 = fbm(vWorldPos.xz * 0.3 + uTime * 0.04);
+        float bleed2 = noise(vWorldPos.xz * 0.8 + uTime * 0.06 + bleed1 * 1.5);
+        float bleedAmount = smoothstep(-0.2, 0.4, bleed1) * 0.3;
+        inkPool += bleedAmount * (1.0 - hNorm * 0.5);
+        inkPool = clamp(inkPool, 0.0, 1.0);
+
+        // ── Brush stroke texture ──
+        // Directional strokes following wave flow
+        vec2 grad = vec2(N.x, N.z);
+        float gradLen = length(grad);
+        vec2 flowDir = gradLen > 0.001 ? grad / gradLen : vec2(1.0, 0.0);
+        float strokeProj = dot(vWorldPos.xz, flowDir);
+        float strokeTex = noise(vec2(strokeProj * 3.0, dot(vWorldPos.xz, vec2(-flowDir.y, flowDir.x)) * 0.5) + uTime * 0.03);
+        // Streak pattern: thin lines of ink along flow
+        float streak = smoothstep(0.1, 0.4, strokeTex) * smoothstep(0.9, 0.6, strokeTex);
+        float steepness = clamp((1.0 - N.y) * 3.0, 0.0, 1.0);
+        float strokeInk = streak * steepness * 0.5;
+
+        // ── Edge darkening (outlines where slope changes sharply) ──
+        float edgeDark = clamp((1.0 - N.y) * 4.0 - 1.0, 0.0, 1.0);
+        edgeDark *= 0.4;
+
+        // Combine all ink sources
+        float totalInk = clamp(inkPool * 0.6 + strokeInk + edgeDark, 0.0, 0.95);
+
+        // ── Subtle warm/cool tone variation ──
+        // Ink is not pure black — slight blue-grey tone shift
+        vec3 inkTone = mix(inkColor, vec3(0.12, 0.10, 0.18), bleed2 * 0.5 + 0.2);
+
+        vec3 col = mix(paperColor, inkTone, totalInk);
+
+        // ── Foam as negative space (paper showing through) ──
+        float foamReveal = smoothstep(0.2, 0.6, vFoam);
+        col = mix(col, paperColor, foamReveal * 0.7);
+
+        // ── Subtle sun warmth on paper ──
+        float NdotL = max(dot(N, L), 0.0);
+        col += vec3(0.03, 0.02, 0.0) * NdotL;
+
+        // ── Paper-toned fog ──
+        float fog = 1.0 - exp(-cd * 0.001);
+        vec3 fogCol = vec3(0.92, 0.90, 0.85);
+        col = mix(col, fogCol, fog);
+        col = mix(col, fogCol, smoothstep(250.0, 600.0, cd) * 0.5);
+
+        gl_FragColor = vec4(col, alpha);
+
+      } else if (uRenderMode > 3.5) {
+        // ═══ TRON / NEON GRID PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // ── Neon grid lines ──
+        float gridSize = 2.0 * max(1.0, cd * 0.006);
+        vec2 gUV = vWorldPos.xz / gridSize;
+        vec2 gFrac = abs(fract(gUV - 0.5) - 0.5);
+        float gLine = min(gFrac.x, gFrac.y);
+        float gridAA = 0.015 * max(1.0, cd * 0.004);
+        float grid = 1.0 - smoothstep(0.0, gridAA, gLine);
+
+        // Major grid lines every 5 cells (thicker, brighter)
+        float majorSize = gridSize * 5.0;
+        vec2 mUV = vWorldPos.xz / majorSize;
+        vec2 mFrac = abs(fract(mUV - 0.5) - 0.5);
+        float mLine = min(mFrac.x, mFrac.y);
+        float majorGrid = 1.0 - smoothstep(0.0, gridAA * 1.5, mLine);
+
+        // ── Height contour rings (neon) ──
+        float contourSpace = 1.0 * max(1.0, cd * 0.008);
+        float cFrac = fract(vHeight / contourSpace);
+        float contour = 1.0 - smoothstep(0.0, gridAA, cFrac) * smoothstep(0.0, gridAA, 1.0 - cFrac);
+
+        // ── Neon color cycling ──
+        // Grid color pulses between cyan and magenta based on height + time
+        float pulse = sin(vHeight * 2.0 + uTime * 1.5) * 0.5 + 0.5;
+        vec3 neonCyan = vec3(0.0, 0.9, 1.0);
+        vec3 neonMagenta = vec3(1.0, 0.0, 0.8);
+        vec3 neonBlue = vec3(0.2, 0.3, 1.0);
+        vec3 gridColor = mix(neonCyan, neonMagenta, pulse);
+        vec3 majorColor = mix(neonBlue, vec3(1.0, 0.4, 0.0), pulse); // blue↔orange for major
+        vec3 contourColor = mix(neonMagenta, neonCyan, 1.0 - pulse);
+
+        // ── Dark arena floor ──
+        vec3 floorColor = vec3(0.01, 0.015, 0.04);
+        // Subtle height tint on floor
+        float hNorm = clamp((vHeight + 3.0) / 7.0, 0.0, 1.0);
+        floorColor += vec3(0.0, 0.02, 0.04) * hNorm;
+
+        // ── Composite glow ──
+        vec3 col = floorColor;
+        // Grid glow (with bloom-like falloff)
+        col += gridColor * grid * 0.7;
+        col += majorColor * majorGrid * 1.2;
+        col += contourColor * contour * 0.9;
+
+        // ── Energy pulse along grid ──
+        // Travelling wave of brightness along the grid
+        float wavePulse = sin(vWorldPos.x * 0.3 + vWorldPos.z * 0.2 + uTime * 3.0) * 0.5 + 0.5;
+        col += gridColor * grid * wavePulse * 0.4;
+
+        // ── Fresnel edge glow ──
+        float fr = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+        col += mix(neonCyan, neonMagenta, fr) * fr * 0.3;
+
+        // ── Foam as white-cyan flash ──
+        col += vec3(0.7, 0.95, 1.0) * smoothstep(0.3, 0.6, vFoam) * 0.5;
+
+        // ── Specular — bright concentrated flash ──
+        vec3 H = normalize(L + V);
+        float spec = pow(max(dot(N, H), 0.0), 256.0);
+        col += vec3(1.0) * spec * 3.0;
+
+        // ── Dark fog with distant glow ──
+        float fog = 1.0 - exp(-cd * 0.0015);
+        vec3 fogCol = vec3(0.02, 0.03, 0.08);
+        col = mix(col, fogCol, fog);
+
+        gl_FragColor = vec4(col, alpha);
+
+      } else if (uRenderMode > 2.5) {
+        // ═══ PAINTERLY / PSYCHEDELIC PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // ── Swirling UV distortion (the "acid" effect) ──
+        // Multiple layers of noise at different scales/speeds create organic swirls
+        vec2 uv = vWorldPos.xz;
+        float swirl1 = fbm(uv * 0.08 + uTime * 0.12);
+        float swirl2 = fbm(uv * 0.15 - uTime * 0.08 + swirl1 * 2.0);
+        float swirl3 = fbm(uv * 0.03 + vec2(swirl2, swirl1) * 1.5 + uTime * 0.05);
+        // Distorted coordinates for color lookup
+        vec2 distUV = uv + vec2(swirl1, swirl2) * 3.0;
+
+        // ── Iridescent color palette ──
+        // Phase shifts through hue based on height + swirl + time
+        float phase = vHeight * 0.8 + swirl3 * 2.5 + uTime * 0.15;
+        // Rainbow cycle with rich saturated colors
+        vec3 col1 = vec3(
+          0.5 + 0.5 * sin(phase * 3.0),
+          0.5 + 0.5 * sin(phase * 3.0 + 2.094),
+          0.5 + 0.5 * sin(phase * 3.0 + 4.189)
+        );
+        // Second shifted palette for depth
+        vec3 col2 = vec3(
+          0.5 + 0.5 * sin(phase * 2.0 + 1.0),
+          0.5 + 0.5 * sin(phase * 2.0 + 3.094),
+          0.5 + 0.5 * sin(phase * 2.0 + 5.189)
+        );
+        // Blend palettes based on swirl patterns
+        float blend = smoothstep(-0.3, 0.3, swirl1);
+        vec3 col = mix(col1, col2, blend);
+
+        // ── Painterly brush strokes ──
+        // Directional noise that mimics oil paint brush strokes
+        vec2 grad = vec2(N.x, N.z);
+        float gradLen = length(grad);
+        vec2 brushDir = gradLen > 0.001 ? grad / gradLen : vec2(1.0, 0.0);
+        float brushProj = dot(distUV, brushDir);
+        float brushTex = noise(vec2(brushProj * 4.0, dot(distUV, vec2(-brushDir.y, brushDir.x)) * 0.8) + uTime * 0.1);
+        // Thick paint texture variation
+        col *= 0.85 + 0.15 * brushTex;
+
+        // ── Dreamy reflections ──
+        // Exaggerated Fresnel with color shift
+        float fr = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+        vec3 reflColor = vec3(
+          0.6 + 0.4 * sin(uTime * 0.3 + vWorldPos.x * 0.02),
+          0.5 + 0.5 * sin(uTime * 0.25 + vWorldPos.z * 0.03 + 1.5),
+          0.7 + 0.3 * sin(uTime * 0.35 + swirl2 * 3.0 + 3.0)
+        );
+        col = mix(col, reflColor, fr * 0.6);
+
+        // ── Sun sparkle (oversaturated, prismatic) ──
+        vec3 H = normalize(L + V);
+        float spec = pow(max(dot(N, H), 0.0), 64.0);
+        // Prismatic sparkle — splits into rainbow near highlights
+        vec3 sparkle = vec3(
+          spec * (1.0 + 0.5 * sin(vWorldPos.x * 2.0 + uTime)),
+          spec * (1.0 + 0.5 * sin(vWorldPos.z * 2.0 + uTime + 2.0)),
+          spec * (1.0 + 0.5 * sin((vWorldPos.x + vWorldPos.z) * 1.5 + uTime + 4.0))
+        );
+        col += sparkle * 1.5;
+
+        // ── Foam as glowing white/pink ──
+        vec3 foamGlow = vec3(1.0, 0.9, 0.95);
+        float foamAmt = smoothstep(0.2, 0.6, vFoam) * 0.7;
+        col = mix(col, foamGlow, foamAmt);
+
+        // ── Saturation boost ──
+        float lum = dot(col, vec3(0.299, 0.587, 0.114));
+        col = mix(vec3(lum), col, 1.6); // oversaturate
+        col = clamp(col, 0.0, 1.0);
+
+        // ── Dreamy fog (purple/pink haze) ──
+        float fog = 1.0 - exp(-cd * 0.001);
+        float sunDot = max(dot(normalize(vWorldPos - uCamPos), L), 0.0);
+        vec3 fogCol = mix(
+          vec3(0.50, 0.35, 0.60),
+          vec3(0.85, 0.60, 0.50),
+          pow(sunDot, 3.0)
+        );
+        col = mix(col, fogCol, fog);
+
+        gl_FragColor = vec4(col, alpha);
+
+      } else if (uRenderMode > 1.5) {
+        // ═══ DEM (Digital Elevation Model) PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // Normalize height to 0..1 range for color ramp
+        // Typical wave range: -3m to +4m
+        float hNorm = clamp((vHeight + 3.0) / 7.0, 0.0, 1.0);
+
+        // Classic DEM hypsometric color ramp (deep blue → cyan → green → yellow → red → white)
+        vec3 col;
+        if (hNorm < 0.15) {
+          col = mix(vec3(0.0, 0.05, 0.35), vec3(0.0, 0.25, 0.65), hNorm / 0.15);
+        } else if (hNorm < 0.30) {
+          col = mix(vec3(0.0, 0.25, 0.65), vec3(0.0, 0.65, 0.65), (hNorm - 0.15) / 0.15);
+        } else if (hNorm < 0.45) {
+          col = mix(vec3(0.0, 0.65, 0.65), vec3(0.15, 0.72, 0.20), (hNorm - 0.30) / 0.15);
+        } else if (hNorm < 0.60) {
+          col = mix(vec3(0.15, 0.72, 0.20), vec3(0.85, 0.85, 0.15), (hNorm - 0.45) / 0.15);
+        } else if (hNorm < 0.80) {
+          col = mix(vec3(0.85, 0.85, 0.15), vec3(0.90, 0.30, 0.10), (hNorm - 0.60) / 0.20);
+        } else {
+          col = mix(vec3(0.90, 0.30, 0.10), vec3(1.0, 0.95, 0.90), (hNorm - 0.80) / 0.20);
+        }
+
+        // Subtle hillshade from surface normal + sun direction
+        float NdotL = max(dot(N, L), 0.0);
+        float shade = 0.55 + 0.45 * NdotL;
+        col *= shade;
+
+        // Contour lines at 0.5m intervals
+        float contourSpacing = 0.5 * max(1.0, cd * 0.01);
+        float cFrac = fract(vHeight / contourSpacing);
+        float cLine = 1.0 - smoothstep(0.0, 0.06, cFrac) * smoothstep(0.0, 0.06, 1.0 - cFrac);
+        col = mix(col, col * 0.3, cLine * 0.6);
+
+        // Foam as white highlights
+        col = mix(col, vec3(1.0), smoothstep(0.3, 0.7, vFoam) * 0.5);
+
+        // Distance fog
+        float fog = 1.0 - exp(-cd * 0.0012);
+        vec3 fogCol = vec3(0.45, 0.55, 0.70);
+        col = mix(col, fogCol, fog);
+        col = mix(col, fogCol, smoothstep(200.0, 500.0, cd) * 0.4);
+
+        gl_FragColor = vec4(col, alpha);
+
+      } else if (uRenderMode > 0.5) {
+        // ═══ WOODCUT / ENGRAVING PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // Palette
+        vec3 paperColor = vec3(0.96, 0.90, 0.82);
+        vec3 inkColor   = vec3(0.10, 0.06, 0.03);
+
+        // Steepness: 0=flat, 1=vertical  (N.y=1 is flat)
+        float steepness = clamp((1.0 - N.y) * 2.5, 0.0, 1.0);
+
+        // LOD: scale line spacing & AA with camera distance
+        float lodScale = max(1.0, cd * 0.015);
+        float lineAA   = 0.03 * lodScale;
+
+        // ── 1) HEIGHT CONTOUR LINES ──
+        float contourSpacing = 0.4 * lodScale;
+        float hFrac = fract(vHeight / contourSpacing);
+        float contourThick = mix(0.04, 0.15, steepness);
+        float contourLine = 1.0 - smoothstep(0.0, contourThick + lineAA, hFrac)
+                                * smoothstep(0.0, contourThick + lineAA, 1.0 - hFrac);
+
+        // ── 2) FLOW-ALIGNED HATCHING ──
+        vec2 grad = vec2(N.x, N.z);
+        float gradLen = length(grad);
+        vec2 gradDir = gradLen > 0.001 ? grad / gradLen : vec2(1.0, 0.0);
+
+        // Project world pos onto gradient direction (primary) and perpendicular (secondary)
+        float projPri = dot(vWorldPos.xz, gradDir) + uTime * 0.3;
+        float projSec = dot(vWorldPos.xz, vec2(-gradDir.y, gradDir.x)) + uTime * 0.15;
+
+        // Hatching frequency: steeper = denser
+        float freqPri = mix(3.0, 10.0, steepness) / lodScale;
+        float freqSec = mix(2.0, 6.0, steepness) / lodScale;
+
+        // Primary hatching
+        float h1Raw = fract(projPri * freqPri);
+        float hatchW1 = mix(0.08, 0.30, steepness);
+        float hatch1 = 1.0 - smoothstep(0.0, hatchW1 + lineAA, h1Raw)
+                            * smoothstep(0.0, hatchW1 + lineAA, 1.0 - h1Raw);
+
+        // Cross-hatching (steep faces only)
+        float h2Raw = fract(projSec * freqSec);
+        float hatchW2 = mix(0.05, 0.20, steepness);
+        float hatch2 = 1.0 - smoothstep(0.0, hatchW2 + lineAA, h2Raw)
+                            * smoothstep(0.0, hatchW2 + lineAA, 1.0 - h2Raw);
+        hatch2 *= smoothstep(0.3, 0.6, steepness);
+
+        // ── 3) ORGANIC EDGE ROUGHNESS ──
+        float nPert = noise(vWorldPos.xz * 2.5 + uTime * 0.1) * 0.15;
+        contourLine = clamp(contourLine + nPert * 0.3, 0.0, 1.0);
+        hatch1 = clamp(hatch1 + nPert * 0.25, 0.0, 1.0);
+        hatch2 = clamp(hatch2 + nPert * 0.2, 0.0, 1.0);
+
+        // ── 4) HEIGHT-BASED TONE BANDING ──
+        float hNorm = smoothstep(-2.0, 3.0, vHeight) + noise(vWorldPos.xz * 0.5) * 0.08;
+        float bandSmooth = smoothstep(0.30, 0.36, hNorm) * 0.30
+                         + smoothstep(0.63, 0.69, hNorm) * 0.35 + 0.15;
+        vec3 baseTone = mix(inkColor, paperColor, bandSmooth);
+
+        // ── 5) SUN-FACING HIGHLIGHT ──
+        float NdotL = max(dot(N, L), 0.0);
+        baseTone = mix(baseTone, paperColor, smoothstep(0.2, 0.8, NdotL) * 0.15);
+
+        // ── 6) COMPOSITE INK ──
+        float inkAmt = max(contourLine, max(hatch1, hatch2));
+        // Foam crests lighten toward paper
+        float foamLighten = smoothstep(0.2, 0.7, vFoam) * 0.6;
+        inkAmt *= (1.0 - foamLighten);
+        vec3 col = mix(baseTone, inkColor, inkAmt * 0.85);
+        col = mix(col, paperColor * 0.95, foamLighten);
+
+        // ── 7) SEPIA FOG + DISTANCE FADE ──
+        float fog = 1.0 - exp(-cd * 0.0012);
+        float sunDot = max(dot(normalize(vWorldPos - uCamPos), L), 0.0);
+        vec3 fogCol = mix(vec3(0.85, 0.78, 0.68), vec3(0.95, 0.85, 0.65), pow(sunDot, 4.0));
+        col = mix(col, fogCol, fog);
+        col = mix(col, fogCol, smoothstep(200.0, 500.0, cd) * 0.5);
+
+        gl_FragColor = vec4(col, alpha);
+
+      } else {
+        // ═══ NORMAL / REALISTIC PBR PATH ═══
+        vec3 N=normalize(vNormal),V=normalize(uCamPos-vWorldPos),L=normalize(uSunDir);
+        float e=.5;vec2 p=vWorldPos.xz;
+        N=normalize(N+vec3(noise(p*.8+uTime*.3+vec2(e,0))-noise(p*.8+uTime*.3-vec2(e,0)),0,noise(p*.8+uTime*.3+vec2(0,e))-noise(p*.8+uTime*.3-vec2(0,e)))*.12);
+        float cd=length(uCamPos-vWorldPos);
+        if(cd<100.){float d2=1.-smoothstep(0.,100.,cd);
+          N=normalize(N+vec3(noise(p*3.+uTime*.5+vec2(e,0))-noise(p*3.+uTime*.5-vec2(e,0)),0,noise(p*3.+uTime*.5+vec2(0,e))-noise(p*3.+uTime*.5-vec2(0,e)))*.06*d2);}
+        float fr=pow(1.-max(dot(N,V),0.),4.);fr=mix(.04,1.,fr);
+        vec3 wc=mix(uDeepColor,uShallowColor,smoothstep(-1.,2.,vHeight)*.5+fr*.3);
+        vec3 sssC=vec3(0,.35,.3)*pow(max(dot(V,-L+N*.6),0.),3.)*.3;
+        vec3 H=normalize(L+V);vec3 sunS=vec3(1,.95,.8)*(pow(max(dot(N,H),0.),512.)*3.+pow(max(dot(N,H),0.),64.)*.6);
+        vec3 R=reflect(-V,N);vec3 skyR=mix(vec3(.55,.7,.85),vec3(.12,.25,.55),pow(max(R.y,0.),.5));
+        skyR+=vec3(1,.9,.7)*pow(max(dot(R,L),0.),64.)*.5;
+        vec3 col=mix(wc+sssC,skyR,fr)+sunS;
+        float fp=noise(vWorldPos.xz*1.5+uTime*.2)*.5+.5;fp*=noise(vWorldPos.xz*4.-uTime*.15)*.5+.5;
+        col=mix(col,uFoamColor*(.8+.2*fp),smoothstep(.15,.6,vFoam*fp)*.85);
+        float fog=1.-exp(-cd*.0012);
+        col=mix(col,mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),fog);
+        gl_FragColor=vec4(col, alpha);
+      }
+    }`
+  });
+  state.oceanMat = oceanMat;
+
+  // ── Mesh ────────────────────────────────────────────────
+  const oceanMesh = new THREE.Mesh(oceanGeo, oceanMat);
+  state.scene.add(oceanMesh);
+  state.oceanMesh = oceanMesh;
+
+  // ── Wave chart DOM refs ─────────────────────────────────
+  waveChartCanvas = document.getElementById('wave-chart');
+  waveChartCtx    = waveChartCanvas.getContext('2d');
+}
+
+// ═══════════════════════════
+// CPU WAVE HEIGHT (mirrors GPU)
+// ═══════════════════════════
+
+function gerstnerY(px,pz,dx,dz,per,ht,t){
+  if(ht<.01)return 0;
+  const wl=1.56*per*per,k=6.28318/wl,spd=Math.sqrt(9.81/k);
+  return ht*.5*Math.cos(k*(dx*px+dz*pz)-spd*t*k);
+}
+
+// CPU noise to match GPU fbm detail displacement
+function cpuNoise2D(x,y){
+  // Simple hash-based gradient noise matching the GPU hash2/noise functions
+  function h2(px,py){
+    const sx=Math.sin(px*127.1+py*311.7)*43758.5453;
+    const sy=Math.sin(px*269.5+py*183.3)*43758.5453;
+    return[(sx-Math.floor(sx))*2-1,(sy-Math.floor(sy))*2-1];
+  }
+  const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy;
+  const ux=fx*fx*(3-2*fx),uy=fy*fy*(3-2*fy);
+  const a=h2(ix,iy),b=h2(ix+1,iy),c=h2(ix,iy+1),d=h2(ix+1,iy+1);
+  const va=a[0]*fx+a[1]*fy, vb=b[0]*(fx-1)+b[1]*fy;
+  const vc=c[0]*fx+c[1]*(fy-1), vd=d[0]*(fx-1)+d[1]*(fy-1);
+  return va+(vb-va)*ux+(vc-va)*uy+(va-vb-vc+vd)*ux*uy;
+}
+
+function cpuFbm(x,y){
+  let v=0,a=.5,px=x,py=y;
+  for(let i=0;i<6;i++){
+    v+=a*cpuNoise2D(px,py);
+    const nx=.8*px+.6*py, ny=-.6*px+.8*py;
+    px=nx*2.03; py=ny*2.03; a*=.48;
+  }
+  return v;
+}
+
+function getWaveHeight(px,pz,t){
+  let h=0;
+  const s1d=degToDir(getVal('swell1Dir')),s1p=getVal('swell1Period'),s1h=getVal('swell1Height');
+  const s2d=degToDir(getVal('swell2Dir')),s2p=getVal('swell2Period'),s2h=getVal('swell2Height');
+  const s3d=degToDir(getVal('swell3Dir')),s3p=getVal('swell3Period'),s3h=getVal('swell3Height');
+  const ch=getVal('chopHeight'),cd_=degToDir(getVal('chopDir'));
+  h+=gerstnerY(px,pz,s1d.x,s1d.y,s1p,s1h,t);
+  h+=gerstnerY(px,pz,s1d.x*1.07,s1d.y*1.07,s1p*.7,s1h*.22,t*1.05);
+  h+=gerstnerY(px,pz,s2d.x,s2d.y,s2p,s2h,t);
+  h+=gerstnerY(px,pz,s2d.x*.95,s2d.y*.95,s2p*.65,s2h*.2,t*.98);
+  h+=gerstnerY(px,pz,s3d.x,s3d.y,s3p,s3h,t);
+  h+=gerstnerY(px,pz,cd_.x,cd_.y,3,ch*.5,t);
+  const cx=cd_.y*.8+cd_.x*.6,cz=-cd_.x*.8+cd_.y*.6;
+  h+=gerstnerY(px,pz,cx,cz,2.2,ch*.35,t*1.1);
+  // Extra chop components matching GPU vertex shader
+  const cx2=cd_.x*.7+(-cd_.y)*.7, cz2=cd_.y*.7+cd_.x*.7;
+  h+=gerstnerY(px,pz,cx2,cz2,1.8,ch*.25,t*1.3);
+  const cx3=cd_.x*.9+cd_.y*.4, cz3=cd_.y*.9+(-cd_.x)*.4;
+  h+=gerstnerY(px,pz,cx3,cz3,1.3,ch*.18,t*.9);
+  // Detail fbm displacement matching GPU (line 1645-1646)
+  const detScale=.08; // GPU uses mix(.08,.02,...) — close range uses .08
+  const det=cpuFbm(px*detScale+t*.15,pz*detScale+t*.15)*.3
+           +cpuFbm(px*.03-t*.08,pz*.03-t*.08)*.15;
+  h+=det*(ch+.2);
+  return h;
+}
+
+function getWaveSlope(px,pz,t){
+  const e=.5;
+  return{
+    dhdx:(getWaveHeight(px+e,pz,t)-getWaveHeight(px-e,pz,t))/(2*e),
+    dhdz:(getWaveHeight(px,pz+e,t)-getWaveHeight(px,pz-e,t))/(2*e)
+  };
+}
+
+// Swell-only height (no chop, no fbm noise) — used for wave energy calculation
+function getSwellHeight(px,pz,t){
+  let h=0;
+  const s1d=degToDir(getVal('swell1Dir')),s1p=getVal('swell1Period'),s1h=getVal('swell1Height');
+  const s2d=degToDir(getVal('swell2Dir')),s2p=getVal('swell2Period'),s2h=getVal('swell2Height');
+  const s3d=degToDir(getVal('swell3Dir')),s3p=getVal('swell3Period'),s3h=getVal('swell3Height');
+  h+=gerstnerY(px,pz,s1d.x,s1d.y,s1p,s1h,t);
+  h+=gerstnerY(px,pz,s1d.x*1.07,s1d.y*1.07,s1p*.7,s1h*.22,t*1.05);
+  h+=gerstnerY(px,pz,s2d.x,s2d.y,s2p,s2h,t);
+  h+=gerstnerY(px,pz,s2d.x*.95,s2d.y*.95,s2p*.65,s2h*.2,t*.98);
+  h+=gerstnerY(px,pz,s3d.x,s3d.y,s3p,s3h,t);
+  return h;
+}
+
+function getSwellSlope(px,pz,t){
+  const e=.5;
+  return{
+    dhdx:(getSwellHeight(px+e,pz,t)-getSwellHeight(px-e,pz,t))/(2*e),
+    dhdz:(getSwellHeight(px,pz+e,t)-getSwellHeight(px,pz-e,t))/(2*e)
+  };
+}
+
+// ═══════════════════════════
+// RENDER MODE
+// ═══════════════════════════
+
+function setRenderMode(val) {
+  state.oceanMat.uniforms.uRenderMode.value = parseFloat(val);
+}
+
+// ═══════════════════════════
+// WAVE CHART — scrolling height & slope strip
+// ═══════════════════════════
+
+function updateWaveChart(waveH, slopeVal, energyVal) {
+  waveChartData.push({ h: waveH, s: slopeVal, e: energyVal });
+  if (waveChartData.length > CHART_MAX_SAMPLES) waveChartData.shift();
+
+  // Resize canvas to screen width if needed
+  const w = window.innerWidth;
+  if (waveChartCanvas.width !== w) { waveChartCanvas.width = w; }
+
+  const ctx = waveChartCtx;
+  const cw = waveChartCanvas.width, ch = CHART_H;
+  ctx.clearRect(0, 0, cw, ch);
+
+  // Auto-scale: find range of recent data
+  let hMin = Infinity, hMax = -Infinity, sMin = Infinity, sMax = -Infinity;
+  let eAbsMax = 0;
+  for (const d of waveChartData) {
+    if (d.h < hMin) hMin = d.h; if (d.h > hMax) hMax = d.h;
+    if (d.s < sMin) sMin = d.s; if (d.s > sMax) sMax = d.s;
+    const ae = Math.abs(d.e); if (ae > eAbsMax) eAbsMax = ae;
+  }
+  const hRange = Math.max(hMax - hMin, 0.5);
+  const sRange = Math.max(sMax - sMin, 0.1);
+  // Threshold for "near neutral" — 10% of the peak energy magnitude
+  const neutralThresh = Math.max(eAbsMax * 0.10, 0.05);
+
+  const n = waveChartData.length;
+  const xStep = cw / CHART_MAX_SAMPLES;
+
+  // Draw wave height — color encodes energy: green=accel, red=decel, cyan=neutral
+  ctx.lineWidth = 2;
+  for (let i = 1; i < n; i++) {
+    const x0 = (CHART_MAX_SAMPLES - n + i - 1) * xStep;
+    const x1 = (CHART_MAX_SAMPLES - n + i) * xStep;
+    const y0 = ch - 8 - ((waveChartData[i-1].h - hMin) / hRange) * (ch - 16);
+    const y1 = ch - 8 - ((waveChartData[i].h - hMin) / hRange) * (ch - 16);
+    const ev = waveChartData[i].e;
+    ctx.strokeStyle = ev > neutralThresh ? '#44ff88' : ev < -neutralThresh ? '#ff3333' : '#00e5ff';
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  }
+
+  // Draw slope (yellow-orange)
+  ctx.strokeStyle = '#ffaa00';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const x = (CHART_MAX_SAMPLES - n + i) * xStep;
+    const y = ch/2 - ((waveChartData[i].s - (sMin+sMax)/2) / sRange) * (ch * 0.35);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // Labels
+  ctx.font = '10px DM Sans, sans-serif';
+  ctx.fillStyle = '#44ff88';
+  ctx.fillText('Accel', 6, 12);
+  ctx.fillStyle = '#00e5ff';
+  ctx.fillText('Neutral', 38, 12);
+  ctx.fillStyle = '#ff3333';
+  ctx.fillText('Decel', 82, 12);
+  ctx.fillStyle = '#ffaa00';
+  ctx.fillText('Slope', 6, 24);
+}
+
+// ═══════════════════════════
+// EXPORTS
+// ═══════════════════════════
+
+export {
+  initOcean,
+  updateEnvMap,
+  getWaveHeight,
+  getWaveSlope,
+  getSwellHeight,
+  getSwellSlope,
+  setRenderMode,
+  updateWaveChart,
+};

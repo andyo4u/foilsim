@@ -165,7 +165,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.75</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.76</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -229,7 +229,7 @@
     <div class="control-row"><span class="control-label">Wave Energy</span><input type="range" id="sbWaveEnergy" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbWaveEnergy-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Foil Stability</span><input type="range" id="sbStability" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbStability-val">1.00×</span></div>
     <div class="control-row" style="margin-top:6px;"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="sbFreeCam" onchange="toggleFreeCam(this.checked)" style="width:14px;height:14px;accent-color:#4af;"><span class="control-label" style="flex:1;">Free Camera</span></label></div>
-    <div class="control-row"><span class="control-label">Render Style</span><select id="sbRenderMode" onchange="setRenderMode(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="0">Normal</option><option value="1">Woodcut</option><option value="2">DEM</option><option value="3">Painterly</option><option value="4">Tron</option><option value="5">Sumi-e</option><option value="6">Pixel Art</option><option value="7">X-Ray</option><option value="8">Plastic</option><option value="9">Lava</option></select></div>
+    <div class="control-row"><span class="control-label">Render Style</span><select id="sbRenderMode" onchange="setRenderMode(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="0">Normal</option><option value="1">Woodcut</option><option value="2">DEM</option><option value="3">Painterly</option><option value="4">Tron</option><option value="5">Sumi-e</option><option value="6">Pixel Art</option><option value="7">X-Ray</option><option value="8">Plastic</option><option value="9">Lava</option><option value="10">Fur</option></select></div>
   </div>
   <div class="section">
     <div class="section-title">🏝 Background</div>
@@ -1912,7 +1912,90 @@ const oceanMat = new THREE.ShaderMaterial({
         alpha = smoothstep(0.08, 0.35, texture2D(uRiverMask, muv).r);
       }
 
-      if (uRenderMode > 8.5) {
+      if (uRenderMode > 9.5) {
+        // ═══ FUR PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // ── Fur base color (warm animal tones with height variation) ──
+        float hNorm = clamp((vHeight + 3.0) / 7.0, 0.0, 1.0);
+        vec3 undercoat = mix(vec3(0.18, 0.10, 0.05), vec3(0.35, 0.22, 0.10), hNorm);
+        vec3 tipColor  = mix(vec3(0.45, 0.30, 0.15), vec3(0.70, 0.55, 0.30), hNorm);
+
+        // ── Fur strand pattern ──
+        // Strands follow the wave gradient (like fur combed by flow)
+        vec2 grad = vec2(N.x, N.z);
+        float gradLen = length(grad);
+        vec2 furDir = gradLen > 0.001 ? grad / gradLen : vec2(1.0, 0.0);
+        // Perpendicular to flow = across the strands
+        vec2 furPerp = vec2(-furDir.y, furDir.x);
+
+        // High-frequency strand lines across the fur direction
+        float strandFreq = 15.0 / max(1.0, cd * 0.008);
+        float strandProj = dot(vWorldPos.xz, furPerp);
+        float strandRaw = fract(strandProj * strandFreq);
+        // Noise perturbs each strand for organic irregularity
+        float strandNoise = noise(vWorldPos.xz * 8.0 + uTime * 0.05) * 0.3;
+        strandRaw = fract(strandRaw + strandNoise);
+        // Strand shape: thin bright tips with darker gaps between
+        float strand = smoothstep(0.0, 0.25, strandRaw) * smoothstep(1.0, 0.55, strandRaw);
+
+        // ── Multiple fur layers (depth illusion) ──
+        // Second layer at different frequency for density
+        float strand2Proj = dot(vWorldPos.xz, furPerp * 1.3 + furDir * 0.4);
+        float strand2Raw = fract(strand2Proj * strandFreq * 0.7 + noise(vWorldPos.xz * 5.0) * 0.4);
+        float strand2 = smoothstep(0.0, 0.3, strand2Raw) * smoothstep(1.0, 0.5, strand2Raw);
+
+        // Combine layers
+        float furDensity = max(strand * 0.8, strand2 * 0.5);
+
+        // ── Steepness affects fur lay direction ──
+        // Steep faces = fur standing up (shows more undercoat/roots)
+        float steepness = clamp((1.0 - N.y) * 2.5, 0.0, 1.0);
+        // Flat = smooth fur tips; steep = ruffled showing roots
+        float tipMix = mix(0.7, 0.2, steepness);
+
+        // ── Color: blend undercoat ↔ tips based on strand + steepness ──
+        vec3 furCol = mix(undercoat, tipColor, furDensity * tipMix);
+
+        // ── Subtle color variation (natural fur has highlights/lowlights) ──
+        float colorVar = noise(vWorldPos.xz * 1.2 + 42.0);
+        furCol *= 0.85 + 0.3 * colorVar;
+
+        // ── Anisotropic fur lighting ──
+        // Kajiya-Kay style: light scattering along strand direction
+        vec3 T = normalize(vec3(furDir.x, 0.0, furDir.y)); // tangent along fur
+        float TdotH = dot(T, normalize(L + V));
+        float anisoSpec = pow(sqrt(max(0.0, 1.0 - TdotH * TdotH)), 24.0);
+        // Diffuse wraps softly for fluffy look
+        float NdotL = max(dot(N, L), 0.0);
+        float diffuse = 0.35 + 0.55 * NdotL;
+        // Rim light catching the fur tips from behind
+        float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+
+        vec3 col = furCol * diffuse;
+        col += tipColor * anisoSpec * 0.6;  // strand specular highlight
+        col += tipColor * rim * 0.25;        // backlit fur rim
+
+        // ── Wind ruffling (animate strand offset slowly) ──
+        float windRuffle = noise(vWorldPos.xz * 0.3 + uTime * 0.4) * 0.15;
+        col *= 1.0 + windRuffle;
+
+        // ── Foam as white fluffy tufts ──
+        float foamAmt = smoothstep(0.2, 0.6, vFoam);
+        vec3 fluffWhite = vec3(0.90, 0.88, 0.82) * (0.5 + 0.5 * diffuse);
+        col = mix(col, fluffWhite, foamAmt * 0.65);
+
+        // ── Warm hazy fog ──
+        float fog = 1.0 - exp(-cd * 0.0012);
+        vec3 fogCol = mix(vec3(0.55, 0.45, 0.35), vec3(0.70, 0.55, 0.40), pow(max(dot(normalize(vWorldPos - uCamPos), L), 0.0), 3.0));
+        col = mix(col, fogCol, fog);
+
+        gl_FragColor = vec4(col, alpha);
+
+      } else if (uRenderMode > 8.5) {
         // ═══ HOT LAVA PATH ═══
         vec3 N = normalize(vNormal);
         vec3 V = normalize(uCamPos - vWorldPos);
@@ -3340,7 +3423,11 @@ function animate(){
       fu.uCamPos.value.copy(camera.position);
       // Match distant water color to ocean wave tops
       const rm = oceanMat.uniforms.uRenderMode.value;
-      if (rm > 8.5) {
+      if (rm > 9.5) {
+        // Fur: warm brown
+        fu.uWaterColor.value.set(0.30, 0.20, 0.10);
+        fu.uFogColor.value.set(0.55, 0.45, 0.35);
+      } else if (rm > 8.5) {
         // Lava: dark cooled crust
         fu.uWaterColor.value.set(0.10, 0.04, 0.02);
         fu.uFogColor.value.set(0.12, 0.06, 0.04);

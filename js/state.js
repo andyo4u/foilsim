@@ -13,6 +13,14 @@
 //        • score: { distance, airTime, tricks, total }
 //        • unlockedLocations: Set
 //        • unlockedRenderModes: Set
+//
+//  TODO: Save / load progress — persist to localStorage:
+//        • saveState(): serialize achievements, unlocks, best
+//          scores, settings prefs → localStorage.setItem()
+//        • loadState(): hydrate state on startup from storage
+//        • Auto-save after each ride or achievement unlock
+//        • Optional: cloud save via Firebase / simple REST API
+//          for cross-device progress sync
 
 /* ── Constants ─────────────────────────────────────────────── */
 

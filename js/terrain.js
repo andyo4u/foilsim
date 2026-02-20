@@ -20,6 +20,13 @@
 //  TODO: More locations — add new terrainConfigs entries for
 //        real-world spots (Jaws/Peahi, Nazaré, Tahiti, etc.)
 //        each with their own heightmap + satellite assets.
+//
+//  TODO: Strava integration — the mini-map already records a
+//        Strava-style red-glow GPS trail. Extend this to:
+//        • Export trail as GPX/FIT with world-mapped coordinates
+//        • Capture a screenshot at ride end for the activity photo
+//        • Upload via Strava API (OAuth2 flow, virtual activity)
+//        • Make this an unlockable achievement reward
 
 import { state, OCEAN_SIZE } from './state.js';
 import { lerp, smoothstep, getVal, applyPreset, cacheAllSliders, degToDir } from './helpers.js';

@@ -34,6 +34,20 @@
 // ║    are more visible (adjust gamma / levels in the terrain    ║
 // ║    fragment shader, or multiply diffuse by a boost factor)   ║
 // ║                                                              ║
+// ║  SOCIAL / INTEGRATIONS                                       ║
+// ║  • Strava upload: unlockable feature — after a ride, export  ║
+// ║    the GPS-style track + screenshot and upload to Strava     ║
+// ║    as a virtual eFoil activity (use Strava API OAuth flow)   ║
+// ║  • Save progress: persist achievements, unlocked locations,  ║
+// ║    unlocked render modes, and best scores to localStorage    ║
+// ║    (or cloud save via a simple backend / Firebase)           ║
+// ║                                                              ║
+// ║  BUSINESS                                                    ║
+// ║  • Polish a killer demo reel for sponsor outreach            ║
+// ║  • Target eFoil brands (Lift, Fliteboard, Waydoo, Takuma)   ║
+// ║    and surf/water-sports media for sponsorship               ║
+// ║  • Consider embed-friendly widget mode for sponsor websites  ║
+// ║                                                              ║
 // ╚═══════════════════════════════════════════════════════════════╝
 
 import { state, OCEAN_SIZE } from './state.js';

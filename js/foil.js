@@ -323,18 +323,86 @@ function setupInput() {
     if (e.key === ' ') input.pump = false;
   });
 
-  // Mobile touch-pad zones
-  document.querySelectorAll('.touch-zone').forEach(zone => {
-    const a = zone.dataset.action;
-    const on  = () => { input[a] = true;  zone.classList.add('active'); };
-    const off = () => { input[a] = false; zone.classList.remove('active'); };
-    zone.addEventListener('touchstart',  e => { e.preventDefault(); e.stopPropagation(); on(); }, { passive: false });
-    zone.addEventListener('touchend',    e => { e.preventDefault(); off(); }, { passive: false });
-    zone.addEventListener('touchcancel', off);
-    // Mouse fallback for testing on desktop
-    zone.addEventListener('mousedown',   e => { e.preventDefault(); e.stopPropagation(); on(); });
-    zone.addEventListener('mouseup',     off);
-    zone.addEventListener('mouseleave',  off);
+  // Mobile touch-pad zones — slide-friendly
+  // Track touches at the pad level so sliding between zones works
+  document.querySelectorAll('.touch-pad').forEach(pad => {
+    const zones = pad.querySelectorAll('.touch-zone');
+    let activeZone = null;
+
+    function activateZone(touch) {
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const zone = el && el.closest('.touch-zone');
+      if (zone === activeZone) return;
+      // Deactivate old zone
+      if (activeZone) {
+        input[activeZone.dataset.action] = false;
+        activeZone.classList.remove('active');
+      }
+      // Activate new zone (if finger is still on a zone)
+      activeZone = zone;
+      if (zone) {
+        input[zone.dataset.action] = true;
+        zone.classList.add('active');
+      }
+    }
+
+    function clearAll() {
+      if (activeZone) {
+        input[activeZone.dataset.action] = false;
+        activeZone.classList.remove('active');
+        activeZone = null;
+      }
+    }
+
+    pad.addEventListener('touchstart', e => {
+      e.preventDefault(); e.stopPropagation();
+      activateZone(e.touches[0]);
+    }, { passive: false });
+
+    pad.addEventListener('touchmove', e => {
+      e.preventDefault();
+      // Find the touch that belongs to this pad
+      for (let i = 0; i < e.touches.length; i++) {
+        const el = document.elementFromPoint(e.touches[i].clientX, e.touches[i].clientY);
+        if (el && el.closest('.touch-pad') === pad) {
+          activateZone(e.touches[i]);
+          break;
+        }
+      }
+    }, { passive: false });
+
+    pad.addEventListener('touchend', e => {
+      e.preventDefault();
+      // Check if any touches remain on this pad
+      let stillOnPad = false;
+      for (let i = 0; i < e.touches.length; i++) {
+        const el = document.elementFromPoint(e.touches[i].clientX, e.touches[i].clientY);
+        if (el && el.closest('.touch-pad') === pad) { stillOnPad = true; break; }
+      }
+      if (!stillOnPad) clearAll();
+    }, { passive: false });
+
+    pad.addEventListener('touchcancel', clearAll);
+
+    // Mouse fallback for desktop testing
+    let mouseDown = false;
+    pad.addEventListener('mousedown', e => {
+      e.preventDefault(); e.stopPropagation();
+      mouseDown = true;
+      const zone = e.target.closest('.touch-zone');
+      if (zone) { activeZone = zone; input[zone.dataset.action] = true; zone.classList.add('active'); }
+    });
+    pad.addEventListener('mousemove', e => {
+      if (!mouseDown) return;
+      const zone = e.target.closest('.touch-zone');
+      if (zone === activeZone) return;
+      if (activeZone) { input[activeZone.dataset.action] = false; activeZone.classList.remove('active'); }
+      activeZone = zone;
+      if (zone) { input[zone.dataset.action] = true; zone.classList.add('active'); }
+    });
+    const mouseUp = () => { mouseDown = false; clearAll(); };
+    pad.addEventListener('mouseup', mouseUp);
+    pad.addEventListener('mouseleave', mouseUp);
   });
 }
 

@@ -787,9 +787,10 @@ function animate() {
   // Audio
   updateAudio(slopeForce, normSwell, foil.speed);
 
-  // Wave chart & mini-map
+  // Wave chart
   updateWaveChart(wH, slopeDot, slopeForce);
-  updateMiniMap();
+  // TODO: Re-enable mini-map once redesigned as Strava-style activity display
+  // updateMiniMap();
 
   foil.prevWH = wH;
 

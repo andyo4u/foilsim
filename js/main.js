@@ -99,8 +99,8 @@ import { initTerrain, rebuildTerrain, restartLevel, getRealTerrainHeight,
 // ═══════════════════════════
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.65;
 document.body.appendChild(renderer.domElement);
@@ -286,9 +286,11 @@ function setQuality(level) {
   state.wakeBudget     = preset.wakeBudget;
   state.streamerBudget = preset.streamerBudget;
 
-  // Apply pixel ratio — must re-call setSize after changing ratio
+  // Apply pixel ratio — setPixelRatio before setSize, then update camera
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.pixelRatioCap));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
 
   // Rebuild ocean geometry if size or segments changed
   if (needsRebuild) {

@@ -50,10 +50,17 @@
 // ║    or randomize gerstner phases/dirs to break up the grid    ║
 // ║                                                              ║
 // ║  PERFORMANCE                                                 ║
-// ║  • Increase FPS — profile GPU & CPU bottlenecks. Options:    ║
-// ║    reduce ocean SEGMENTS on mobile, simplify fragment shader  ║
-// ║    for far pixels, frustum-cull terrain chunks, lower pixel  ║
-// ║    ratio on low-end devices                                  ║
+// ║  • Adaptive LOD: auto-detect FPS and dynamically adjust:     ║
+// ║    – OCEAN_SIZE (shrink sim area if GPU-bound)               ║
+// ║    – SEGMENTS (256→128 on mobile, 512 on desktop)            ║
+// ║    – Pixel ratio (cap at 1 on low-end, 2 on high-end)       ║
+// ║    – Fragment shader complexity (skip fbm detail at dist)    ║
+// ║    – Particle counts (spray, wake, streamers)                ║
+// ║    Target: maintain 60fps on desktop, 30fps floor on mobile  ║
+// ║    Could expose a Quality slider: Low / Med / High / Ultra   ║
+// ║  • Profile GPU vs CPU bottleneck — is it the 512x512 vertex  ║
+// ║    shader, the fragment shader (11 render modes), or the     ║
+// ║    CPU-side getWaveHeight() calls per frame?                 ║
 // ║  • Mobile testing: verify on Android Chrome + iOS Safari,    ║
 // ║    fix touch controls, handle orientation changes, test on   ║
 // ║    low-end devices. Ensure touch input feels responsive.     ║

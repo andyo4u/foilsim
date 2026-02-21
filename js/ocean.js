@@ -22,10 +22,17 @@
 //        • Add more non-harmonic wave directions to break grid
 //        • Use hash-based noise injection in the vertex shader
 //
-//  TODO: Performance — on mobile, SEGMENTS=512 may be too heavy.
-//        • Detect device capability and use lower segment count
-//        • Simplify fragment shader for distant fragments (LOD)
-//        • Consider half-res render + upscale on low-end GPUs
+//  TODO: Adaptive LOD / ocean sizing — dynamically adjust to
+//        maintain target FPS:
+//        • SEGMENTS: 512 (ultra) → 256 (high) → 128 (mobile)
+//        • OCEAN_SIZE: shrink from 800 to 400 if GPU-bound —
+//          smaller sim area = fewer vertices = faster, and the
+//          camera is usually looking at nearby water anyway
+//        • Fragment shader: skip fbm detail octaves for pixels
+//          beyond a distance threshold (cheap LOD in shader)
+//        • Rebuild oceanGeo on-the-fly when quality changes
+//        • Half-res render + upscale on low-end GPUs
+//        • Could measure FPS over N frames and auto-step down
 
 import { state, OCEAN_SIZE, SEGMENTS } from './state.js';
 import { getVal, degToDir, lerp, smoothstep } from './helpers.js';

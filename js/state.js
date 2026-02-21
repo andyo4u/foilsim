@@ -21,6 +21,14 @@
 //        • Auto-save after each ride or achievement unlock
 //        • Optional: cloud save via Firebase / simple REST API
 //          for cross-device progress sync
+//
+//  TODO: Quality / LOD state — make OCEAN_SIZE and SEGMENTS
+//        mutable so adaptive LOD can adjust them at runtime:
+//        • quality: 'low' | 'med' | 'high' | 'ultra'
+//        • oceanSegments: 128 / 256 / 384 / 512
+//        • oceanSize: 400 / 600 / 800 / 800
+//        • pixelRatioCap: 1 / 1.5 / 2 / 2
+//        • particleBudget: 50 / 100 / 150 / 200
 
 /* ── Constants ─────────────────────────────────────────────── */
 

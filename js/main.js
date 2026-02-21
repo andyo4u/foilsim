@@ -286,8 +286,9 @@ function setQuality(level) {
   state.wakeBudget     = preset.wakeBudget;
   state.streamerBudget = preset.streamerBudget;
 
-  // Apply pixel ratio
+  // Apply pixel ratio — must re-call setSize after changing ratio
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.pixelRatioCap));
+  renderer.setSize(window.innerWidth, window.innerHeight);
 
   // Rebuild ocean geometry if size or segments changed
   if (needsRebuild) {
@@ -823,6 +824,6 @@ animate();
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.pixelRatioCap));
+  renderer.setSize(window.innerWidth, window.innerHeight);
 });

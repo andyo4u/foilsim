@@ -238,6 +238,9 @@ initTerrain();
   window.addEventListener(evt, initAudio, { once: true });
 });
 
+// Start with Auto quality — self-tunes FPS from the first frame
+setQuality('auto');
+
 // ═══════════════════════════
 // QUALITY / LOD
 // ═══════════════════════════

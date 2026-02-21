@@ -82,31 +82,41 @@
   #hud .label { font-size: 10px; color: #6a94c0; text-transform: uppercase; letter-spacing: 1px; }
 
   /* Ride controls */
-  #ride-controls {
-    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
-    z-index: 80; display: flex; gap: 10px; align-items: end;
+  /* ── Mobile Touch Pads ─────────────────────────────────── */
+  .touch-pad {
+    position: fixed; bottom: 18px; z-index: 80;
+    display: none;  /* shown via @media (pointer:coarse) */
+    border-radius: 16px;
+    background: rgba(8,18,38,0.55); backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(100,160,255,0.2);
+    overflow: hidden;
+    user-select: none; -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
   }
-  .ride-btn {
-    width: 56px; height: 56px; border-radius: 50%;
-    background: rgba(8,18,38,0.75); backdrop-filter: blur(10px);
-    border: 1.5px solid rgba(100,160,255,0.25);
-    color: #aaccff; font-size: 22px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: all 0.12s; user-select: none; -webkit-user-select: none;
-    -webkit-tap-highlight-color: transparent; position: relative;
+  .touch-pad.left-pad  { left: 14px;  width: 150px; height: 90px; display: flex; }
+  .touch-pad.right-pad { right: 14px; width: 150px; height: 90px; display: flex; flex-direction: column; }
+
+  .touch-zone {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    color: rgba(170,200,255,0.5); font-size: 24px;
+    transition: background 0.1s;
+    position: relative;
   }
-  .ride-btn:active, .ride-btn.active {
-    background: rgba(74,158,255,0.35); border-color: rgba(100,180,255,0.6);
-    transform: scale(0.92); color: #fff;
+  .touch-zone:active, .touch-zone.active {
+    background: rgba(74,158,255,0.3); color: #fff;
   }
-  .ride-btn.pump-btn {
-    width: 72px; height: 72px; font-size: 14px; font-weight: 600;
-    border-color: rgba(100,220,180,0.35); color: #80e0c0;
+  .touch-zone .zone-label {
+    position: absolute; bottom: 4px; font-size: 8px; letter-spacing: 0.6px;
+    color: rgba(140,180,230,0.4); text-transform: uppercase; pointer-events: none;
   }
-  .ride-btn.pump-btn:active, .ride-btn.pump-btn.active {
-    background: rgba(80,220,180,0.35); border-color: rgba(100,220,180,0.6); color: #fff;
+  /* Divider lines between zones */
+  .left-pad .touch-zone:first-child { border-right: 1px solid rgba(100,160,255,0.15); }
+  .right-pad .touch-zone:first-child { border-bottom: 1px solid rgba(100,160,255,0.15); }
+
+  /* Show touch pads on touch devices */
+  @media (pointer: coarse) {
+    .touch-pad { display: flex; }
   }
-  .btn-label { position: absolute; bottom: -18px; font-size: 9px; color: #6a94c0; text-transform: uppercase; letter-spacing: 0.8px; white-space: nowrap; pointer-events: none; }
 
   #info-bar {
     position: fixed; bottom: 110px; left: 50%; transform: translateX(-50%);
@@ -165,8 +175,10 @@
 
   @media (max-width: 480px) {
     #controls-panel { width: calc(100vw - 32px); max-height: 55vh; }
-    .ride-btn { width: 50px; height: 50px; font-size: 20px; }
-    .ride-btn.pump-btn { width: 64px; height: 64px; font-size: 13px; }
+    .touch-pad { bottom: 10px; }
+    .touch-pad.left-pad  { left: 8px;  width: 130px; height: 80px; }
+    .touch-pad.right-pad { right: 8px; width: 130px; height: 80px; }
+    .touch-zone { font-size: 20px; }
     #hud .speed { font-size: 22px; }
     #mini-map { width: 180px; height: 230px; bottom: 88px; right: 8px; }
   }
@@ -175,7 +187,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.84</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.85</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -240,7 +252,7 @@
     <div class="control-row"><span class="control-label">Foil Stability</span><input type="range" id="sbStability" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbStability-val">1.00×</span></div>
     <div class="control-row" style="margin-top:6px;"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="sbFreeCam" onchange="toggleFreeCam(this.checked)" style="width:14px;height:14px;accent-color:#4af;"><span class="control-label" style="flex:1;">Free Camera</span></label></div>
     <div class="control-row"><span class="control-label">Render Style</span><select id="sbRenderMode" onchange="setRenderMode(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="0">Normal</option><option value="1">Woodcut</option><option value="2">DEM</option><option value="3">Painterly</option><option value="4">Tron</option><option value="5">Sumi-e</option><option value="6">Pixel Art</option><option value="7">X-Ray</option><option value="8">Plastic</option><option value="9">Lava</option><option value="10">Fur</option></select></div>
-    <div class="control-row"><span class="control-label">Quality</span><select id="sbQuality" onchange="setQuality(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="low">Low</option><option value="med">Medium</option><option value="high">High</option><option value="ultra" selected>Ultra</option><option value="auto">Auto</option></select></div>
+    <div class="control-row"><span class="control-label">Quality</span><select id="sbQuality" onchange="setQuality(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="low">Low</option><option value="med">Medium</option><option value="high">High</option><option value="ultra">Ultra</option><option value="auto" selected>Auto</option></select></div>
   </div>
   <div class="section">
     <div class="section-title">🏝 Background</div>
@@ -295,16 +307,17 @@
 <!-- Mini-map — Strava-style GPS track overlay (East at top) -->
 <canvas id="mini-map" width="280" height="360"></canvas>
 
-<!-- Ride controls hidden — keyboard only for now (A/D turn, W pump, S power, Space boost) -->
-<div id="ride-controls" style="display:none;">
-  <button class="ride-btn" id="btn-left" data-action="left">◀<span class="btn-label">A / ←</span></button>
-  <button class="ride-btn" id="btn-up" data-action="up">▲<span class="btn-label">Pump · W</span></button>
-  <button class="ride-btn pump-btn" id="btn-pump" data-action="pump">⚡<span class="btn-label">Boost · Space</span></button>
-  <button class="ride-btn" id="btn-down" data-action="down">▼<span class="btn-label">Power · S</span></button>
-  <button class="ride-btn" id="btn-right" data-action="right">▶<span class="btn-label">D / →</span></button>
+<!-- Mobile touch pads — shown on touch devices via CSS @media (pointer:coarse) -->
+<div class="touch-pad left-pad">
+  <div class="touch-zone" data-action="left">◀<span class="zone-label">left</span></div>
+  <div class="touch-zone" data-action="right">▶<span class="zone-label">right</span></div>
+</div>
+<div class="touch-pad right-pad">
+  <div class="touch-zone" data-action="up">▲<span class="zone-label">pump</span></div>
+  <div class="touch-zone" data-action="down">▼<span class="zone-label">brake</span></div>
 </div>
 
-<div id="info-bar">AD: turn · W: pump · W+S: power pump · Space: boost · Drag to orbit</div>
+<div id="info-bar">AD: turn · W: pump · S: brake · Space: boost · Drag to orbit</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/objects/Sky.js"></script>

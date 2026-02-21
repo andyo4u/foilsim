@@ -323,17 +323,18 @@ function setupInput() {
     if (e.key === ' ') input.pump = false;
   });
 
-  // Touch buttons
-  document.querySelectorAll('.ride-btn').forEach(btn => {
-    const a = btn.dataset.action;
-    const on  = () => { input[a] = true;  btn.classList.add('active'); };
-    const off = () => { input[a] = false; btn.classList.remove('active'); };
-    btn.addEventListener('mousedown',   e => { e.preventDefault(); e.stopPropagation(); on(); });
-    btn.addEventListener('mouseup',     off);
-    btn.addEventListener('mouseleave',  off);
-    btn.addEventListener('touchstart',  e => { e.preventDefault(); e.stopPropagation(); on(); }, { passive: false });
-    btn.addEventListener('touchend',    e => { e.preventDefault(); off(); }, { passive: false });
-    btn.addEventListener('touchcancel', off);
+  // Mobile touch-pad zones
+  document.querySelectorAll('.touch-zone').forEach(zone => {
+    const a = zone.dataset.action;
+    const on  = () => { input[a] = true;  zone.classList.add('active'); };
+    const off = () => { input[a] = false; zone.classList.remove('active'); };
+    zone.addEventListener('touchstart',  e => { e.preventDefault(); e.stopPropagation(); on(); }, { passive: false });
+    zone.addEventListener('touchend',    e => { e.preventDefault(); off(); }, { passive: false });
+    zone.addEventListener('touchcancel', off);
+    // Mouse fallback for testing on desktop
+    zone.addEventListener('mousedown',   e => { e.preventDefault(); e.stopPropagation(); on(); });
+    zone.addEventListener('mouseup',     off);
+    zone.addEventListener('mouseleave',  off);
   });
 }
 
@@ -428,7 +429,7 @@ function setupCameraControls() {
   renderer.domElement.addEventListener('contextmenu', e => { if (cam.free) e.preventDefault(); });
 
   renderer.domElement.addEventListener('touchstart', e => {
-    if (e.target.closest('#ride-controls') || e.target.closest('#controls-panel')) return;
+    if (e.target.closest('.touch-pad') || e.target.closest('#controls-panel')) return;
     if (e.touches.length === 1) {
       cam.drag = true; cam.lx = e.touches[0].clientX; cam.ly = e.touches[0].clientY;
     } else if (e.touches.length === 2) {
@@ -442,7 +443,7 @@ function setupCameraControls() {
   }, { passive: true });
 
   renderer.domElement.addEventListener('touchmove', e => {
-    if (e.target.closest('#ride-controls') || e.target.closest('#controls-panel')) return;
+    if (e.target.closest('.touch-pad') || e.target.closest('#controls-panel')) return;
     e.preventDefault();
     if (cam.panning && cam.free && e.touches.length >= 3) {
       const dx = e.touches[0].clientX - cam.lx, dy = e.touches[0].clientY - cam.ly;

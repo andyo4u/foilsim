@@ -241,6 +241,13 @@ initTerrain();
 // Start with Auto quality — self-tunes FPS from the first frame
 setQuality('auto');
 
+// Mobile detection — enable touch pads, gear button, hide mini-map
+const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+if (isMobile) {
+  document.body.classList.add('mobile-device');
+  document.querySelectorAll('.touch-pad').forEach(p => p.classList.add('mobile-active'));
+}
+
 // ═══════════════════════════
 // QUALITY / LOD
 // ═══════════════════════════

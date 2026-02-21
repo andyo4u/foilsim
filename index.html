@@ -26,10 +26,12 @@
     background: rgba(8,18,38,0.85); backdrop-filter: blur(12px);
     border: 1px solid rgba(100,160,255,0.2);
     color: #7eb8ff; font-size: 20px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
+    display: none; align-items: center; justify-content: center;
     transition: all 0.3s ease;
   }
   #controls-toggle:hover { background: rgba(20,40,70,0.9); }
+  /* Show gear button on mobile */
+  .mobile-device #controls-toggle { display: flex; }
 
   #controls-panel {
     position: fixed; top: 16px; right: 16px; z-index: 99;
@@ -85,20 +87,20 @@
   /* ── Mobile Touch Pads ─────────────────────────────────── */
   .touch-pad {
     position: fixed; bottom: 18px; z-index: 80;
-    display: none;  /* shown via @media (pointer:coarse) */
-    border-radius: 16px;
+    display: none;  /* shown via JS on mobile: .mobile-active */
+    border-radius: 20px;
     background: rgba(8,18,38,0.55); backdrop-filter: blur(8px);
     border: 1.5px solid rgba(100,160,255,0.2);
     overflow: hidden;
     user-select: none; -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
   }
-  .touch-pad.left-pad  { left: 14px;  width: 150px; height: 90px; display: flex; }
-  .touch-pad.right-pad { right: 14px; width: 150px; height: 90px; display: flex; flex-direction: column; }
+  .touch-pad.left-pad  { left: 14px;  width: 220px; height: 130px; }
+  .touch-pad.right-pad { right: 14px; width: 220px; height: 130px; }
 
   .touch-zone {
     flex: 1; display: flex; align-items: center; justify-content: center;
-    color: rgba(170,200,255,0.5); font-size: 24px;
+    color: rgba(170,200,255,0.5); font-size: 32px;
     transition: background 0.1s;
     position: relative;
   }
@@ -106,17 +108,17 @@
     background: rgba(74,158,255,0.3); color: #fff;
   }
   .touch-zone .zone-label {
-    position: absolute; bottom: 4px; font-size: 8px; letter-spacing: 0.6px;
+    position: absolute; bottom: 6px; font-size: 10px; letter-spacing: 0.6px;
     color: rgba(140,180,230,0.4); text-transform: uppercase; pointer-events: none;
   }
   /* Divider lines between zones */
   .left-pad .touch-zone:first-child { border-right: 1px solid rgba(100,160,255,0.15); }
   .right-pad .touch-zone:first-child { border-bottom: 1px solid rgba(100,160,255,0.15); }
 
-  /* Show touch pads on touch devices */
-  @media (pointer: coarse) {
-    .touch-pad { display: flex; }
-  }
+  /* Mobile-active class added by JS on touch devices */
+  .touch-pad.mobile-active { display: flex; }
+  .touch-pad.left-pad.mobile-active  { flex-direction: row; }
+  .touch-pad.right-pad.mobile-active { flex-direction: column; }
 
   #info-bar {
     position: fixed; bottom: 110px; left: 50%; transform: translateX(-50%);
@@ -164,7 +166,10 @@
     border-top: 1px solid rgba(255,255,255,0.1);
   }
 
-  /* Mini-map — Strava-style GPS track overlay */
+  /* Mini-map — Strava-style GPS track overlay
+     TODO: Redesign as a proper Strava-style activity display with
+     distance, time, avg speed, elevation profile, and the GPS track.
+     Make it a slide-up panel or overlay that appears after a ride. */
   #mini-map {
     position: fixed; bottom: 96px; right: 16px;
     width: 280px; height: 360px; z-index: 55;
@@ -172,27 +177,28 @@
     border: 1px solid rgba(100,160,255,0.2);
     background: rgba(8,18,38,0.85);
   }
+  /* Hide mini-map on mobile — too much screen clutter */
+  .mobile-device #mini-map { display: none; }
 
   @media (max-width: 480px) {
     #controls-panel { width: calc(100vw - 32px); max-height: 55vh; }
     .touch-pad { bottom: 10px; }
-    .touch-pad.left-pad  { left: 8px;  width: 130px; height: 80px; }
-    .touch-pad.right-pad { right: 8px; width: 130px; height: 80px; }
-    .touch-zone { font-size: 20px; }
+    .touch-pad.left-pad  { left: 8px;  width: 180px; height: 110px; }
+    .touch-pad.right-pad { right: 8px; width: 180px; height: 110px; }
+    .touch-zone { font-size: 28px; }
     #hud .speed { font-size: 22px; }
-    #mini-map { width: 180px; height: 230px; bottom: 88px; right: 8px; }
   }
 </style>
 </head>
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.85</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.86</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
-<!-- Gear button hidden — use Tab key to toggle controls panel -->
-<button id="controls-toggle" style="display:none" onclick="toggleControls()">⚙</button>
+<!-- Gear button — hidden by default, shown on mobile via JS -->
+<button id="controls-toggle" onclick="toggleControls()">⚙</button>
 
 <div id="controls-panel" class="hidden">
   <div class="panel-header">

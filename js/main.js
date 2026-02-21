@@ -99,8 +99,8 @@ import { initTerrain, rebuildTerrain, restartLevel, getRealTerrainHeight,
 // ═══════════════════════════
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.65;
 document.body.appendChild(renderer.domElement);
@@ -286,11 +286,8 @@ function setQuality(level) {
   state.wakeBudget     = preset.wakeBudget;
   state.streamerBudget = preset.streamerBudget;
 
-  // Apply pixel ratio — setPixelRatio before setSize, then update camera
+  // Apply pixel ratio
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.pixelRatioCap));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
 
   // Rebuild ocean geometry if size or segments changed
   if (needsRebuild) {
@@ -356,7 +353,7 @@ function animate() {
   const fpsNow = performance.now();
   if (fpsNow - fpsLastTime >= 500) {
     const fps = Math.round(fpsFrames / ((fpsNow - fpsLastTime) / 1000));
-    fpsLabel.textContent = fps;
+    fpsLabel.textContent = fps + ' fps';
     fpsFrames = 0; fpsLastTime = fpsNow;
 
     // Auto-quality adjustment
@@ -790,10 +787,9 @@ function animate() {
   // Audio
   updateAudio(slopeForce, normSwell, foil.speed);
 
-  // Wave chart
+  // Wave chart & mini-map
   updateWaveChart(wH, slopeDot, slopeForce);
-  // TODO: Re-enable mini-map once redesigned as Strava-style activity display
-  // updateMiniMap();
+  updateMiniMap();
 
   foil.prevWH = wH;
 
@@ -826,6 +822,6 @@ animate();
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.pixelRatioCap));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.pixelRatioCap));
 });

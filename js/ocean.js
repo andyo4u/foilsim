@@ -34,7 +34,7 @@
 //        • Half-res render + upscale on low-end GPUs
 //        • Could measure FPS over N frames and auto-step down
 
-import { state, OCEAN_SIZE, SEGMENTS } from './state.js';
+import { state } from './state.js';
 import { getVal, degToDir, lerp, smoothstep } from './helpers.js';
 
 /* ── Module-local helpers (terrain accessors) ──────────────── */
@@ -81,7 +81,7 @@ function initOcean() {
   state.pmremGenerator.compileCubemapShader();
 
   // ── Geometry ────────────────────────────────────────────
-  const oceanGeo = new THREE.PlaneGeometry(OCEAN_SIZE, OCEAN_SIZE, SEGMENTS, SEGMENTS);
+  const oceanGeo = new THREE.PlaneGeometry(state.oceanSize, state.oceanSize, state.oceanSegments, state.oceanSegments);
   oceanGeo.rotateX(-Math.PI / 2);
   state.oceanGeo = oceanGeo;
 
@@ -1071,6 +1071,21 @@ function updateWaveChart(waveH, slopeVal, energyVal) {
 }
 
 // ═══════════════════════════
+// QUALITY / LOD — REBUILD OCEAN GEOMETRY
+// ═══════════════════════════
+
+function rebuildOceanGeometry() {
+  if (state.oceanGeo) state.oceanGeo.dispose();
+  const geo = new THREE.PlaneGeometry(
+    state.oceanSize, state.oceanSize,
+    state.oceanSegments, state.oceanSegments
+  );
+  geo.rotateX(-Math.PI / 2);
+  state.oceanMesh.geometry = geo;
+  state.oceanGeo = geo;
+}
+
+// ═══════════════════════════
 // EXPORTS
 // ═══════════════════════════
 
@@ -1083,4 +1098,5 @@ export {
   getSwellSlope,
   setRenderMode,
   updateWaveChart,
+  rebuildOceanGeometry,
 };

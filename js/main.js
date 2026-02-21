@@ -84,12 +84,12 @@
 // ║                                                              ║
 // ╚═══════════════════════════════════════════════════════════════╝
 
-import { state, OCEAN_SIZE } from './state.js';
+import { state } from './state.js';
 import { updateVal, toggleControls, getVal, cacheAllSliders, applyPreset, showToast,
          copySettings, copySettingsJSON, lerp, smoothstep, degToDir } from './helpers.js';
 import { initAudio, updateAudio } from './audio.js';
 import { initOcean, updateEnvMap, getWaveHeight, getWaveSlope, getSwellHeight,
-         getSwellSlope, setRenderMode, updateWaveChart } from './ocean.js';
+         getSwellSlope, setRenderMode, updateWaveChart, rebuildOceanGeometry } from './ocean.js';
 import { initFoil, emitSpray, updateSpray, updateWake, updateStreamer, toggleFreeCam, updateCamera } from './foil.js';
 import { initTerrain, rebuildTerrain, restartLevel, getRealTerrainHeight,
          RT_WATER_Y, RT_WORLD_W, RT_WORLD_D, updateMiniMap, terrainConfigs } from './terrain.js';
@@ -239,6 +239,60 @@ initTerrain();
 });
 
 // ═══════════════════════════
+// QUALITY / LOD
+// ═══════════════════════════
+
+const QUALITY_PRESETS = {
+  low:   { oceanSegments: 128, oceanSize: 400, pixelRatioCap: 1,   sprayBudget: 50,  wakeBudget: 30, streamerBudget: 40  },
+  med:   { oceanSegments: 256, oceanSize: 600, pixelRatioCap: 1.5, sprayBudget: 100, wakeBudget: 50, streamerBudget: 80  },
+  high:  { oceanSegments: 384, oceanSize: 800, pixelRatioCap: 2,   sprayBudget: 150, wakeBudget: 65, streamerBudget: 100 },
+  ultra: { oceanSegments: 512, oceanSize: 800, pixelRatioCap: 2,   sprayBudget: 200, wakeBudget: 80, streamerBudget: 120 },
+};
+
+const QUALITY_LEVELS = ['low', 'med', 'high', 'ultra'];
+
+function setQuality(level) {
+  if (level === 'auto') {
+    state.autoQuality = true;
+    // Start auto from current level
+    return;
+  }
+  state.autoQuality = false;
+
+  const preset = QUALITY_PRESETS[level];
+  if (!preset) return;
+
+  const needsRebuild = (
+    state.oceanSegments !== preset.oceanSegments ||
+    state.oceanSize !== preset.oceanSize
+  );
+
+  // Apply all quality properties to state
+  state.quality        = level;
+  state.oceanSegments  = preset.oceanSegments;
+  state.oceanSize      = preset.oceanSize;
+  state.pixelRatioCap  = preset.pixelRatioCap;
+  state.sprayBudget    = preset.sprayBudget;
+  state.wakeBudget     = preset.wakeBudget;
+  state.streamerBudget = preset.streamerBudget;
+
+  // Apply pixel ratio
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.pixelRatioCap));
+
+  // Rebuild ocean geometry if size or segments changed
+  if (needsRebuild) {
+    rebuildOceanGeometry();
+  }
+
+  // Trim wake history if it exceeds new budget
+  while (state.wkHist.length > state.wakeBudget) state.wkHist.pop();
+
+  // Update the dropdown to reflect current level
+  const sel = document.getElementById('sbQuality');
+  if (sel && sel.value !== level && sel.value !== 'auto') sel.value = level;
+}
+
+// ═══════════════════════════
 // WINDOW.* BRIDGE — expose functions for inline HTML event handlers
 // ═══════════════════════════
 
@@ -251,6 +305,7 @@ window.copySettings      = copySettings;
 window.copySettingsJSON  = copySettingsJSON;
 window.toggleFreeCam     = toggleFreeCam;
 window.setRenderMode     = setRenderMode;
+window.setQuality        = setQuality;
 
 // ═══════════════════════════
 // MAIN LOOP
@@ -263,6 +318,14 @@ let prevSunAngle = -1, prevSunDir = -1;
 // FPS counter
 let fpsFrames = 0, fpsLastTime = performance.now();
 const fpsLabel = document.getElementById('fps-label');
+
+// Auto-quality FPS tracking
+let autoQFrames = [];
+const AUTO_Q_WINDOW    = 6;   // 500ms samples → 3 seconds
+const AUTO_Q_DOWN_FPS  = 45;  // step down if avg below this
+const AUTO_Q_UP_FPS    = 55;  // step up if avg above this
+const AUTO_Q_UP_HOLD   = 10;  // consecutive above-thresh samples before stepping up (5s)
+let autoQUpCount = 0;
 
 // DOM refs for shallow water
 const shallowWarningEl = document.getElementById('shallow-warning');
@@ -282,6 +345,35 @@ function animate() {
     const fps = Math.round(fpsFrames / ((fpsNow - fpsLastTime) / 1000));
     fpsLabel.textContent = fps + ' fps';
     fpsFrames = 0; fpsLastTime = fpsNow;
+
+    // Auto-quality adjustment
+    if (state.autoQuality) {
+      autoQFrames.push(fps);
+      if (autoQFrames.length > AUTO_Q_WINDOW) autoQFrames.shift();
+
+      if (autoQFrames.length >= AUTO_Q_WINDOW) {
+        const avgFps = autoQFrames.reduce((a, b) => a + b, 0) / autoQFrames.length;
+        const curIdx = QUALITY_LEVELS.indexOf(state.quality);
+
+        if (avgFps < AUTO_Q_DOWN_FPS && curIdx > 0) {
+          // Step down immediately
+          setQuality(QUALITY_LEVELS[curIdx - 1]);
+          state.autoQuality = true;  // re-enable (setQuality disables it)
+          autoQFrames.length = 0;
+          autoQUpCount = 0;
+        } else if (avgFps > AUTO_Q_UP_FPS && curIdx < QUALITY_LEVELS.length - 1) {
+          autoQUpCount++;
+          if (autoQUpCount >= AUTO_Q_UP_HOLD) {
+            setQuality(QUALITY_LEVELS[curIdx + 1]);
+            state.autoQuality = true;  // re-enable
+            autoQFrames.length = 0;
+            autoQUpCount = 0;
+          }
+        } else {
+          autoQUpCount = 0;
+        }
+      }
+    }
   }
 
   const dt = Math.min(clock.getDelta(), .05);
@@ -505,14 +597,14 @@ function animate() {
 
   // Move ocean mesh to follow foil
   {
-    const SNAP = OCEAN_SIZE * 0.25;
+    const SNAP = state.oceanSize * 0.25;
     state.oceanMesh.position.x = Math.round(foil.x / SNAP) * SNAP;
     state.oceanMesh.position.z = Math.round(foil.z / SNAP) * SNAP;
     state.oceanMesh.position.y = state.realTerrainMesh ? RT_WATER_Y() : 0;
 
     // Update water fill plane
     if (state.waterFillPlane) {
-      const half = OCEAN_SIZE / 2;
+      const half = state.oceanSize / 2;
       const fu = state.waterFillPlane.material.uniforms;
       fu.uOceanMin.value.set(state.oceanMesh.position.x - half, state.oceanMesh.position.z - half);
       fu.uOceanMax.value.set(state.oceanMesh.position.x + half, state.oceanMesh.position.z + half);
@@ -583,7 +675,7 @@ function animate() {
 
   // Wake
   if (foil.speed > 1.5) state.wkHist.unshift({ x: foil.x - mx, y: bY - foil.rideH + .05, z: foil.z - mz });
-  while (state.wkHist.length > 80) state.wkHist.pop();
+  while (state.wkHist.length > state.wakeBudget) state.wkHist.pop();
   updateWake();
 
   // Wingtip streamers
@@ -721,4 +813,5 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.pixelRatioCap));
 });

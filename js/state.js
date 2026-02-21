@@ -22,19 +22,6 @@
 //        • Optional: cloud save via Firebase / simple REST API
 //          for cross-device progress sync
 //
-//  TODO: Quality / LOD state — make OCEAN_SIZE and SEGMENTS
-//        mutable so adaptive LOD can adjust them at runtime:
-//        • quality: 'low' | 'med' | 'high' | 'ultra'
-//        • oceanSegments: 128 / 256 / 384 / 512
-//        • oceanSize: 400 / 600 / 800 / 800
-//        • pixelRatioCap: 1 / 1.5 / 2 / 2
-//        • particleBudget: 50 / 100 / 150 / 200
-
-/* ── Constants ─────────────────────────────────────────────── */
-
-export const OCEAN_SIZE = 800;
-export const SEGMENTS   = 512;
-
 /* ── State ─────────────────────────────────────────────────── */
 
 export const state = {
@@ -153,4 +140,14 @@ export const state = {
   // ── Pre-allocated vectors (avoid GC) ──────────────────────
   _tipLWorld : null,   // will be THREE.Vector3
   _tipRWorld : null,   // will be THREE.Vector3
+
+  // ── Quality / LOD ────────────────────────────────────────
+  oceanSize       : 800,
+  oceanSegments   : 512,
+  pixelRatioCap   : 2,
+  quality         : 'ultra',   // 'low' | 'med' | 'high' | 'ultra'
+  autoQuality     : false,     // FPS-based auto-adjust active?
+  sprayBudget     : 200,
+  wakeBudget      : 80,
+  streamerBudget  : 120,
 };

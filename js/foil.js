@@ -152,7 +152,7 @@ function createSpraySystem() {
 export function emitSpray(px, py, pz, vx, vy, vz, n) {
   const spParts = state.spParts;
   let e = 0;
-  for (let i = 0; i < SPRAY_N && e < n; i++) {
+  for (let i = 0; i < state.sprayBudget && e < n; i++) {
     if (spParts[i].life <= 0) {
       const p = spParts[i];
       p.x = px + (Math.random() - 0.5) * 0.3;
@@ -170,7 +170,8 @@ export function emitSpray(px, py, pz, vx, vy, vz, n) {
 
 export function updateSpray(dt) {
   const spParts = state.spParts;
-  for (let i = 0; i < SPRAY_N; i++) {
+  const budget = state.sprayBudget;
+  for (let i = 0; i < budget; i++) {
     const p = spParts[i];
     if (p.life > 0) {
       p.life -= dt;
@@ -188,6 +189,11 @@ export function updateSpray(dt) {
       spPos[i * 3 + 1] = -100;
       spAl[i] = 0;
     }
+  }
+  // Hide particles beyond current quality budget
+  for (let i = budget; i < SPRAY_N; i++) {
+    spPos[i * 3 + 1] = -100;
+    spAl[i] = 0;
   }
   spGeo.attributes.position.needsUpdate = true;
   spGeo.attributes.size.needsUpdate     = true;
@@ -271,7 +277,7 @@ export function updateStreamer(str, wx, wy, wz, speed) {
   if (speed > 1.0) {
     str.hist.unshift({ x: wx, y: wy, z: wz });
   }
-  while (str.hist.length > STR_N) str.hist.pop();
+  while (str.hist.length > state.streamerBudget) str.hist.pop();
 
   for (let i = 0; i < STR_N; i++) {
     if (i < str.hist.length) {

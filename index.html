@@ -166,20 +166,6 @@
     border-top: 1px solid rgba(255,255,255,0.1);
   }
 
-  /* Mini-map — Strava-style GPS track overlay
-     TODO: Redesign as a proper Strava-style activity display with
-     distance, time, avg speed, elevation profile, and the GPS track.
-     Make it a slide-up panel or overlay that appears after a ride. */
-  #mini-map {
-    position: fixed; bottom: 96px; right: 16px;
-    width: 280px; height: 360px; z-index: 55;
-    pointer-events: none; border-radius: 12px;
-    border: 1px solid rgba(100,160,255,0.2);
-    background: rgba(8,18,38,0.85);
-  }
-  /* Hide mini-map on mobile — too much screen clutter */
-  .mobile-device #mini-map { display: none; }
-
   @media (max-width: 480px) {
     #controls-panel { width: calc(100vw - 32px); max-height: 55vh; }
     .touch-pad { bottom: 10px; }
@@ -193,7 +179,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.86</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.89</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -309,9 +295,6 @@
 
 <!-- Wave height & slope chart — scrolling strip at bottom of screen -->
 <canvas id="wave-chart" width="800" height="80"></canvas>
-
-<!-- Mini-map — Strava-style GPS track overlay (East at top) -->
-<canvas id="mini-map" width="280" height="360"></canvas>
 
 <!-- Mobile touch pads — shown on touch devices via CSS @media (pointer:coarse) -->
 <div class="touch-pad left-pad">

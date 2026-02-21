@@ -92,7 +92,7 @@ import { initOcean, updateEnvMap, getWaveHeight, getWaveSlope, getSwellHeight,
          getSwellSlope, setRenderMode, updateWaveChart, rebuildOceanGeometry } from './ocean.js';
 import { initFoil, emitSpray, updateSpray, updateWake, updateStreamer, toggleFreeCam, updateCamera } from './foil.js';
 import { initTerrain, rebuildTerrain, restartLevel, getRealTerrainHeight,
-         RT_WATER_Y, RT_WORLD_W, RT_WORLD_D, updateMiniMap, terrainConfigs } from './terrain.js';
+         RT_WATER_Y, RT_WORLD_W, RT_WORLD_D, terrainConfigs } from './terrain.js';
 
 // ═══════════════════════════
 // THREE.JS CORE SETUP
@@ -241,7 +241,7 @@ initTerrain();
 // Start with Auto quality — self-tunes FPS from the first frame
 setQuality('auto');
 
-// Mobile detection — enable touch pads, gear button, hide mini-map
+// Mobile detection — enable touch pads, gear button
 const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 if (isMobile) {
   document.body.classList.add('mobile-device');
@@ -787,9 +787,8 @@ function animate() {
   // Audio
   updateAudio(slopeForce, normSwell, foil.speed);
 
-  // Wave chart & mini-map
+  // Wave chart
   updateWaveChart(wH, slopeDot, slopeForce);
-  updateMiniMap();
 
   foil.prevWH = wH;
 

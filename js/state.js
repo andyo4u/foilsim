@@ -122,15 +122,6 @@ export const state = {
   shallowStalled : false,
   shallowTimer   : 0,
 
-  // ── Mini-Map ──────────────────────────────────────────────
-  miniMapCanvas       : null,   // set from DOM
-  miniMapCtx          : null,
-  miniMapPath         : [],
-  miniMapBgImage      : null,
-  miniMapDirty        : true,
-  miniMapFrameCounter : 0,
-  mmapBounds          : null,
-
   // ── Particles ─────────────────────────────────────────────
   spParts   : [],   // spray particles
   wkHist    : [],   // wake history

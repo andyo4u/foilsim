@@ -2,7 +2,7 @@
 //  terrain.js  –  Terrain systems module
 //
 //  Distant silhouettes, 3D cliff segments, real terrain loading
-//  (heightmap + satellite), panoramic photo backdrops, mini-map,
+//  (heightmap + satellite), panoramic photo backdrops,
 //  terrain presets / configs, shallow-water restart logic.
 // ──────────────────────────────────────────────────────────────
 //
@@ -33,8 +33,7 @@
 //        terrainConfig would use a volcanic crater heightmap
 //        with a molten-rock satellite texture. Because why not.
 //
-//  TODO: Strava integration — the mini-map already records a
-//        Strava-style red-glow GPS trail. Extend this to:
+//  TODO: Strava integration — record a GPS-style trail and:
 //        • Export trail as GPX/FIT with world-mapped coordinates
 //        • Capture a screenshot at ride end for the activity photo
 //        • Upload via Strava API (OAuth2 flow, virtual activity)
@@ -627,10 +626,7 @@ export function rebuildTerrain(presetName) {
         state.oceanMat.needsUpdate = true;
         state.realTerrainMat.uniforms.uWaterLevel.value = RT_WATER_Y();
         state.oceanMesh.scale.set(1, 1, 1);
-        // Initialize mini-map from heightmap
-        state.miniMapPath.length = 0;
-        state.miniMapDirty = true;
-        buildMiniMapBackground();
+        // Mini-map removed (v0.89)
       });
     });
   } else {
@@ -642,10 +638,7 @@ export function rebuildTerrain(presetName) {
       state.oceanMat.needsUpdate = true;
       state.oceanMesh.scale.set(1, 1, 1);
       state.oceanMesh.position.y = 0;
-      // Hide mini-map for non-terrain presets
-      state.miniMapPath.length = 0;
-      state.miniMapBgImage = null;
-      state.miniMapCanvas.style.display = 'none';
+      // Mini-map removed (v0.89)
     });
   }
 
@@ -1191,227 +1184,6 @@ export function restartLevel() {
   state.foil.x = startPos.x; state.foil.z = startPos.z; state.foil.heading = startPos.heading;
   state.foil.speed = 3; state.foil.rideH = 0; state.foil.pitch = 0; state.foil.roll = 0;
   state.foil.energy = 1;
-  // Clear mini-map trail for fresh run
-  state.miniMapPath.length = 0;
-  state.miniMapDirty = true;
-}
-
-/* ================================================================
-   MINI-MAP — Strava-style GPS track overlay
-   ================================================================ */
-
-const MMAP_W = 280, MMAP_H = 360;
-const MMAP_PAD = 8;
-const MMAP_MAX_POINTS = 4000;
-const MMAP_SAMPLE_DIST = 15;
-
-// World -> canvas coords (East at top, North on left)
-function worldToMiniMap(wx, wz) {
-  if (!state.mmapBounds) return { x: MMAP_W / 2, y: MMAP_H / 2 };
-  const nx = (wx - state.mmapBounds[0]) / (state.mmapBounds[2] - state.mmapBounds[0]); // 0=west, 1=east
-  const nz = (wz - state.mmapBounds[1]) / (state.mmapBounds[3] - state.mmapBounds[1]); // 0=south, 1=north
-  const usableW = MMAP_W - 2 * MMAP_PAD;
-  const usableH = MMAP_H - 2 * MMAP_PAD;
-  return {
-    x: MMAP_PAD + (1 - nz) * usableW,  // north->left, south->right
-    y: MMAP_PAD + (1 - nx) * usableH   // east->top, west->bottom
-  };
-}
-
-function headingToMapAngle(heading) {
-  return Math.atan2(-Math.sin(heading), -Math.cos(heading));
-}
-
-function buildMiniMapBackground() {
-  // Use Mapbox image if available, otherwise fall back to heightmap
-  const cfg = state.activeTerrainCfg;
-  state.mmapBounds = cfg.mapBounds || [
-    -RT_WORLD_W() / 2, -RT_WORLD_D() / 2,
-     RT_WORLD_W() / 2,  RT_WORLD_D() / 2
-  ];
-
-  if (cfg.mapImage) {
-    const img = new Image();
-    img.onload = function() {
-      const offscreen = document.createElement('canvas');
-      offscreen.width = MMAP_W;
-      offscreen.height = MMAP_H;
-      const octx = offscreen.getContext('2d');
-
-      // Dark background
-      octx.fillStyle = '#0a1628';
-      octx.fillRect(0, 0, MMAP_W, MMAP_H);
-
-      // The map image is landscape (wide E-W). On our canvas, East is at top,
-      // so we rotate the image 90 deg CW: image width->canvas height, image height->canvas width.
-      const usableW = MMAP_W - 2 * MMAP_PAD;
-      const usableH = MMAP_H - 2 * MMAP_PAD;
-
-      octx.save();
-      // Translate to center of usable area, rotate 90 deg CW, then draw centered
-      octx.translate(MMAP_PAD + usableW / 2, MMAP_PAD + usableH / 2);
-      octx.rotate(Math.PI / 2);
-      // After 90 deg CW rotation: image X->canvas Y(down), image Y->canvas X(left)
-      // Draw image centered: it will fill usableH wide x usableW tall (in rotated space)
-      octx.drawImage(img, -usableH / 2, -usableW / 2, usableH, usableW);
-      octx.restore();
-
-      state.miniMapBgImage = octx.getImageData(0, 0, MMAP_W, MMAP_H);
-      state.miniMapDirty = true;
-      state.miniMapCanvas.style.display = 'block';
-    };
-    img.src = cfg.mapImage;
-  } else if (state.realTerrainHeightData) {
-    // Fallback: generate from heightmap
-    const d = state.realTerrainHeightData;
-    const WATER_THRESH = cfg.waterThresh || 12;
-
-    const offscreen = document.createElement('canvas');
-    offscreen.width = MMAP_W;
-    offscreen.height = MMAP_H;
-    const octx = offscreen.getContext('2d');
-
-    octx.fillStyle = '#0a1628';
-    octx.fillRect(0, 0, MMAP_W, MMAP_H);
-
-    const usableW = MMAP_W - 2 * MMAP_PAD;
-    const usableH = MMAP_H - 2 * MMAP_PAD;
-    const imgData = octx.createImageData(usableW, usableH);
-
-    for (let my = 0; my < usableH; my++) {
-      for (let mx = 0; mx < usableW; mx++) {
-        const nx = 1 - my / usableH;
-        const nz = 1 - mx / usableW;
-        const hmU = nx;
-        const hmV = 1 - nz;
-        const hpx = Math.min(d.width - 1, Math.max(0, Math.floor(hmU * (d.width - 1))));
-        const hpy = Math.min(d.height - 1, Math.max(0, Math.floor(hmV * (d.height - 1))));
-        const idx = (hpy * d.width + hpx) * 4;
-        const elev = d.pixels[idx];
-
-        const pixIdx = (my * usableW + mx) * 4;
-        if (elev <= WATER_THRESH) {
-          imgData.data[pixIdx] = 15; imgData.data[pixIdx+1] = 25;
-          imgData.data[pixIdx+2] = 50; imgData.data[pixIdx+3] = 255;
-        } else {
-          const t = Math.min(1, (elev - WATER_THRESH) / (200 - WATER_THRESH));
-          imgData.data[pixIdx] = Math.floor(20 + t * 30);
-          imgData.data[pixIdx+1] = Math.floor(30 + t * 25);
-          imgData.data[pixIdx+2] = Math.floor(25 + t * 15);
-          imgData.data[pixIdx+3] = 255;
-        }
-      }
-    }
-    octx.putImageData(imgData, MMAP_PAD, MMAP_PAD);
-    state.miniMapBgImage = octx.getImageData(0, 0, MMAP_W, MMAP_H);
-    state.miniMapDirty = true;
-    state.miniMapCanvas.style.display = 'block';
-  }
-}
-
-export function updateMiniMap() {
-  state.miniMapFrameCounter++;
-  if (state.miniMapFrameCounter % 30 !== 0) return;
-  if (!state.miniMapBgImage) return;
-
-  const foil = state.foil;
-
-  // Check if foil moved enough to record a new point
-  const lastPt = state.miniMapPath.length > 0 ? state.miniMapPath[state.miniMapPath.length - 1] : null;
-  const dx = lastPt ? foil.x - lastPt.x : Infinity;
-  const dz = lastPt ? foil.z - lastPt.z : Infinity;
-  const dist = Math.sqrt(dx * dx + dz * dz);
-
-  if (dist < MMAP_SAMPLE_DIST && !state.miniMapDirty) return;
-
-  if (dist >= MMAP_SAMPLE_DIST) {
-    state.miniMapPath.push({ x: foil.x, z: foil.z });
-    if (state.miniMapPath.length > MMAP_MAX_POINTS) state.miniMapPath.shift();
-  }
-
-  const ctx = state.miniMapCtx;
-
-  // Restore cached background
-  ctx.putImageData(state.miniMapBgImage, 0, 0);
-
-  // Draw path -- Strava-style red glow
-  if (state.miniMapPath.length > 1) {
-    const p0 = worldToMiniMap(state.miniMapPath[0].x, state.miniMapPath[0].z);
-
-    // Outer glow
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255, 60, 40, 0.35)';
-    ctx.lineWidth = 5;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(p0.x, p0.y);
-    for (let i = 1; i < state.miniMapPath.length; i++) {
-      const p = worldToMiniMap(state.miniMapPath[i].x, state.miniMapPath[i].z);
-      ctx.lineTo(p.x, p.y);
-    }
-    ctx.stroke();
-
-    // Core line
-    ctx.strokeStyle = '#ff3030';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(p0.x, p0.y);
-    for (let i = 1; i < state.miniMapPath.length; i++) {
-      const p = worldToMiniMap(state.miniMapPath[i].x, state.miniMapPath[i].z);
-      ctx.lineTo(p.x, p.y);
-    }
-    ctx.stroke();
-
-    // Hot center highlight
-    ctx.strokeStyle = 'rgba(255, 180, 160, 0.5)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(p0.x, p0.y);
-    for (let i = 1; i < state.miniMapPath.length; i++) {
-      const p = worldToMiniMap(state.miniMapPath[i].x, state.miniMapPath[i].z);
-      ctx.lineTo(p.x, p.y);
-    }
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // Current position -- heading arrow with glow
-  const cur = worldToMiniMap(foil.x, foil.z);
-  const angle = headingToMapAngle(foil.heading);
-  const aLen = 8;
-
-  ctx.save();
-  ctx.translate(cur.x, cur.y);
-  ctx.rotate(angle);
-  ctx.shadowColor = '#ff4040';
-  ctx.shadowBlur = 8;
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.moveTo(aLen, 0);
-  ctx.lineTo(-aLen * 0.5, -aLen * 0.45);
-  ctx.lineTo(-aLen * 0.2, 0);
-  ctx.lineTo(-aLen * 0.5, aLen * 0.45);
-  ctx.closePath();
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.restore();
-
-  // Distance label (total km)
-  if (state.miniMapPath.length > 1) {
-    let totalDist = 0;
-    for (let i = 1; i < state.miniMapPath.length; i++) {
-      const ddx = state.miniMapPath[i].x - state.miniMapPath[i - 1].x;
-      const ddz = state.miniMapPath[i].z - state.miniMapPath[i - 1].z;
-      totalDist += Math.sqrt(ddx * ddx + ddz * ddz);
-    }
-    const km = (totalDist / 1000).toFixed(1);
-    ctx.font = '10px DM Sans, sans-serif';
-    ctx.fillStyle = 'rgba(180, 210, 255, 0.6)';
-    ctx.fillText(km + ' km', MMAP_PAD + 2, MMAP_H - MMAP_PAD - 4);
-  }
-
-  state.miniMapDirty = false;
 }
 
 /* ================================================================
@@ -1453,10 +1225,6 @@ export function initTerrain() {
 
   // Load panoramic texture (Kauai)
   loadPanoTexture();
-
-  // Get mini-map canvas from DOM
-  state.miniMapCanvas = document.getElementById('mini-map');
-  state.miniMapCtx = state.miniMapCanvas.getContext('2d');
 
   // Store bgPresets in state so helpers.js can access it
   state.bgPresets = bgPresets;

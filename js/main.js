@@ -30,6 +30,13 @@
 // ║  • Fix foil riding too high above the water – adjust         ║
 // ║    rideH clamp / visual offset so board sits closer to       ║
 // ║    the surface at normal speeds                              ║
+// ║  • BUG: Wave energy never goes very high — check the energy  ║
+// ║    gain formula in animate(); multiplier or clamp may be off ║
+// ║  • BUG: Board is too bouncy in high wind chop — add more     ║
+// ║    smoothing / damping to rideH when chop amplitude is high  ║
+// ║  • Easy / Pro modes: Easy = forgiving physics, auto-balance, ║
+// ║    slower drain, gentle waves. Pro = realistic drag, tighter ║
+// ║    energy budget, steeper waves, crash penalties.            ║
 // ║                                                              ║
 // ║  VISUALS                                                     ║
 // ║  • Distant water: blend the flat far-plane water into the    ║
@@ -38,6 +45,18 @@
 // ║  • Brighten satellite terrain texture so mountain features   ║
 // ║    are more visible (adjust gamma / levels in the terrain    ║
 // ║    fragment shader, or multiply diffuse by a boost factor)   ║
+// ║  • Reduce wave tiling — waves look too repetitive / patterny ║
+// ║    at distance. Add more octaves of noise, domain warping,   ║
+// ║    or randomize gerstner phases/dirs to break up the grid    ║
+// ║                                                              ║
+// ║  PERFORMANCE                                                 ║
+// ║  • Increase FPS — profile GPU & CPU bottlenecks. Options:    ║
+// ║    reduce ocean SEGMENTS on mobile, simplify fragment shader  ║
+// ║    for far pixels, frustum-cull terrain chunks, lower pixel  ║
+// ║    ratio on low-end devices                                  ║
+// ║  • Mobile testing: verify on Android Chrome + iOS Safari,    ║
+// ║    fix touch controls, handle orientation changes, test on   ║
+// ║    low-end devices. Ensure touch input feels responsive.     ║
 // ║                                                              ║
 // ║  SOCIAL / INTEGRATIONS                                       ║
 // ║  • Strava upload: unlockable feature — after a ride, export  ║
@@ -394,6 +413,10 @@ function animate() {
   foil.pitch = lerp(foil.pitch, autoPitch, dt * 3 * getVal('sbStability'));
 
   // Energy system
+  // BUG: Wave energy never seems to go very high — the passive
+  // regen (0.06 * dt) is tiny and slopeForce contribution may be
+  // getting lost. Check that slopeForce actually feeds into energy
+  // accumulation, and verify the sbWaveEnergy slider range/default.
   const maxEnergy = getVal('sbBatteryCap');
   const drainMul = getVal('sbBatteryDrain');
   foil.energy = Math.min(maxEnergy, foil.energy + 0.06 * dt);

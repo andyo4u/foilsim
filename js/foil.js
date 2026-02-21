@@ -21,6 +21,24 @@
 //  TODO: Power-up collisions — check foil position against
 //        floating power-up objects each frame; trigger effects
 //        (speed boost, energy refill, score multiplier, etc.).
+//
+//  BUG:  Board too bouncy in high wind chop — rideH oscillates
+//        rapidly when chop amplitude is large. Add low-pass
+//        filtering or damping to smooth out the ride height.
+//        Maybe lerp rideH more aggressively toward a smoothed
+//        wave height average instead of raw getWaveHeight().
+//
+//  TODO: Easy / Pro difficulty modes — adjust physics params:
+//        Easy: higher energy gain, slower drain, gentler chop
+//              response, auto-balance (reduce roll/pitch wobble),
+//              wider turn radius forgiveness
+//        Pro:  realistic drag model, tight energy budget, full
+//              chop response, crash on hard landings, narrower
+//              stability envelope
+//
+//  TODO: Mobile touch controls — verify touch input works well
+//        on Android Chrome + iOS Safari. May need larger touch
+//        zones, on-screen joystick, or tilt-to-steer option.
 
 import { state } from './state.js';
 import { lerp, toggleControls } from './helpers.js';

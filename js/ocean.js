@@ -14,6 +14,18 @@
 //        • Horizon fog/fade to hide the seam
 //        • Vertex displacement on a second larger plane that
 //          samples simplified wave functions
+//
+//  TODO: Reduce wave tiling — the gerstner pattern repeats
+//        visibly at distance. Options:
+//        • Add domain warping (offset UV by low-freq noise)
+//        • Randomize gerstner phase offsets per component
+//        • Add more non-harmonic wave directions to break grid
+//        • Use hash-based noise injection in the vertex shader
+//
+//  TODO: Performance — on mobile, SEGMENTS=512 may be too heavy.
+//        • Detect device capability and use lower segment count
+//        • Simplify fragment shader for distant fragments (LOD)
+//        • Consider half-res render + upscale on low-end GPUs
 
 import { state, OCEAN_SIZE, SEGMENTS } from './state.js';
 import { getVal, degToDir, lerp, smoothstep } from './helpers.js';

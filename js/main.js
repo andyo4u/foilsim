@@ -353,7 +353,7 @@ function animate() {
   const fpsNow = performance.now();
   if (fpsNow - fpsLastTime >= 500) {
     const fps = Math.round(fpsFrames / ((fpsNow - fpsLastTime) / 1000));
-    fpsLabel.textContent = fps + ' fps';
+    fpsLabel.textContent = fps;
     fpsFrames = 0; fpsLastTime = fpsNow;
 
     // Auto-quality adjustment

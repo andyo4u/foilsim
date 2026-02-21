@@ -192,10 +192,7 @@
 </head>
 <body>
 
-<!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.86</div>
-<!-- FPS counter: updated every 500ms in the animation loop -->
-<div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
+<!-- Version + FPS now inside #hud (below wave energy bar) -->
 
 <!-- Gear button — hidden by default, shown on mobile via JS -->
 <button id="controls-toggle" onclick="toggleControls()">⚙</button>
@@ -300,6 +297,10 @@
   <div style="width:100px;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;margin-top:3px;position:relative;">
     <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:rgba(255,255,255,0.2);"></div>
     <div id="hud-swell-bar" style="position:absolute;top:0;height:100%;border-radius:4px;transition:left 0.1s,width 0.1s,background 0.15s;width:0;left:50%;background:#4ae88a;"></div>
+  </div>
+  <div style="margin-top:10px;display:flex;align-items:baseline;gap:8px;">
+    <span class="speed" id="fps-label" style="font-size:14px;">--</span><span class="unit">fps</span>
+    <span class="unit" id="version-label">v0.87</span>
   </div>
 </div>
 

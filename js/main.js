@@ -261,6 +261,15 @@ initTerrain();
 // Start with Auto quality — self-tunes FPS from the first frame
 setQuality('auto');
 
+// Populate version displays from the hidden version label
+{
+  const ver = document.getElementById('version-label').textContent;
+  const mv = document.getElementById('menu-version');
+  const sv = document.getElementById('score-version');
+  if (mv) mv.textContent = ver;
+  if (sv) sv.textContent = ver;
+}
+
 // Mobile detection — enable touch pads, gear button
 const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 if (isMobile) {
@@ -345,6 +354,7 @@ window.setQuality        = setQuality;
 function startRide(locationPreset) {
   // Reset score & timer
   state.rideTimer = 120;
+  state.rideStarted = false; // timer doesn't tick until first pump
   state.score.distance = 0;
   state.score.topSpeed = 0;
   state.score.pocketTime = 0;
@@ -423,6 +433,7 @@ let prevSunAngle = -1, prevSunDir = -1;
 // FPS counter
 let fpsFrames = 0, fpsLastTime = performance.now();
 const fpsLabel = document.getElementById('fps-label');
+const hudFps = document.getElementById('hud-fps');
 
 // Auto-quality FPS tracking
 let autoQFrames = [];
@@ -449,6 +460,7 @@ function animate() {
   if (fpsNow - fpsLastTime >= 500) {
     const fps = Math.round(fpsFrames / ((fpsNow - fpsLastTime) / 1000));
     fpsLabel.textContent = fps + ' fps';
+    hudFps.textContent = fps + ' fps';
     fpsFrames = 0; fpsLastTime = fpsNow;
 
     // Auto-quality adjustment
@@ -635,6 +647,11 @@ function animate() {
 
   if (isBoost) {
     pf += 1.8;
+  }
+
+  // Start ride timer on first pump input
+  if ((isPump || isPowerPump) && !state.rideStarted) {
+    state.rideStarted = true;
   }
 
   if (isPump && foil.energy > 0.02) {
@@ -960,9 +977,11 @@ function animate() {
   }
 
   // ── RIDE TIMER & SCORING ──
-  // Timer countdown
-  state.rideTimer -= dt;
-  if (state.rideTimer <= 0) { state.rideTimer = 0; endRide(); }
+  // Timer countdown — only starts after first pump
+  if (state.rideStarted) {
+    state.rideTimer -= dt;
+    if (state.rideTimer <= 0) { state.rideTimer = 0; endRide(); }
+  }
   const mins = Math.floor(state.rideTimer / 60);
   const secs = Math.floor(state.rideTimer % 60);
   const timerEl = document.getElementById('hud-timer');

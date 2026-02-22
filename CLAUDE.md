@@ -69,7 +69,7 @@ Passive energy regen is tiny (0.06 * dt) and `slopeForce` contribution may not f
 ## Key Technical Details
 
 - **11 render modes** controlled by a single `uRenderMode` uniform in the ocean shader
-- **Quality/LOD system**: 4 presets (Low/Med/High/Ultra) + Auto mode with asymmetric FPS thresholds (down at <45fps, up after sustained >55fps) to prevent oscillation
+- **Quality/LOD system**: 5 presets (Low/Med/High/Ultra/Max) + Auto mode with asymmetric FPS thresholds (down at <45fps, up after sustained >55fps) to prevent oscillation
 - **Mobile detection**: JS-based (`'ontouchstart' in window || navigator.maxTouchPoints > 0`), not CSS media queries
 - **Terrain configs**: defined in `terrainConfigs` object in `terrain.js` — real terrain modes use heightmap PNG for vertex displacement + satellite JPEG for texture
 - **Wave physics**: Gerstner waves with 3 swell components + wind chop; real-time slope calculations drive physics feedback

@@ -277,7 +277,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.93</div>
+<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.94</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -386,6 +386,7 @@
     <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:rgba(255,255,255,0.2);"></div>
     <div id="hud-swell-bar" style="position:absolute;top:0;height:100%;border-radius:4px;transition:left 0.1s,width 0.1s,background 0.15s;width:0;left:50%;background:#4ae88a;"></div>
   </div>
+  <div id="hud-fps" style="font-size:11px;color:#6a94c0;margin-top:6px;">-- fps</div>
 </div>
 
 <div id="hud-pocket">In the Pocket!</div>
@@ -435,6 +436,7 @@
   </div>
   <button class="game-btn" onclick="startRide('gorge-real')">Start Ride</button>
   <div class="sponsor-bar">Powered by <strong>SLINGSHOT</strong></div>
+  <div id="menu-version" style="margin-top:8px;font-size:10px;color:rgba(140,180,230,0.3);letter-spacing:1px;"></div>
 </div>
 
 <!-- Score overlay -->
@@ -449,6 +451,7 @@
   </div>
   <button class="game-btn" onclick="rideAgain()">Ride Again</button>
   <div class="sponsor-bar">Powered by <strong>SLINGSHOT</strong></div>
+  <div id="score-version" style="margin-top:8px;font-size:10px;color:rgba(140,180,230,0.3);letter-spacing:1px;"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

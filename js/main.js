@@ -362,6 +362,11 @@ function startRide(locationPreset) {
   rebuildTerrain(locationPreset);
   restartLevel();
 
+  // Tutorial: apply gentle wave/physics preset after terrain build
+  if (locationPreset === 'tutorial') {
+    applyPreset('tutorial');
+  }
+
   // Track starting position
   state.ridePrevX = state.foil.x;
   state.ridePrevZ = state.foil.z;
@@ -386,8 +391,8 @@ function endRide() {
   s.total = Math.round(s.distance + 2 * s.pocketTime + 10 * s.topSpeed);
 
   // Populate score overlay
-  document.getElementById('score-distance').textContent = Math.round(s.distance) + ' m';
-  document.getElementById('score-topspeed').textContent = s.topSpeed.toFixed(1) + ' kts';
+  document.getElementById('score-distance').textContent = (s.distance / 1609.34).toFixed(2) + ' mi';
+  document.getElementById('score-topspeed').textContent = s.topSpeed.toFixed(1) + ' mph';
   document.getElementById('score-pocket').textContent = s.pocketTime.toFixed(1) + 's';
   document.getElementById('score-total').textContent = s.total;
 
@@ -619,7 +624,7 @@ function animate() {
   // accumulation, and verify the sbWaveEnergy slider range/default.
   const maxEnergy = getVal('sbBatteryCap');
   const drainMul = getVal('sbBatteryDrain');
-  foil.energy = Math.min(maxEnergy, foil.energy + 0.06 * dt);
+  foil.energy = Math.min(maxEnergy, foil.energy + 0.015 * dt);
 
   let pf = 0;
   const isPump = input.up && !input.down;
@@ -633,13 +638,13 @@ function animate() {
 
   if (isPump && foil.energy > 0.02) {
     pumpPhase += dt * 9;
-    const pumpCost = 0.18 * drainMul * dt;
+    const pumpCost = 0.36 * drainMul * dt;
     foil.energy = Math.max(0, foil.energy - pumpCost);
     pf += 3.0 * pumpMul * Math.min(1, foil.energy * 5);
     foil.pitch += Math.sin(pumpPhase * 2) * 0.08;
   } else if (isPowerPump && foil.energy > 0.05) {
     pumpPhase += dt * 12;
-    const powerCost = 0.35 * drainMul * dt;
+    const powerCost = 0.70 * drainMul * dt;
     foil.energy = Math.max(0, foil.energy - powerCost);
     pf += 5.5 * pumpMul * Math.min(1, foil.energy * 4);
     foil.pitch += Math.sin(pumpPhase * 2) * 0.15;
@@ -788,8 +793,8 @@ function animate() {
   updateStreamer(state.streamerR, state._tipRWorld.x, state._tipRWorld.y, state._tipRWorld.z, foil.speed);
 
   // HUD
-  const curKts = foil.speed * 1.94384;
-  document.getElementById('hud-speed').textContent = curKts.toFixed(1);
+  const curMph = foil.speed * 2.23694;
+  document.getElementById('hud-speed').textContent = curMph.toFixed(1);
 
   // Acceleration indicator
   const accelEl = document.getElementById('hud-accel');
@@ -892,9 +897,9 @@ function animate() {
     if (!pu.active && !pu.boostActive) {
       pu.spawnTimer -= dt;
       if (pu.spawnTimer <= 0) {
-        // Spawn 30-50m ahead with slight lateral offset
-        const ahead = 30 + Math.random() * 20;
-        const lateral = (Math.random() - 0.5) * 20;
+        // Spawn 60-100m ahead, 30-60m to one side (requires turning)
+        const ahead = 60 + Math.random() * 40;
+        const lateral = (Math.random() < 0.5 ? -1 : 1) * (30 + Math.random() * 30);
         const fwd_x = Math.sin(foil.heading);
         const fwd_z = Math.cos(foil.heading);
         pu.x = foil.x + fwd_x * ahead + fwd_z * lateral;
@@ -911,10 +916,10 @@ function animate() {
       pu.mesh.position.set(pu.x, orbY, pu.z);
       pu.mesh.rotation.y += dt * 2;
 
-      // Collection check — distance < 5m
+      // Collection check — distance < 6m
       const cdx = foil.x - pu.x;
       const cdz = foil.z - pu.z;
-      if (Math.sqrt(cdx * cdx + cdz * cdz) < 5) {
+      if (Math.sqrt(cdx * cdx + cdz * cdz) < 6) {
         pu.active = false;
         pu.mesh.visible = false;
         pu.boostActive = true;
@@ -971,8 +976,8 @@ function animate() {
   state.ridePrevZ = foil.z;
 
   // Top speed tracking
-  const curKtsScore = foil.speed * 1.94384;
-  if (curKtsScore > state.score.topSpeed) state.score.topSpeed = curKtsScore;
+  const curMphScore = foil.speed * 2.23694;
+  if (curMphScore > state.score.topSpeed) state.score.topSpeed = curMphScore;
 
   // Pocket time tracking
   if (normSwell > 0.8 && foil.speed > 3) state.score.pocketTime += dt;

@@ -277,7 +277,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.92</div>
+<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.93</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -371,7 +371,7 @@
 <div id="hud">
   <div class="label">Speed</div>
   <div style="display:flex;align-items:baseline;gap:6px">
-    <span class="speed" id="hud-speed">0</span><span class="unit">kts</span>
+    <span class="speed" id="hud-speed">0</span><span class="unit">mph</span>
     <span id="hud-accel" style="font-size:18px;font-weight:600;transition:opacity 0.2s;"></span>
   </div>
   <div class="label" style="margin-top:6px">Status</div>
@@ -424,9 +424,9 @@
       <div class="loc-name">Maliko Run, Maui</div>
       <div class="loc-tag">Coming Soon</div>
     </div>
-    <div class="location-card locked">
-      <div class="loc-name">North Florida</div>
-      <div class="loc-tag">Coming Soon</div>
+    <div class="location-card" onclick="startRide('tutorial')">
+      <div class="loc-name">Tutorial</div>
+      <div class="loc-tag" style="color:rgba(255,180,60,0.7);">Learn to Ride</div>
     </div>
     <div class="location-card locked">
       <div class="loc-name">San Francisco Bay</div>

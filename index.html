@@ -30,12 +30,10 @@
     background: rgba(8,18,38,0.85); backdrop-filter: blur(12px);
     border: 1px solid rgba(100,160,255,0.2);
     color: #7eb8ff; font-size: 20px; cursor: pointer;
-    display: none; align-items: center; justify-content: center;
+    display: flex; align-items: center; justify-content: center;
     transition: all 0.3s ease;
   }
   #controls-toggle:hover { background: rgba(20,40,70,0.9); }
-  /* Show gear button on mobile */
-  .mobile-device #controls-toggle { display: flex; }
 
   #controls-panel {
     position: fixed; top: 16px; right: 16px; z-index: 99;
@@ -170,6 +168,102 @@
     border-top: 1px solid rgba(255,255,255,0.1);
   }
 
+  /* ── Game Overlays ─────────────────────────────────── */
+  .game-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(6,14,30,0.82); backdrop-filter: blur(16px);
+    transition: opacity 0.4s ease;
+  }
+  .game-overlay.hidden { opacity: 0; pointer-events: none; }
+
+  .game-overlay h1 {
+    font-size: 56px; font-weight: 300; color: #fff;
+    letter-spacing: 6px; margin-bottom: 4px;
+    text-shadow: 0 0 40px rgba(80,180,255,0.3);
+  }
+  .game-overlay .subtitle {
+    font-size: 14px; color: rgba(160,200,240,0.6);
+    letter-spacing: 2px; margin-bottom: 36px;
+  }
+
+  .location-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px; margin-bottom: 32px; width: 340px;
+  }
+  .location-card {
+    padding: 18px 14px; border-radius: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(100,160,255,0.15);
+    text-align: center; cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .location-card:hover:not(.locked) {
+    background: rgba(100,160,255,0.12);
+    border-color: rgba(100,180,255,0.4);
+    transform: translateY(-2px);
+  }
+  .location-card.locked {
+    opacity: 0.4; cursor: default;
+  }
+  .location-card .loc-name {
+    font-size: 14px; font-weight: 500; color: #c0d8ff; margin-bottom: 4px;
+  }
+  .location-card .loc-tag {
+    font-size: 10px; color: rgba(140,180,230,0.5);
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+
+  .game-btn {
+    padding: 14px 48px; border-radius: 10px; border: none;
+    background: linear-gradient(135deg, #4a9eff 0%, #2070e0 100%);
+    color: #fff; font-family: 'DM Sans', sans-serif;
+    font-size: 16px; font-weight: 600; letter-spacing: 1px;
+    cursor: pointer; transition: all 0.2s ease;
+    box-shadow: 0 4px 20px rgba(74,158,255,0.3);
+  }
+  .game-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(74,158,255,0.45); }
+  .game-btn:active { transform: scale(0.97); }
+
+  .sponsor-bar {
+    margin-top: 28px; font-size: 11px; color: rgba(160,200,240,0.35);
+    letter-spacing: 2px; text-transform: uppercase;
+  }
+  .sponsor-bar strong {
+    color: rgba(160,200,240,0.55); font-weight: 600; letter-spacing: 3px;
+  }
+
+  /* Score screen stats */
+  .score-stats { margin-bottom: 28px; width: 280px; }
+  .stat-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 10px 0; border-bottom: 1px solid rgba(100,160,255,0.08);
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { font-size: 12px; color: #7eb8ff; }
+  .stat-value { font-size: 20px; font-weight: 600; color: #fff; }
+  .stat-total .stat-value { font-size: 28px; color: #5effa0; }
+
+  /* HUD Timer */
+  #hud-timer {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 60; font-family: 'DM Sans', sans-serif;
+    font-size: 28px; font-weight: 600; color: #fff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    pointer-events: none; display: none;
+  }
+  #hud-timer.warning { color: #ff4040; animation: pulse-timer 0.8s infinite alternate; }
+  @keyframes pulse-timer { from { opacity: 1; } to { opacity: 0.5; } }
+
+  /* HUD Boost indicator */
+  #hud-boost {
+    position: fixed; top: 52px; left: 50%; transform: translateX(-50%);
+    z-index: 60; font-family: 'DM Sans', sans-serif;
+    font-size: 16px; font-weight: 600; color: #ffaa30;
+    text-shadow: 0 0 16px rgba(255,170,48,0.6);
+    pointer-events: none; display: none;
+  }
+
   @media (max-width: 480px) {
     #controls-panel { width: calc(100vw - 32px); max-height: 55vh; }
     .touch-pad { bottom: 10px; }
@@ -183,9 +277,9 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.91</div>
+<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.92</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
-<div id="fps-label" style="position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
+<div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
 <!-- Gear button — hidden by default, shown on mobile via JS -->
 <button id="controls-toggle" onclick="toggleControls()">⚙</button>
@@ -247,6 +341,7 @@
     <div class="control-row"><span class="control-label">Wave Energy</span><input type="range" id="sbWaveEnergy" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbWaveEnergy-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Foil Stability</span><input type="range" id="sbStability" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbStability-val">1.00×</span></div>
     <div class="control-row" style="margin-top:6px;"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="sbFreeCam" onchange="toggleFreeCam(this.checked)" style="width:14px;height:14px;accent-color:#4af;"><span class="control-label" style="flex:1;">Free Camera</span></label></div>
+    <div class="control-row"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="sbWaveChart" onchange="document.getElementById('wave-chart').style.display=this.checked?'block':'none'" style="width:14px;height:14px;accent-color:#4af;"><span class="control-label" style="flex:1;">Wave Chart</span></label></div>
     <div class="control-row"><span class="control-label">Render Style</span><select id="sbRenderMode" onchange="setRenderMode(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="0">Normal</option><option value="1">Woodcut</option><option value="2">DEM</option><option value="3">Painterly</option><option value="4">Tron</option><option value="5">Sumi-e</option><option value="6">Pixel Art</option><option value="7">X-Ray</option><option value="8">Plastic</option><option value="9">Lava</option><option value="10">Fur</option></select></div>
     <div class="control-row"><span class="control-label">Quality</span><select id="sbQuality" onchange="setQuality(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="low">Low</option><option value="med">Medium</option><option value="high">High</option><option value="ultra">Ultra</option><option value="auto" selected>Auto</option></select></div>
   </div>
@@ -293,12 +388,12 @@
   </div>
 </div>
 
-<div id="hud-pocket">🤙 In the Pocket!</div>
-<div id="shallow-warning">⚠️ Shallow Water!</div>
+<div id="hud-pocket">In the Pocket!</div>
+<div id="shallow-warning">Shallow Water!</div>
 <button id="restart-btn" onclick="restartLevel()">↻ Restart</button>
 
 <!-- Wave height & slope chart — scrolling strip at bottom of screen -->
-<canvas id="wave-chart" width="800" height="80"></canvas>
+<canvas id="wave-chart" width="800" height="80" style="display:none"></canvas>
 
 <!-- Mobile touch pads — shown on touch devices via CSS @media (pointer:coarse) -->
 <div class="touch-pad left-pad">
@@ -311,6 +406,50 @@
 </div>
 
 <div id="info-bar">AD: turn · W: pump · S: brake · Space: boost · Drag to orbit</div>
+
+<!-- Game timer & boost HUD -->
+<div id="hud-timer">2:00</div>
+<div id="hud-boost">TURBO BOOST 5.0s</div>
+
+<!-- Menu overlay -->
+<div id="menu-overlay" class="game-overlay">
+  <h1>FOILSIM</h1>
+  <div class="subtitle">Hydrofoil Simulator</div>
+  <div class="location-grid">
+    <div class="location-card" onclick="startRide('gorge-real')">
+      <div class="loc-name">Columbia River Gorge</div>
+      <div class="loc-tag" style="color:rgba(80,220,130,0.7);">HD Terrain</div>
+    </div>
+    <div class="location-card locked">
+      <div class="loc-name">Maliko Run, Maui</div>
+      <div class="loc-tag">Coming Soon</div>
+    </div>
+    <div class="location-card locked">
+      <div class="loc-name">North Florida</div>
+      <div class="loc-tag">Coming Soon</div>
+    </div>
+    <div class="location-card locked">
+      <div class="loc-name">San Francisco Bay</div>
+      <div class="loc-tag">Coming Soon</div>
+    </div>
+  </div>
+  <button class="game-btn" onclick="startRide('gorge-real')">Start Ride</button>
+  <div class="sponsor-bar">Powered by <strong>SLINGSHOT</strong></div>
+</div>
+
+<!-- Score overlay -->
+<div id="score-overlay" class="game-overlay hidden">
+  <h1 style="font-size:40px;letter-spacing:4px;">RIDE COMPLETE</h1>
+  <div class="subtitle" style="margin-bottom:24px;">Great session!</div>
+  <div class="score-stats">
+    <div class="stat-row"><span class="stat-label">Distance</span><span class="stat-value" id="score-distance">0 m</span></div>
+    <div class="stat-row"><span class="stat-label">Top Speed</span><span class="stat-value" id="score-topspeed">0 kts</span></div>
+    <div class="stat-row"><span class="stat-label">Pocket Time</span><span class="stat-value" id="score-pocket">0.0s</span></div>
+    <div class="stat-row stat-total"><span class="stat-label">Total Score</span><span class="stat-value" id="score-total">0</span></div>
+  </div>
+  <button class="game-btn" onclick="rideAgain()">Ride Again</button>
+  <div class="sponsor-bar">Powered by <strong>SLINGSHOT</strong></div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/objects/Sky.js"></script>

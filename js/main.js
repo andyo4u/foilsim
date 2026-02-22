@@ -238,6 +238,21 @@ initOcean();
 initFoil();
 initTerrain();
 
+// ── Power-up orb mesh ──
+{
+  const puGeo = new THREE.SphereGeometry(1.5, 16, 12);
+  const puMat = new THREE.MeshStandardMaterial({
+    color: 0xff8800, emissive: 0xff6600, emissiveIntensity: 0.6,
+    roughness: 0.3, metalness: 0.4,
+  });
+  const puMesh = new THREE.Mesh(puGeo, puMat);
+  const puLight = new THREE.PointLight(0xff8800, 2, 15);
+  puMesh.add(puLight);
+  puMesh.visible = false;
+  scene.add(puMesh);
+  state.powerUp.mesh = puMesh;
+}
+
 // Audio init on first user interaction
 ['click', 'keydown', 'touchstart'].forEach(evt => {
   window.addEventListener(evt, initAudio, { once: true });
@@ -321,6 +336,75 @@ window.copySettingsJSON  = copySettingsJSON;
 window.toggleFreeCam     = toggleFreeCam;
 window.setRenderMode     = setRenderMode;
 window.setQuality        = setQuality;
+
+// ═══════════════════════════
+// GAME LOOP — Menu → Ride → Score
+// ═══════════════════════════
+
+function startRide(locationPreset) {
+  // Reset score & timer
+  state.rideTimer = 120;
+  state.score.distance = 0;
+  state.score.topSpeed = 0;
+  state.score.pocketTime = 0;
+  state.score.total = 0;
+  state.infoBarFadeTimer = 0;
+
+  // Reset power-up
+  const pu = state.powerUp;
+  pu.active = false;
+  pu.boostActive = false;
+  pu.boostTimer = 0;
+  pu.spawnTimer = 15 + Math.random() * 10; // first spawn 15-25s in
+  if (pu.mesh) pu.mesh.visible = false;
+
+  // Load location and restart
+  rebuildTerrain(locationPreset);
+  restartLevel();
+
+  // Track starting position
+  state.ridePrevX = state.foil.x;
+  state.ridePrevZ = state.foil.z;
+
+  // UI transitions
+  document.getElementById('menu-overlay').classList.add('hidden');
+  document.getElementById('score-overlay').classList.add('hidden');
+  document.getElementById('hud-timer').style.display = 'block';
+  document.getElementById('hud-timer').classList.remove('warning');
+  document.getElementById('hud-timer').textContent = '2:00';
+  document.getElementById('hud-boost').style.display = 'none';
+  document.getElementById('info-bar').style.opacity = '';
+
+  state.gamePhase = 'riding';
+}
+
+function endRide() {
+  state.gamePhase = 'score';
+
+  // Compute final score
+  const s = state.score;
+  s.total = Math.round(s.distance + 2 * s.pocketTime + 10 * s.topSpeed);
+
+  // Populate score overlay
+  document.getElementById('score-distance').textContent = Math.round(s.distance) + ' m';
+  document.getElementById('score-topspeed').textContent = s.topSpeed.toFixed(1) + ' kts';
+  document.getElementById('score-pocket').textContent = s.pocketTime.toFixed(1) + 's';
+  document.getElementById('score-total').textContent = s.total;
+
+  // Show score overlay, hide timer
+  document.getElementById('score-overlay').classList.remove('hidden');
+  document.getElementById('hud-timer').style.display = 'none';
+  document.getElementById('hud-boost').style.display = 'none';
+}
+
+function rideAgain() {
+  document.getElementById('score-overlay').classList.add('hidden');
+  document.getElementById('menu-overlay').classList.remove('hidden');
+  state.gamePhase = 'menu';
+}
+
+window.startRide = startRide;
+window.rideAgain = rideAgain;
 
 // ═══════════════════════════
 // MAIN LOOP
@@ -481,10 +565,12 @@ function animate() {
     u.uShallowColor.value.set(lerp(.02, 0, db), lerp(.06, .15, db), lerp(.12, .3, db));
   }
 
-  // ── FOIL PHYSICS ──
+  const cam = state.cam;
+
+  // ── FOIL PHYSICS (only during ride) ──
+  if (state.gamePhase === 'riding') {
   const foil = state.foil;
   const input = state.input;
-  const cam = state.cam;
 
   // Banking turn
   const maxRoll = 0.55;
@@ -581,7 +667,8 @@ function animate() {
 
   foil.speed += (slopeForce + pf + windForce) * dt;
   foil.speed -= drag * dt;
-  foil.speed = Math.max(0, Math.min(foil.speed, getVal('sbTopSpeed')));
+  const speedCap = state.powerUp.boostActive ? getVal('sbTopSpeed') * 1.5 : getVal('sbTopSpeed');
+  foil.speed = Math.max(0, Math.min(foil.speed, speedCap));
 
   const tgtRH = isF ? .6 + foil.pitch * .5 : 0;
   foil.rideH = lerp(foil.rideH, tgtRH, dt * 3);
@@ -797,9 +884,111 @@ function animate() {
 
   foil.prevWH = wH;
 
+  // ── POWER-UP: Spawn, Collect, Boost ──
+  {
+    const pu = state.powerUp;
+
+    // Spawn timer — only when no orb visible and not boosting
+    if (!pu.active && !pu.boostActive) {
+      pu.spawnTimer -= dt;
+      if (pu.spawnTimer <= 0) {
+        // Spawn 30-50m ahead with slight lateral offset
+        const ahead = 30 + Math.random() * 20;
+        const lateral = (Math.random() - 0.5) * 20;
+        const fwd_x = Math.sin(foil.heading);
+        const fwd_z = Math.cos(foil.heading);
+        pu.x = foil.x + fwd_x * ahead + fwd_z * lateral;
+        pu.z = foil.z + fwd_z * ahead - fwd_x * lateral;
+        pu.active = true;
+        pu.mesh.visible = true;
+        pu.nextSpawnDelay = 20 + Math.random() * 15;
+      }
+    }
+
+    // Orb update — bob on water, spin
+    if (pu.active && pu.mesh) {
+      const orbY = getWaveHeight(pu.x, pu.z, t) + (state.realTerrainMesh ? RT_WATER_Y() : 0) + 2;
+      pu.mesh.position.set(pu.x, orbY, pu.z);
+      pu.mesh.rotation.y += dt * 2;
+
+      // Collection check — distance < 5m
+      const cdx = foil.x - pu.x;
+      const cdz = foil.z - pu.z;
+      if (Math.sqrt(cdx * cdx + cdz * cdz) < 5) {
+        pu.active = false;
+        pu.mesh.visible = false;
+        pu.boostActive = true;
+        pu.boostTimer = pu.boostDuration;
+        document.getElementById('hud-boost').style.display = 'block';
+      }
+    }
+
+    // Active boost
+    if (pu.boostActive) {
+      foil.speed += pu.boostAmount * dt;
+      // Allow exceeding top speed by 1.5x during boost
+      const boostCap = getVal('sbTopSpeed') * 1.5;
+      foil.speed = Math.min(foil.speed, boostCap);
+
+      pu.boostTimer -= dt;
+      document.getElementById('hud-boost').textContent = 'TURBO BOOST ' + pu.boostTimer.toFixed(1) + 's';
+
+      // Extra spray during boost
+      if (foil.speed > 3 && Math.random() < 0.5) {
+        emitSpray(
+          foil.x - mx * 1.5, bY + 0.3, foil.z - mz * 1.5,
+          -mx * foil.speed * 0.5 + (Math.random() - 0.5) * 2,
+          2 + foil.speed * 0.15,
+          -mz * foil.speed * 0.5 + (Math.random() - 0.5) * 2,
+          Math.floor(Math.min(8, foil.speed * 0.6))
+        );
+      }
+
+      if (pu.boostTimer <= 0) {
+        pu.boostActive = false;
+        pu.boostTimer = 0;
+        pu.spawnTimer = pu.nextSpawnDelay;
+        document.getElementById('hud-boost').style.display = 'none';
+      }
+    }
+  }
+
+  // ── RIDE TIMER & SCORING ──
+  // Timer countdown
+  state.rideTimer -= dt;
+  if (state.rideTimer <= 0) { state.rideTimer = 0; endRide(); }
+  const mins = Math.floor(state.rideTimer / 60);
+  const secs = Math.floor(state.rideTimer % 60);
+  const timerEl = document.getElementById('hud-timer');
+  timerEl.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
+  if (state.rideTimer <= 10) timerEl.classList.add('warning');
+
+  // Distance tracking
+  const dx = foil.x - state.ridePrevX;
+  const dz = foil.z - state.ridePrevZ;
+  state.score.distance += Math.sqrt(dx * dx + dz * dz);
+  state.ridePrevX = foil.x;
+  state.ridePrevZ = foil.z;
+
+  // Top speed tracking
+  const curKtsScore = foil.speed * 1.94384;
+  if (curKtsScore > state.score.topSpeed) state.score.topSpeed = curKtsScore;
+
+  // Pocket time tracking
+  if (normSwell > 0.8 && foil.speed > 3) state.score.pocketTime += dt;
+
+  // Info bar fade after 10 seconds of riding
+  state.infoBarFadeTimer += dt;
+  if (state.infoBarFadeTimer > 10) {
+    const fadeProgress = Math.min(1, (state.infoBarFadeTimer - 10) / 2);
+    document.getElementById('info-bar').style.opacity = 1 - fadeProgress;
+  }
+
+  } // end gamePhase === 'riding'
+
   // Camera
   if (!cam.drag && !cam.free) cam.offsetTheta *= 0.97;
-  cam.followSmooth = Math.abs(foil.roll) > 0.1 ? 0.08 : 0.04;
+  cam.followSmooth = Math.abs(state.foil.roll) > 0.1 ? 0.08 : 0.04;
   updateCamera();
 
   // Center sky, clouds, silhouettes on camera

@@ -6,11 +6,8 @@
 //  variables that lived in the original monolithic index.html.
 // ──────────────────────────────────────────────────────────────
 //
-//  TODO: Game state — add properties for:
+//  TODO: Game state — remaining future properties:
 //        • achievements: { unlocked: Set, progress: Map }
-//        • powerUps: [] (active power-up instances in the scene)
-//        • gamePhase: 'menu' | 'riding' | 'score' | 'paused'
-//        • score: { distance, airTime, tricks, total }
 //        • unlockedLocations: Set
 //        • unlockedRenderModes: Set
 //
@@ -130,6 +127,23 @@ export const state = {
   cachedParams   : {},
   shallowStalled : false,
   shallowTimer   : 0,
+
+  // ── Game Loop ───────────────────────────────────────────
+  gamePhase      : 'menu',       // 'menu' | 'riding' | 'score'
+  rideTimer      : 120,          // seconds remaining
+  score          : { distance: 0, topSpeed: 0, pocketTime: 0, total: 0 },
+  ridePrevX      : 0,
+  ridePrevZ      : 0,
+
+  // ── Power-up ────────────────────────────────────────────
+  powerUp: {
+    mesh: null, active: false, x: 0, z: 0,
+    spawnTimer: 0, nextSpawnDelay: 25,
+    boostActive: false, boostTimer: 0, boostDuration: 5, boostAmount: 4.12,
+  },
+
+  // ── Info Bar ────────────────────────────────────────────
+  infoBarFadeTimer: 0,
 
   // ── Particles ─────────────────────────────────────────────
   spParts   : [],   // spray particles

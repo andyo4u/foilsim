@@ -1,6 +1,6 @@
 # FoilSim — Developer Notes
 
-> Last updated: v0.89
+> Last updated: v0.90
 
 ## Project Overview
 
@@ -162,6 +162,7 @@ Defined in `terrainConfigs` object in terrain.js:
 | v0.87   | HUD version/FPS below wave energy (REVERTED — caused half-screen bug) |
 | v0.88   | Version bump after revert to v0.86 baseline |
 | v0.89   | Remove mini-map tracker completely from codebase |
+| v0.90   | Version bump for repo access verification |
 
 ## Reverted Features (Available for Re-Implementation)
 

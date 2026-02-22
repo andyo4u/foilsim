@@ -21,6 +21,15 @@
 //        • Auto-save after each ride or achievement unlock
 //        • Optional: cloud save via Firebase / simple REST API
 //          for cross-device progress sync
+//        • What to save:
+//          – Unlocked locations + render modes
+//          – Best speed / longest ride / most distance per location
+//          – Total lifetime stats (distance, rides, time on foil)
+//          – Achievement progress (partially completed challenges)
+//          – Preferred settings (quality, controls, slider positions)
+//          – Power-ups collected / inventory
+//        • On first load, detect no save → show welcome / tutorial
+//        • "Reset progress" button in settings (with confirmation!)
 //
 /* ── State ─────────────────────────────────────────────────── */
 

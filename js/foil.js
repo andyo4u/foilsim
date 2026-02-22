@@ -19,8 +19,33 @@
 //        landing impact physics (splash, speed penalty if bad).
 //
 //  TODO: Power-up collisions — check foil position against
-//        floating power-up objects each frame; trigger effects
-//        (speed boost, energy refill, score multiplier, etc.).
+//        floating power-up objects each frame; trigger effects.
+//        Power-ups bob on the wave surface, glow/spin to be visible.
+//        Collect by riding through them (radius check vs foil pos).
+//
+//        Silly / fun power-up ideas:
+//        • 🚀 Turbo Boost — instant speed burst, rocket flames from tail
+//        • 🔋 Battery Pack — full energy refill, electric spark effect
+//        • 🛡️ Invincibility Bubble — can't stall for 10s, glowing shield
+//        • 🧲 Wave Magnet — all swell energy pulls toward you for 15s
+//        • 🐬 Dolphin Mode — auto-pump at 2x efficiency, dolphin escort
+//        • 👻 Ghost Foil — phase through shallow water / land for 8s
+//        • 🌪️ Tailwind Burst — wind shifts to perfect downwind for 10s
+//        • 🎯 Score Multiplier (2x, 3x, 5x) — stacks with combos
+//        • 🏗️ Ramp Spawn — drops a jump ramp ahead of you
+//        • 🍄 Giant Mode — board grows huge, massive wake, comedy physics
+//        • 🐙 Kraken Boost — tentacles push you from below, huge air
+//        • 🧊 Ice Mode — ocean freezes around you, zero friction slide
+//        • 🎸 Air Guitar — trick mode, score points for style mid-air
+//        • ☕ Coffee — everything goes 2x speed for 10s (including music)
+//        • 🪝 Grapple Hook — hook onto a wave face and slingshot around it
+//
+//        Implementation:
+//        • Spawn system: random timer, drop at distance ahead of rider
+//        • Visual: Three.js sprite or low-poly mesh, bobbing on waves
+//        • Collect: distance check in animate loop (< 5m = pickup)
+//        • Duration: most are timed (8-15s), show countdown in HUD
+//        • Rare drops: 🐙 Kraken, 🧊 Ice Mode, 🍄 Giant (1 in 20)
 //
 //  BUG:  Board too bouncy in high wind chop — rideH oscillates
 //        rapidly when chop amplitude is large. Add low-pass

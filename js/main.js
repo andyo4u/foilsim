@@ -12,7 +12,10 @@
 // ║                                                              ║
 // ║  GAMEPLAY                                                    ║
 // ║  • Power-ups: collectible items floating on the water that   ║
-// ║    you ride over (speed boost, energy refill, score mult…)   ║
+// ║    you ride over — turbo boost, energy refill, score mult,  ║
+// ║    dolphin mode, ghost foil, giant mode, kraken boost,      ║
+// ║    ice mode, ramp spawn, tailwind burst, grapple hook…      ║
+// ║    (full list in foil.js TODO)                               ║
 // ║  • Game loop: location-select menu → ride → score screen     ║
 // ║  • Achievements system: unlock new locations, new render     ║
 // ║    modes / visualization styles as rewards                   ║
@@ -73,8 +76,10 @@
 // ║    on your Strava feed somewhere ridiculous (eFoiling across ║
 // ║    Lake Geneva? Down the Amazon? Around Alcatraz?)           ║
 // ║  • Save progress: persist achievements, unlocked locations,  ║
-// ║    unlocked render modes, and best scores to localStorage    ║
-// ║    (or cloud save via a simple backend / Firebase)           ║
+// ║    unlocked render modes, best scores, lifetime stats,      ║
+// ║    power-up inventory, and preferred settings to             ║
+// ║    localStorage (or cloud save via Firebase for cross-device ║
+// ║    sync). Auto-save after each ride. (details in state.js)  ║
 // ║                                                              ║
 // ║  BUSINESS                                                    ║
 // ║  • Polish a killer demo reel for sponsor outreach            ║

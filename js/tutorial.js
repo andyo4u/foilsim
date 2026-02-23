@@ -26,7 +26,7 @@ import { bgPresets } from './terrain.js';
 
 // ── Tutorial preset: waves present but rider starts at zero speed ──
 presets.tutorial = {
-  sunAngle:12, sunDir:260, cloudCover:0.25,
+  sunAngle:3, sunDir:147, cloudCover:0.25,
   chopHeight:0.09, chopDir:180,
   swell1Height:2, swell1Period:5, swell1Dir:270,
   swell2Height:1.9, swell2Period:10, swell2Dir:250,

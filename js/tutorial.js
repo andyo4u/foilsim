@@ -8,14 +8,14 @@
 //    "catch"    — "Catch the wave to keep speed" for 4s.
 //    "pocket"   — "Find the pocket for max lift" for 4s, starts ramp.
 //    "ramping"  — Ease swell1Height from 2.0 → 0 over 30s.
-//    "gassed"   — Energy depleted. "Gassed" for 3s → back to pump.
+//    "gassed"   — Energy below 10%. "Gassed" for 3s → back to pump.
 //
 //  No timer — rider exits via "Stoked" button when ready.
 //  No power-ups in tutorial (handled in main.js).
 // ──────────────────────────────────────────────────────────────
 
 import { state } from './state.js';
-import { presets, applyPreset, updateVal } from './helpers.js';
+import { presets, applyPreset, updateVal, getVal } from './helpers.js';
 import { bgPresets } from './terrain.js';
 
 // ── Tutorial preset: waves present but rider starts at zero speed ──
@@ -103,8 +103,9 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
   if (state.activeBgPreset !== 'tutorial') return;
   if (phase === 'idle') return;
 
-  // "Gassed" detection — energy depleted and lost foil
-  if (phase !== 'gassed' && state.foil.energy <= 0.02 && foilSpeed < stallMs) {
+  // "Gassed" detection — energy drops below 10%
+  const energyPct = state.foil.energy / getVal('sbBatteryCap');
+  if (phase !== 'gassed' && energyPct <= 0.10) {
     phase = 'gassed';
     phaseTimer = 0;
     showMessage('Gassed');

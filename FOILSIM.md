@@ -180,6 +180,10 @@ path rendering. Removed to clean up the codebase — the Strava integration is
 preserved as a future TODO for a more comprehensive implementation (ride summary
 panel with distance, time, avg speed, elevation profile, etc.).
 
+## Future Features
+
+- **Multiplayer** — Shared sessions where multiple riders are visible on the same ocean. Could use WebRTC or WebSocket relay for real-time position/state sync.
+
 ## Commit Conventions
 
 - **Version bump**: Increment version in `index.html` div#version-label with every commit
@@ -213,3 +217,12 @@ C:\foilsim\
 │   └── maliko_satellite_2048.jpg
 └── mask.html               Standalone heightmap mask tool
 ```
+
+## possible names
+
+foilbrain.io
+foil-brain.com
+foil-brained.com
+foilrunner.com
+
+foilbrain.com - forsale..

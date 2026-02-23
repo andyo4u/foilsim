@@ -6,8 +6,10 @@
 //    "foiling"  — "Foiling!" for 3s.
 //    "doing-it" — "You are doing it" for 3s.
 //    "catch"    — "Catch the wave to keep speed" for 4s.
-//    "pocket"   — "Find the pocket for max lift" for 4s, starts ramp.
-//    "ramping"  — Ease swell1Height from 2.0 → 0 over 30s.
+//    "pocket"   — "Find the pocket for max lift" for 4s.
+//    "drop-back" — "Drop back a bump if you need more power" for 4s.
+//    "leapfrog" — "Speed lets you leap-frog forward" for 4s.
+//    "ramping"  — Chop fades over 30s.
 //    "gassed"   — Energy below 10%. "Gassed" for 3s → back to pump.
 //
 //  No timer — rider exits via "Stoked" button when ready.
@@ -165,7 +167,28 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
   if (phase === 'pocket') {
     phaseTimer += dt;
     if (phaseTimer >= 4) {
+      phase = 'drop-back';
+      phaseTimer = 0;
+      showMessage('Drop back a bump if you need more power');
+    }
+    return;
+  }
+
+  if (phase === 'drop-back') {
+    phaseTimer += dt;
+    if (phaseTimer >= 4) {
+      phase = 'leapfrog';
+      phaseTimer = 0;
+      showMessage('Speed lets you leap-frog forward');
+    }
+    return;
+  }
+
+  if (phase === 'leapfrog') {
+    phaseTimer += dt;
+    if (phaseTimer >= 4) {
       hideMessage();
+      if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 0;
       phase = 'ramping';
       swellRampTime = 0;
       const btn = getDoneBtn();

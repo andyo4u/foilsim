@@ -885,10 +885,27 @@ function animate() {
   const maxSlopeSum = (maxSlope(s1h, s1p) + maxSlope(s1h * 0.22, s1p * 0.7)
     + maxSlope(s2h, s2p) + maxSlope(s2h * 0.2, s2p * 0.65)
     + maxSlope(s3h, s3p)) * 3.25;
-  const dynamicMax = Math.max(0.3, maxSlopeSum * 0.85);
+  const dynamicMax = Math.max(0.05, maxSlopeSum * 0.85);
+
+  // Pocket strength (mirrors shader pocket detection at rider position)
+  // Uses swell height + face orientation to match the Pocket Highlights render mode
+  const swellH = getSwellHeight(foil.x, foil.z, t);
+  const swSlope = getSwellSlope(foil.x, foil.z, t);
+  const slopeLen = Math.sqrt(swSlope.dhdx * swSlope.dhdx + swSlope.dhdz * swSlope.dhdz);
+  const nxz = slopeLen > 0.001 ? [-swSlope.dhdx / slopeLen, -swSlope.dhdz / slopeLen] : [0, 0];
+  const s1dir = degToDir(getVal('swell1Dir'));
+  const hFactor = smoothstep(-s1h * 0.1, s1h * 0.35, swellH);
+  const crestFade = 1 - smoothstep(s1h * 0.4, s1h * 0.85, swellH);
+  const faceDot = -(nxz[0] * s1dir.x + nxz[1] * s1dir.y);
+  const faceFactor = smoothstep(0.08, 0.35, faceDot);
+  const pocketStrength = hFactor * crestFade * faceFactor;
 
   const swBar = document.getElementById('hud-swell-bar');
-  const normSwell = Math.max(-1, Math.min(1, slopeForce / dynamicMax));
+  // Blend slopeForce with pocket strength for a bar that reflects both
+  // rider heading alignment AND position on the wave face
+  const rawNorm = slopeForce / dynamicMax;
+  const blended = rawNorm * (0.5 + 0.5 * pocketStrength);
+  const normSwell = Math.max(-1, Math.min(1, blended));
   const absSwell = Math.abs(normSwell);
   const pct = absSwell * 50;
   if (normSwell >= 0) {

@@ -184,6 +184,7 @@ panel with distance, time, avg speed, elevation profile, etc.).
 
 - **Multiplayer** — Shared sessions where multiple riders are visible on the same ocean. Could use WebRTC or WebSocket relay for real-time position/state sync.
 - **Fix sun visualization & water reflection** — Sun disc hidden (mieCoefficient=0) because the sky sun and ocean specular reflection moved in opposite directions. Need to diagnose the coordinate mismatch between Three.js Sky sunPosition and the ocean shader's uSunDir/specular calculations, then re-enable the sun disc.
+- **Pocket glow driven by normSwell uniform** — Currently the wave energy bar blends JS-side pocket strength with slopeForce (option 2). A future alternative (option 1): pass `normSwell` to the shader as a uniform and multiply the pocket glow by it, so the glow brightens only when the rider is actually harvesting energy. This would let the shader glow respond to rider heading/speed, not just wave geometry. Investigate whether this feels better for gameplay feedback.
 
 ## Commit Conventions
 

@@ -167,7 +167,186 @@ function initOcean() {
         alpha = smoothstep(0.08, 0.35, texture2D(uRiverMask, muv).r);
       }
 
-      if (uRenderMode > 9.5) {
+      if (uRenderMode > 11.5) {
+        // ═══ POCKET HIGHLIGHTS PATH ═══
+        // Normal PBR render with pocket zones always highlighted
+        vec3 N=normalize(vNormal),V=normalize(uCamPos-vWorldPos),L=normalize(uSunDir);
+        float e=.5;vec2 p=vWorldPos.xz;
+        N=normalize(N+vec3(noise(p*.8+uTime*.3+vec2(e,0))-noise(p*.8+uTime*.3-vec2(e,0)),0,noise(p*.8+uTime*.3+vec2(0,e))-noise(p*.8+uTime*.3-vec2(0,e)))*.12);
+        float cd=length(uCamPos-vWorldPos);
+        if(cd<100.){float d2=1.-smoothstep(0.,100.,cd);
+          N=normalize(N+vec3(noise(p*3.+uTime*.5+vec2(e,0))-noise(p*3.+uTime*.5-vec2(e,0)),0,noise(p*3.+uTime*.5+vec2(0,e))-noise(p*3.+uTime*.5-vec2(0,e)))*.06*d2);}
+        float fr=pow(1.-max(dot(N,V),0.),4.);fr=mix(.04,1.,fr);
+        vec3 wc=mix(uDeepColor,uShallowColor,smoothstep(-1.,2.,vHeight)*.5+fr*.3);
+        vec3 sssC=vec3(0,.35,.3)*pow(max(dot(V,-L+N*.6),0.),3.)*.1;
+        vec3 H=normalize(L+V);float NdH=max(dot(N,H),0.);
+        vec3 sunS=vec3(1,.95,.8)*(pow(NdH,256.)*2.5+pow(NdH,64.)*.5);
+        vec3 R=reflect(-V,N);vec3 skyR=mix(uFogColor,uFogColor*.3+vec3(.02,.05,.15),pow(max(R.y,0.),.5));
+        float srDot=max(dot(R,L),0.);skyR+=uFogSunColor*pow(srDot,8.)*.3;skyR+=vec3(1,.9,.7)*pow(srDot,64.)*.5;
+        vec3 col=mix(wc+sssC,skyR+sunS,fr);
+        float fp=noise(vWorldPos.xz*1.5+uTime*.2)*.5+.5;fp*=noise(vWorldPos.xz*4.-uTime*.15)*.5+.5;
+        col=mix(col,uFoamColor*(.8+.2*fp),smoothstep(.15,.6,vFoam*fp)*.85);
+        // ── Pocket highlight (always on) ──
+        float hFactor=smoothstep(-uSwell1.w*0.1,uSwell1.w*0.35,vHeight);
+        float crestFade=1.0-smoothstep(uSwell1.w*0.4,uSwell1.w*0.85,vHeight);
+        float faceFactor=smoothstep(0.08,0.35,-dot(N.xz,uSwell1.xy));
+        float pocket=hFactor*crestFade*faceFactor;
+        float pulse=0.75+0.25*sin(uTime*2.5);
+        vec3 pocketCol=vec3(0.1,1.0,0.7);
+        col=mix(col,pocketCol,pocket*pulse*0.75);
+        float fog=1.-exp(-cd*.0012);
+        col=mix(col,mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),fog);
+        gl_FragColor=vec4(col, alpha);
+      } else if (uRenderMode > 10.5) {
+        // ═══ WATERCOLOR PATH ═══
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(uCamPos - vWorldPos);
+        vec3 L = normalize(uSunDir);
+        float cd = length(uCamPos - vWorldPos);
+
+        // Paper texture
+        // Cold-pressed watercolor paper has visible tooth/grain
+        // Two frequencies: coarse grain structure + fine fiber texture
+        float paperGrain = noise(vWorldPos.xz * 12.0) * 0.5 + 0.5;
+        float paperFiber = noise(vWorldPos.xz * 45.0 + 7.3) * 0.5 + 0.5;
+        float paperTex = paperGrain * 0.7 + paperFiber * 0.3;
+        // Paper base: warm off-white like Arches rough
+        vec3 paperColor = vec3(0.96, 0.94, 0.89) - vec3(0.03, 0.02, 0.01) * (1.0 - paperTex);
+
+        // Wave topology mapping
+        float hNorm = clamp((vHeight + 3.0) / 7.0, 0.0, 1.0);
+        float steepness = clamp((1.0 - N.y) * 2.5, 0.0, 1.0);
+        float NdotL = max(dot(N, L), 0.0);
+
+        // Watercolor pigment palette
+        // Real watercolor ocean pigments: cerulean blue, ultramarine, viridian,
+        // with warm burnt sienna undertones in shadows
+        vec3 cerulean    = vec3(0.12, 0.45, 0.72);
+        vec3 ultramarine = vec3(0.15, 0.18, 0.58);
+        vec3 viridian    = vec3(0.10, 0.50, 0.42);
+        vec3 burntSienna = vec3(0.55, 0.28, 0.12);
+        vec3 paynesGrey  = vec3(0.20, 0.22, 0.28);
+
+        // Pigment selection varies with height and slow noise for organic variety
+        float pigmentShift = fbm(vWorldPos.xz * 0.06 + uTime * 0.02) * 0.5 + 0.5;
+        float depthShift = fbm(vWorldPos.xz * 0.12 - uTime * 0.015 + pigmentShift * 1.2);
+
+        // Mix pigments: crests lean cerulean/viridian, troughs lean ultramarine/payne's grey
+        vec3 pigment = mix(
+          mix(ultramarine, paynesGrey, smoothstep(-0.2, 0.3, depthShift)),
+          mix(cerulean, viridian, smoothstep(0.3, 0.7, pigmentShift)),
+          hNorm
+        );
+        // Warm undertone in shadowed areas (burnt sienna granulates in valleys)
+        pigment = mix(pigment, burntSienna, (1.0 - NdotL) * (1.0 - hNorm) * 0.15);
+
+        // Wet-on-wet diffusion
+        // Watercolor's signature: pigment bleeds organically when paper is wet
+        // Use cascading fbm to simulate water migration on wet paper
+        float wetness = smoothstep(0.2, 0.8, 1.0 - hNorm); // troughs are wetter
+        float diffuse1 = fbm(vWorldPos.xz * 0.18 + uTime * 0.03);
+        float diffuse2 = fbm(vWorldPos.xz * 0.35 + uTime * 0.05 + diffuse1 * 2.0);
+        float diffuse3 = noise(vWorldPos.xz * 0.7 + diffuse2 * 1.5 + uTime * 0.02);
+        // Diffusion warps the pigment concentration
+        float diffusionAmount = wetness * (0.3 + 0.4 * smoothstep(-0.3, 0.4, diffuse1));
+        // Pigment pools where diffusion converges
+        float pigmentPool = smoothstep(0.1, 0.6, diffuse2) * diffusionAmount;
+
+        // Pigment concentration / wash layering
+        // Watercolor builds up in layers (washes). Thin wash = paper shows through.
+        // Thick wash = saturated pigment. Height determines wash thickness.
+        float washThickness = mix(0.15, 0.85, 1.0 - hNorm); // thin on crests, thick in troughs
+        washThickness += pigmentPool * 0.3; // extra pigment where it pools
+        washThickness += steepness * 0.15;  // steep faces catch more pigment running down
+        washThickness = clamp(washThickness, 0.0, 1.0);
+
+        // Pigment granulation
+        // Some pigments (ultramarine, cerulean) granulate: they settle into
+        // the paper's texture valleys, creating a speckled appearance
+        float granulation = paperGrain * paperGrain; // stronger in paper valleys
+        // Granulation is more visible in medium-thick washes
+        float granulationStr = smoothstep(0.2, 0.5, washThickness) * smoothstep(0.9, 0.6, washThickness);
+        float granulationEffect = granulation * granulationStr * 0.4;
+        // Granulation darkens valleys, lightens peaks of paper texture
+        washThickness += (granulation - 0.5) * granulationStr * 0.25;
+
+        // Cauliflower / bloom effect
+        // When wet paint meets a drying edge, pigment pushes outward creating
+        // distinctive fractal "cauliflower" shapes with dark rims
+        float bloomNoise = fbm(vWorldPos.xz * 0.4 + diffuse1 * 3.0 + uTime * 0.01);
+        float bloomEdge = smoothstep(0.25, 0.35, bloomNoise) * smoothstep(0.65, 0.55, bloomNoise);
+        // Bloom creates a dark pigment rim where wet meets dry
+        float bloomRim = bloomEdge * wetness * 0.6;
+        // Inside the bloom: lighter (pigment pushed away from center)
+        float bloomCenter = smoothstep(0.35, 0.5, bloomNoise) * smoothstep(0.55, 0.5, bloomNoise);
+        float bloomLighten = bloomCenter * wetness * 0.3;
+
+        // Flow patterns (wet paint following gravity/tilt)
+        // On steep wave faces, paint runs downhill creating directional streaks
+        vec2 grad = vec2(N.x, N.z);
+        float gradLen = length(grad);
+        vec2 flowDir = gradLen > 0.001 ? grad / gradLen : vec2(1.0, 0.0);
+        float flowProj = dot(vWorldPos.xz, flowDir);
+        float flowStreak = noise(vec2(flowProj * 2.5, dot(vWorldPos.xz, vec2(-flowDir.y, flowDir.x)) * 0.4) + uTime * 0.02);
+        float flowEffect = smoothstep(0.2, 0.6, flowStreak) * steepness * 0.3;
+
+        // Composite: blend pigment onto paper
+        // Final wash concentration combines all effects
+        float finalConc = washThickness + bloomRim - bloomLighten + flowEffect;
+        finalConc = clamp(finalConc, 0.0, 1.0);
+
+        // Watercolor mixing: pigment over paper (not opaque paint—light passes through)
+        // Thin washes: paper luminance shows through tinted by pigment
+        // Thick washes: saturated pigment dominates
+        vec3 thinWash = paperColor * (vec3(1.0) - pigment * 0.4); // paper tinted by pigment
+        vec3 thickWash = pigment * (0.35 + 0.25 * paperTex);      // pigment with paper texture showing
+        vec3 col = mix(thinWash, thickWash, finalConc);
+
+        // Granulation darkening in thick areas
+        col -= vec3(0.06, 0.04, 0.02) * granulationEffect * finalConc;
+
+        // Dry brush on crests
+        // Wave crests and foam: paper shows through in a broken, ragged way
+        // Simulates dragging a nearly-dry brush across textured paper
+        float dryBrush = smoothstep(0.55, 0.85, hNorm);
+        // Dry brush skips over paper valleys (only catches the peaks)
+        float dryBrushMask = smoothstep(0.45, 0.75, paperGrain);
+        float dryBrushEffect = dryBrush * dryBrushMask;
+        // Foam enhances the dry brush look
+        float foamDry = smoothstep(0.15, 0.55, vFoam);
+        dryBrushEffect = max(dryBrushEffect, foamDry * dryBrushMask * 0.8);
+        // Dry brush reveals paper through the pigment
+        col = mix(col, paperColor * 0.98, dryBrushEffect * 0.7);
+
+        // Subtle sun warmth
+        // Light hitting the paper/wash creates warm glow
+        col += vec3(0.04, 0.03, 0.01) * NdotL * (1.0 - finalConc * 0.5);
+        // Gentle specular: watercolor paper has a soft sheen when wet
+        vec3 H = normalize(L + V);
+        float spec = pow(max(dot(N, H), 0.0), 16.0);
+        col += vec3(0.96, 0.94, 0.90) * spec * 0.08 * wetness;
+
+        // Edge darkening (pigment accumulates at wash boundaries)
+        // The hallmark of watercolor: darker rims where a wash dried
+        float edgeNoise = noise(vWorldPos.xz * 1.5 + uTime * 0.01);
+        float edge = smoothstep(0.3, 0.5, steepness) * (0.5 + 0.5 * edgeNoise);
+        col = mix(col, pigment * 0.4, edge * 0.25);
+
+        // Atmospheric perspective (distant washes)
+        // Watercolor landscapes fade to a pale, cool wash in the distance
+        float fog = 1.0 - exp(-cd * 0.001);
+        // Distant wash: very dilute cerulean/lavender on paper
+        vec3 distantWash = mix(
+          vec3(0.82, 0.86, 0.92),  // cool lavender-grey
+          vec3(0.90, 0.87, 0.80),  // warm paper-toned towards sun
+          pow(max(dot(normalize(vWorldPos - uCamPos), L), 0.0), 3.0)
+        );
+        col = mix(col, distantWash, fog);
+        // Extra distance fade for the watercolor look (paintings fade fast at distance)
+        col = mix(col, distantWash, smoothstep(200.0, 600.0, cd) * 0.45);
+
+        gl_FragColor = vec4(col, alpha);
+      } else if (uRenderMode > 9.5) {
         // ═══ FUR PATH ═══
         vec3 N = normalize(vNormal);
         vec3 V = normalize(uCamPos - vWorldPos);

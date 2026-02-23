@@ -888,12 +888,12 @@ function initOcean() {
         col=mix(col,uFoamColor*(.8+.2*fp),smoothstep(.15,.6,vFoam*fp)*.85);
         // ── Pocket highlight (tutorial) ──
         if(uShowPocket>0.5){
-          float hFactor=smoothstep(uSwell1.w*0.33,uSwell1.w*0.66,vHeight);
-          float faceFactor=smoothstep(0.0,0.3,dot(N.xz,uSwell1.xy));
+          float hFactor=smoothstep(uSwell1.w*0.15,uSwell1.w*0.5,vHeight);
+          float faceFactor=smoothstep(-0.05,0.2,dot(N.xz,uSwell1.xy));
           float pocket=hFactor*faceFactor;
-          float pulse=0.7+0.3*sin(uTime*2.5);
-          vec3 pocketCol=mix(vec3(0.0,0.8,0.4),vec3(0.0,0.6,0.8),0.5);
-          col=mix(col,pocketCol,pocket*pulse*0.4);
+          float pulse=0.75+0.25*sin(uTime*2.5);
+          vec3 pocketCol=vec3(0.1,1.0,0.7);
+          col=mix(col,pocketCol,pocket*pulse*0.6);
         }
         float fog=1.-exp(-cd*.0012);
         col=mix(col,mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),fog);

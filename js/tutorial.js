@@ -177,8 +177,6 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
   if (phase === 'ramping') {
     swellRampTime += dt;
     const t = Math.min(1, swellRampTime / RAMP_DURATION);
-    const h = SWELL_START + (SWELL_END - SWELL_START) * t;
-    setSlider('swell1Height', h.toFixed(1));
 
     const chop = 0.09 * (1 - t);
     setSlider('chopHeight', chop.toFixed(2));

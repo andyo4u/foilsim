@@ -183,6 +183,7 @@ panel with distance, time, avg speed, elevation profile, etc.).
 ## Future Features
 
 - **Multiplayer** — Shared sessions where multiple riders are visible on the same ocean. Could use WebRTC or WebSocket relay for real-time position/state sync.
+- **Fix sun visualization & water reflection** — Sun disc hidden (mieCoefficient=0) because the sky sun and ocean specular reflection moved in opposite directions. Need to diagnose the coordinate mismatch between Three.js Sky sunPosition and the ocean shader's uSunDir/specular calculations, then re-enable the sun disc.
 
 ## Commit Conventions
 

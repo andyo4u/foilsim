@@ -139,8 +139,8 @@ state.sky = sky;
 const skyUniforms = sky.material.uniforms;
 skyUniforms['turbidity'].value = 4;
 skyUniforms['rayleigh'].value = 2;
-skyUniforms['mieCoefficient'].value = 0.005;
-skyUniforms['mieDirectionalG'].value = 0.8;
+skyUniforms['mieCoefficient'].value = 0;
+skyUniforms['mieDirectionalG'].value = 0;
 state.skyUniforms = skyUniforms;
 
 // ═══════════════════════════

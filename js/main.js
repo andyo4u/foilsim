@@ -98,7 +98,7 @@ import { initOcean, updateEnvMap, getWaveHeight, getWaveSlope, getSwellHeight,
 import { initFoil, emitSpray, updateSpray, updateWake, updateStreamer, toggleFreeCam, updateCamera } from './foil.js';
 import { initTerrain, rebuildTerrain, restartLevel, getRealTerrainHeight,
          RT_WATER_Y, RT_WORLD_W, RT_WORLD_D, terrainConfigs } from './terrain.js';
-import { onTutorialStart } from './tutorial.js';
+import { onTutorialStart, updateTutorial } from './tutorial.js';
 
 // ═══════════════════════════
 // THREE.JS CORE SETUP
@@ -626,6 +626,9 @@ function animate() {
   const stallKts = getVal('sbStallSpeed');
   const stallMs = stallKts / 1.94384;
   const isF = foil.speed > stallMs;
+
+  // Tutorial phase machine (only active when tutorial location is selected)
+  updateTutorial(dt, foil.speed, stallMs);
 
   // Pitch
   const autoPitch = isF ? -0.05 : 0;

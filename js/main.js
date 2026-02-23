@@ -98,7 +98,7 @@ import { initOcean, updateEnvMap, getWaveHeight, getWaveSlope, getSwellHeight,
 import { initFoil, emitSpray, updateSpray, updateWake, updateStreamer, toggleFreeCam, updateCamera } from './foil.js';
 import { initTerrain, rebuildTerrain, restartLevel, getRealTerrainHeight,
          RT_WATER_Y, RT_WORLD_W, RT_WORLD_D, terrainConfigs } from './terrain.js';
-import { onTutorialStart, updateTutorial } from './tutorial.js';
+import { onTutorialStart, updateTutorial, endTutorial } from './tutorial.js';
 
 // ═══════════════════════════
 // THREE.JS CORE SETUP
@@ -384,9 +384,10 @@ function startRide(locationPreset) {
   state.ridePrevZ = state.foil.z;
 
   // UI transitions
+  const isTutorial = locationPreset === 'tutorial';
   document.getElementById('menu-overlay').classList.add('hidden');
   document.getElementById('score-overlay').classList.add('hidden');
-  document.getElementById('hud-timer').style.display = 'block';
+  document.getElementById('hud-timer').style.display = isTutorial ? 'none' : 'block';
   document.getElementById('hud-timer').classList.remove('warning');
   document.getElementById('hud-timer').textContent = '2:00';
   document.getElementById('hud-boost').style.display = 'none';
@@ -422,6 +423,7 @@ function rideAgain() {
 
 window.startRide = startRide;
 window.rideAgain = rideAgain;
+window.endTutorial = endTutorial;
 
 // ═══════════════════════════
 // MAIN LOOP
@@ -981,16 +983,18 @@ function animate() {
   }
 
   // ── RIDE TIMER & SCORING ──
-  // Timer countdown — only starts after first pump
-  if (state.rideStarted) {
-    state.rideTimer -= dt;
-    if (state.rideTimer <= 0) { state.rideTimer = 0; endRide(); }
+  // Timer countdown — only starts after first pump (skipped in tutorial)
+  if (state.activeBgPreset !== 'tutorial') {
+    if (state.rideStarted) {
+      state.rideTimer -= dt;
+      if (state.rideTimer <= 0) { state.rideTimer = 0; endRide(); }
+    }
+    const mins = Math.floor(state.rideTimer / 60);
+    const secs = Math.floor(state.rideTimer % 60);
+    const timerEl = document.getElementById('hud-timer');
+    timerEl.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
+    if (state.rideTimer <= 10) timerEl.classList.add('warning');
   }
-  const mins = Math.floor(state.rideTimer / 60);
-  const secs = Math.floor(state.rideTimer % 60);
-  const timerEl = document.getElementById('hud-timer');
-  timerEl.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
-  if (state.rideTimer <= 10) timerEl.classList.add('warning');
 
   // Distance tracking
   const dx = foil.x - state.ridePrevX;

@@ -148,6 +148,19 @@
   }
   #hud-tutorial.show { opacity: 1; }
 
+  #tutorial-done-btn {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    z-index: 80; padding: 14px 36px;
+    font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 600;
+    color: #fff; background: rgba(74,158,255,0.75); border: 2px solid rgba(100,180,255,0.5);
+    border-radius: 12px; cursor: pointer; display: none;
+    backdrop-filter: blur(8px);
+    transition: background 0.2s, transform 0.15s;
+    letter-spacing: 1px;
+  }
+  #tutorial-done-btn:hover { background: rgba(74,158,255,0.95); transform: translateX(-50%) translateY(-2px); }
+  #tutorial-done-btn:active { transform: translateX(-50%) scale(0.97); }
+
   /* Shallow water warning overlay */
   #shallow-warning {
     position: fixed; top: 38%; left: 50%; transform: translate(-50%,-50%);
@@ -287,7 +300,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.0.97</div>
+<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.0.98</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -401,6 +414,7 @@
 
 <div id="hud-pocket">In the Pocket!</div>
 <div id="hud-tutorial"></div>
+<button id="tutorial-done-btn" onclick="endTutorial()">Stoked, I'm done learning</button>
 <div id="shallow-warning">Shallow Water!</div>
 <button id="restart-btn" onclick="restartLevel()">↻ Restart</button>
 

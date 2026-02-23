@@ -4,10 +4,13 @@
 //  Phases:
 //    "push"    — Flat ocean. Prompt to pump for speed.
 //    "foiling" — "Foiling!" message for 3s, then fade.
-//    "ramping" — Gradually ramp swell1Height 0 → 3.5m over ~60s.
+//    "ramping" — Ramp swell1Height 0 → 3.0m, then ease down to 1.0m
+//                over 30s so the learner feels big waves then settles.
+//
+//  No timer — rider exits via "Stoked" button when ready.
 //
 //  Self-registers tutorial presets into helpers.js / terrain.js.
-//  Exports onTutorialStart() and updateTutorial() for main.js.
+//  Exports onTutorialStart(), updateTutorial(), endTutorial().
 // ──────────────────────────────────────────────────────────────
 
 import { state } from './state.js';
@@ -37,15 +40,22 @@ bgPresets['tutorial'] = {
 let phase = 'idle';    // 'idle' | 'push' | 'foiling' | 'ramping'
 let phaseTimer = 0;
 let swellRampTime = 0;
-const SWELL_TARGET = 3.5;   // target swell1Height in meters
-const RAMP_DURATION = 60;   // seconds to reach full swell
+const SWELL_START  = 3.0;   // initial big swell after foiling
+const SWELL_END    = 1.0;   // settle-down target
+const RAMP_DURATION = 30;   // seconds to ease from start → end
 
-// DOM ref (cached on first use)
+// DOM refs (cached on first use)
 let hudEl = null;
+let doneBtn = null;
 
 function getHud() {
   if (!hudEl) hudEl = document.getElementById('hud-tutorial');
   return hudEl;
+}
+
+function getDoneBtn() {
+  if (!doneBtn) doneBtn = document.getElementById('tutorial-done-btn');
+  return doneBtn;
 }
 
 function showMessage(text) {
@@ -78,6 +88,9 @@ export function onTutorialStart() {
   phaseTimer = 0;
   swellRampTime = 0;
   showMessage('Push forward to gain speed');
+  // Hide the done button until ramping starts
+  const btn = getDoneBtn();
+  if (btn) btn.style.display = 'none';
 }
 
 /**
@@ -105,6 +118,12 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
       hideMessage();
       phase = 'ramping';
       swellRampTime = 0;
+      // Jump swell to the starting height immediately
+      setSlider('swell1Height', SWELL_START.toFixed(1));
+      setSlider('chopHeight', '0.15');
+      // Show the done button
+      const btn = getDoneBtn();
+      if (btn) btn.style.display = 'block';
     }
     return;
   }
@@ -112,17 +131,29 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
   if (phase === 'ramping') {
     swellRampTime += dt;
     const t = Math.min(1, swellRampTime / RAMP_DURATION);
-    const h = SWELL_TARGET * t;
+    // Ease from SWELL_START down to SWELL_END
+    const h = SWELL_START + (SWELL_END - SWELL_START) * t;
     setSlider('swell1Height', h.toFixed(1));
 
-    // Also bring in a little chop once swell is noticeable
-    if (t > 0.3) {
-      const chopT = (t - 0.3) / 0.7; // 0→1 over last 70% of ramp
-      setSlider('chopHeight', (0.15 * chopT).toFixed(2));
-    }
+    // Ease chop down proportionally
+    const chop = 0.15 * (1 - t * 0.5); // 0.15 → 0.075
+    setSlider('chopHeight', chop.toFixed(2));
 
     if (t >= 1) {
-      phase = 'idle'; // ramp complete
+      phase = 'idle'; // ramp complete, settled at gentle swell
     }
   }
+}
+
+/** Called when the rider clicks "Stoked, I'm done learning". */
+export function endTutorial() {
+  phase = 'idle';
+  hideMessage();
+  const btn = getDoneBtn();
+  if (btn) btn.style.display = 'none';
+  // Return to main menu
+  document.getElementById('menu-overlay').classList.remove('hidden');
+  document.getElementById('hud-timer').style.display = 'none';
+  document.getElementById('hud-boost').style.display = 'none';
+  state.gamePhase = 'menu';
 }

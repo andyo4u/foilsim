@@ -3,17 +3,20 @@
 //
 //  Phases:
 //    "pump"        — Zero speed, waves present. "Pump to get on foil".
-//    "foiling"     — "Foiling!" for 4s.
+//                    Waits for foilSpeed > stallMs, then holds 2s.
+//    "foiling"     — "Foiling!" for 5s.
 //    "catch"       — "Catch the wave to keep speed" for 5s.
 //    "pocket"      — "Find the pocket for max lift" for 5s. Pocket glow on.
 //    "drop-back"   — "Drop back a bump if you need more power" for 5s.
 //    "leapfrog"    — "Speed lets you leap-frog forward" for 5s.
-//    "turning"     — "Turning generates speed" for 5s. Pocket glow off.
+//    "turning"     — "Turning generates some speed" for 5s. Pocket glow off.
 //    "weight-back" — "Weight back will slow you down" for 5s.
 //    "lean-back"   — "Lean back to get tighter turns" for 5s.
-//    "hunt-sets"   — "Hunt for sets" for 5s.
-//    "ramping"     — Chop fades over 30s.
-//    "gassed"   — Energy below 10%. "Gassed" for 3s → back to pump.
+//    "hunt-sets"   — "Hunt for sets" for 10s. DEM render, camera zooms out.
+//    "drone"       — "Control your HoverAir AQUA Drone" for 5s.
+//                    Normal render, camera zooms back in.
+//    "ready"       — "Ready to rip". Stoked button appears.
+//    "gassed"      — Energy below 10%. "Gassed" for 3s → back to pump.
 //
 //  No timer — rider exits via "Stoked" button when ready.
 //  No power-ups in tutorial (handled in main.js).
@@ -45,10 +48,9 @@ bgPresets['tutorial'] = {
 // ── Tutorial state ──
 let phase = 'idle';
 let phaseTimer = 0;
-let swellRampTime = 0;
-const SWELL_START   = 2.0;
-const SWELL_END     = 0;
-const RAMP_DURATION = 30;
+let pumpHoldTimer = 0;            // 2s hold after reaching foiling speed
+let savedRenderMode = 0;          // stash render mode before DEM switch
+let savedCamDist = 32;            // stash camera distance before zoom-out
 
 // DOM refs (cached on first use)
 let hudEl = null;
@@ -94,7 +96,7 @@ export function onTutorialStart() {
   state.foil.rideH = 0;
   phase = 'pump';
   phaseTimer = 0;
-  swellRampTime = 0;
+  pumpHoldTimer = 0;
   if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 0;
   showMessage('Pump to get on foil');
   const btn = getDoneBtn();
@@ -122,6 +124,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
     phaseTimer += dt;
     if (phaseTimer >= 3) {
       phase = 'pump';
+      pumpHoldTimer = 0;
       showMessage('Pump to get on foil');
     }
     return;
@@ -129,16 +132,21 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
 
   if (phase === 'pump') {
     if (foilSpeed > stallMs) {
-      phase = 'foiling';
-      phaseTimer = 0;
-      showMessage('Foiling!');
+      pumpHoldTimer += dt;
+      if (pumpHoldTimer >= 2) {
+        phase = 'foiling';
+        phaseTimer = 0;
+        showMessage('Foiling!');
+      }
+    } else {
+      pumpHoldTimer = 0;
     }
     return;
   }
 
   if (phase === 'foiling') {
     phaseTimer += dt;
-    if (phaseTimer >= 4) {
+    if (phaseTimer >= 5) {
       phase = 'catch';
       phaseTimer = 0;
       showMessage('Catch the wave to keep speed');
@@ -182,7 +190,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
     if (phaseTimer >= 5) {
       phase = 'turning';
       phaseTimer = 0;
-      showMessage('Turning generates speed');
+      showMessage('Turning generates some speed');
     }
     return;
   }
@@ -213,6 +221,11 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
     if (phaseTimer >= 5) {
       phase = 'hunt-sets';
       phaseTimer = 0;
+      // Switch to DEM render and zoom camera out
+      savedRenderMode = state.oceanMat ? state.oceanMat.uniforms.uRenderMode.value : 0;
+      savedCamDist = state.cam.dist;
+      if (state.oceanMat) state.oceanMat.uniforms.uRenderMode.value = 2;
+      state.cam.dist = 80;
       showMessage('Hunt for sets');
     }
     return;
@@ -220,34 +233,39 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
 
   if (phase === 'hunt-sets') {
     phaseTimer += dt;
+    if (phaseTimer >= 10) {
+      phase = 'drone';
+      phaseTimer = 0;
+      // Switch back to normal render and zoom camera in
+      if (state.oceanMat) state.oceanMat.uniforms.uRenderMode.value = savedRenderMode;
+      state.cam.dist = savedCamDist;
+      showMessage('Control your HoverAir AQUA Drone');
+    }
+    return;
+  }
+
+  if (phase === 'drone') {
+    phaseTimer += dt;
     if (phaseTimer >= 5) {
-      hideMessage();
-      phase = 'ramping';
-      swellRampTime = 0;
+      phase = 'ready';
+      phaseTimer = 0;
+      showMessage('Ready to rip');
       const btn = getDoneBtn();
       if (btn) btn.style.display = 'block';
     }
     return;
   }
 
-  if (phase === 'ramping') {
-    swellRampTime += dt;
-    const t = Math.min(1, swellRampTime / RAMP_DURATION);
-
-    const chop = 0.09 * (1 - t);
-    setSlider('chopHeight', chop.toFixed(2));
-
-    if (t >= 1) {
-      if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 0;
-      phase = 'idle';
-    }
-  }
+  // "ready" phase — just wait for Stoked button click
 }
 
 /** Called when the rider clicks "Stoked, I'm done learning". */
 export function endTutorial() {
   phase = 'idle';
   if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 0;
+  // Restore render mode and camera in case tutorial ended mid-sequence
+  if (state.oceanMat) state.oceanMat.uniforms.uRenderMode.value = savedRenderMode;
+  state.cam.dist = savedCamDist;
   hideMessage();
   const btn = getDoneBtn();
   if (btn) btn.style.display = 'none';

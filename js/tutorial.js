@@ -16,7 +16,6 @@
 //    "drone"       — "Control your HoverAir AQUA Drone" for 5s.
 //                    Normal render, camera zooms back in.
 //    "ready"       — "Ready to rip". Stoked button appears.
-//    "gassed"      — Energy below 10%. "Gassed" for 3s → back to pump.
 //
 //  No timer — rider exits via "Stoked" button when ready.
 //  No power-ups in tutorial (handled in main.js).
@@ -118,24 +117,6 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
   // Smooth camera zoom each frame
   state.cam.dist += (targetCamDist - state.cam.dist) * CAM_LERP;
 
-  // "Gassed" detection — energy drops below 10%
-  const energyPct = state.foil.energy / getVal('sbBatteryCap');
-  if (phase !== 'gassed' && energyPct <= 0.10) {
-    phase = 'gassed';
-    phaseTimer = 0;
-    showMessage('Gassed');
-    return;
-  }
-
-  if (phase === 'gassed') {
-    phaseTimer += dt;
-    if (phaseTimer >= 3) {
-      phase = 'pump';
-      pumpHoldTimer = 0;
-      showMessage('Pump to get on foil');
-    }
-    return;
-  }
 
   if (phase === 'pump') {
     if (foilSpeed > stallMs) {

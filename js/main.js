@@ -287,7 +287,7 @@ const QUALITY_PRESETS = {
   med:   { oceanSegments: 256, oceanSize: 600, pixelRatioCap: 1.5, sprayBudget: 100, wakeBudget: 50, streamerBudget: 80  },
   high:  { oceanSegments: 384, oceanSize: 800, pixelRatioCap: 2,   sprayBudget: 150, wakeBudget: 65, streamerBudget: 100 },
   ultra: { oceanSegments: 512, oceanSize: 800, pixelRatioCap: 2,   sprayBudget: 200, wakeBudget: 80, streamerBudget: 120 },
-  max:   { oceanSegments: 1000, oceanSize: 80000, pixelRatioCap: 2,  sprayBudget: 200, wakeBudget: 80, streamerBudget: 120 },
+  max:   { oceanSegments: 1000, oceanSize: 1200, pixelRatioCap: 2,   sprayBudget: 200, wakeBudget: 80, streamerBudget: 120 },
 };
 
 const QUALITY_LEVELS = ['low', 'med', 'high', 'ultra', 'max'];

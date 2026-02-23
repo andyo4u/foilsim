@@ -890,10 +890,9 @@ function initOcean() {
         float fr=pow(1.-max(dot(N,V),0.),4.);fr=mix(.04,1.,fr);
         vec3 wc=mix(uDeepColor,uShallowColor,smoothstep(-1.,2.,vHeight)*.5+fr*.3);
         vec3 sssC=vec3(0,.35,.3)*pow(max(dot(V,-L+N*.6),0.),3.)*.3;
-        vec3 H=normalize(L+V);vec3 sunS=vec3(1,.95,.8)*(pow(max(dot(N,H),0.),512.)*3.+pow(max(dot(N,H),0.),64.)*.6);
         vec3 R=reflect(-V,N);vec3 skyR=mix(uFogColor,uFogColor*.3+vec3(.02,.05,.15),pow(max(R.y,0.),.5));
-        float srDot=max(dot(R,L),0.);skyR+=uFogSunColor*pow(srDot,8.)*.3;skyR+=vec3(1,.9,.7)*pow(srDot,64.)*.5;
-        vec3 col=mix(wc+sssC,skyR,fr)+sunS;
+        float srDot=max(dot(R,L),0.);skyR+=uFogSunColor*pow(srDot,8.)*.4;skyR+=vec3(1,.95,.8)*pow(srDot,128.)*2.5;
+        vec3 col=mix(wc+sssC,skyR,fr);
         float fp=noise(vWorldPos.xz*1.5+uTime*.2)*.5+.5;fp*=noise(vWorldPos.xz*4.-uTime*.15)*.5+.5;
         col=mix(col,uFoamColor*(.8+.2*fp),smoothstep(.15,.6,vFoam*fp)*.85);
         // ── Pocket highlight (tutorial) ──

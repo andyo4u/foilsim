@@ -90,6 +90,7 @@ export function onTutorialStart() {
   phase = 'pump';
   phaseTimer = 0;
   swellRampTime = 0;
+  if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 0;
   showMessage('Pump to get on foil');
   const btn = getDoneBtn();
   if (btn) btn.style.display = 'none';
@@ -155,6 +156,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
     if (phaseTimer >= 4) {
       phase = 'pocket';
       phaseTimer = 0;
+      if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 1;
       showMessage('Find the pocket for max lift');
     }
     return;
@@ -182,6 +184,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
     setSlider('chopHeight', chop.toFixed(2));
 
     if (t >= 1) {
+      if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 0;
       phase = 'idle';
     }
   }
@@ -190,6 +193,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
 /** Called when the rider clicks "Stoked, I'm done learning". */
 export function endTutorial() {
   phase = 'idle';
+  if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 0;
   hideMessage();
   const btn = getDoneBtn();
   if (btn) btn.style.display = 'none';

@@ -51,6 +51,8 @@ let phaseTimer = 0;
 let pumpHoldTimer = 0;            // 2s hold after reaching foiling speed
 let savedRenderMode = 0;          // stash render mode before DEM switch
 let savedCamDist = 32;            // stash camera distance before zoom-out
+let targetCamDist = 32;           // smooth zoom target
+const CAM_LERP = 0.03;           // zoom smoothing factor per frame
 
 // DOM refs (cached on first use)
 let hudEl = null;
@@ -97,6 +99,8 @@ export function onTutorialStart() {
   phase = 'pump';
   phaseTimer = 0;
   pumpHoldTimer = 0;
+  savedCamDist = state.cam.dist;
+  targetCamDist = state.cam.dist;
   if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 0;
   showMessage('Pump to get on foil');
   const btn = getDoneBtn();
@@ -110,6 +114,9 @@ export function onTutorialStart() {
 export function updateTutorial(dt, foilSpeed, stallMs) {
   if (state.activeBgPreset !== 'tutorial') return;
   if (phase === 'idle') return;
+
+  // Smooth camera zoom each frame
+  state.cam.dist += (targetCamDist - state.cam.dist) * CAM_LERP;
 
   // "Gassed" detection — energy drops below 10%
   const energyPct = state.foil.energy / getVal('sbBatteryCap');
@@ -225,7 +232,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
       savedRenderMode = state.oceanMat ? state.oceanMat.uniforms.uRenderMode.value : 0;
       savedCamDist = state.cam.dist;
       if (state.oceanMat) state.oceanMat.uniforms.uRenderMode.value = 2;
-      state.cam.dist = 80;
+      targetCamDist = 80;
       showMessage('Hunt for sets');
     }
     return;
@@ -238,7 +245,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
       phaseTimer = 0;
       // Switch back to normal render and zoom camera in
       if (state.oceanMat) state.oceanMat.uniforms.uRenderMode.value = savedRenderMode;
-      state.cam.dist = savedCamDist;
+      targetCamDist = savedCamDist;
       showMessage('Control your HoverAir AQUA Drone');
     }
     return;
@@ -265,6 +272,7 @@ export function endTutorial() {
   if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 0;
   // Restore render mode and camera in case tutorial ended mid-sequence
   if (state.oceanMat) state.oceanMat.uniforms.uRenderMode.value = savedRenderMode;
+  targetCamDist = savedCamDist;
   state.cam.dist = savedCamDist;
   hideMessage();
   const btn = getDoneBtn();

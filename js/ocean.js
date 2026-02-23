@@ -889,7 +889,7 @@ function initOcean() {
         // ── Pocket highlight (tutorial) ──
         if(uShowPocket>0.5){
           float hFactor=smoothstep(uSwell1.w*0.15,uSwell1.w*0.5,vHeight);
-          float faceFactor=smoothstep(-0.05,0.2,dot(N.xz,uSwell1.xy));
+          float faceFactor=smoothstep(-0.05,0.2,-dot(N.xz,uSwell1.xy));
           float pocket=hFactor*faceFactor;
           float pulse=0.75+0.25*sin(uTime*2.5);
           vec3 pocketCol=vec3(0.1,1.0,0.7);

@@ -840,7 +840,10 @@ function animate() {
 
   // Status
   const st = document.getElementById('hud-status');
-  if (foil.speed <= 0.3) {
+  if (foil.energy / getVal('sbBatteryCap') <= 0.10) {
+    st.textContent = '⛽ Gassed';
+    st.style.color = '#ff6040';
+  } else if (foil.speed <= 0.3) {
     st.textContent = '⚠ STALLED';
     st.style.color = '#ff5555';
   } else if (foil.speed < 2.5) {

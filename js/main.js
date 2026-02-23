@@ -913,8 +913,8 @@ function animate() {
 
   foil.prevWH = wH;
 
-  // ── POWER-UP: Spawn, Collect, Boost ──
-  {
+  // ── POWER-UP: Spawn, Collect, Boost (disabled in tutorial) ──
+  if (state.activeBgPreset !== 'tutorial') {
     const pu = state.powerUp;
 
     // Spawn timer — only when no orb visible and not boosting

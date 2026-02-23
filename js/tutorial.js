@@ -1,16 +1,17 @@
 // ──────────────────────────────────────────────────────────────
-//  tutorial.js  –  Guided tutorial with flat start & swell ramp
+//  tutorial.js  –  Guided tutorial with message sequence & swell ramp
 //
 //  Phases:
-//    "pump"    — Waves present, zero speed. "Pump to get on foil".
-//    "foiling" — "Foiling!" message for 3s, then starts swell ramp.
-//    "ramping" — Ease swell1Height from 2.0 → 0 over 30s.
-//    "gassed"  — Energy depleted. "Gassed" message.
+//    "pump"     — Zero speed, waves present. "Pump to get on foil".
+//    "foiling"  — "Foiling!" for 3s.
+//    "doing-it" — "You are doing it" for 3s.
+//    "catch"    — "Catch the wave to keep speed" for 4s.
+//    "pocket"   — "Find the pocket for max lift" for 4s, starts ramp.
+//    "ramping"  — Ease swell1Height from 2.0 → 0 over 30s.
+//    "gassed"   — Energy depleted. "Gassed" for 3s → back to pump.
 //
 //  No timer — rider exits via "Stoked" button when ready.
-//
-//  Self-registers tutorial presets into helpers.js / terrain.js.
-//  Exports onTutorialStart(), updateTutorial(), endTutorial().
+//  No power-ups in tutorial (handled in main.js).
 // ──────────────────────────────────────────────────────────────
 
 import { state } from './state.js';
@@ -37,13 +38,12 @@ bgPresets['tutorial'] = {
 };
 
 // ── Tutorial state ──
-let phase = 'idle';    // 'idle' | 'pump' | 'foiling' | 'ramping' | 'gassed'
+let phase = 'idle';
 let phaseTimer = 0;
 let swellRampTime = 0;
-const SWELL_START   = 2.0;   // starting swell1Height
-const SWELL_END     = 0;     // ramp down to flat
-const RAMP_DURATION = 30;    // seconds to ease from start → end
-let wasGassed = false;        // track if we already showed "Gassed"
+const SWELL_START   = 2.0;
+const SWELL_END     = 0;
+const RAMP_DURATION = 30;
 
 // DOM refs (cached on first use)
 let hudEl = null;
@@ -85,15 +85,12 @@ function setSlider(id, val) {
 /** Called from startRide() when locationPreset === 'tutorial'. */
 export function onTutorialStart() {
   applyPreset('tutorial');
-  // Start at zero speed — rider must pump
   state.foil.speed = 0;
   state.foil.rideH = 0;
   phase = 'pump';
   phaseTimer = 0;
   swellRampTime = 0;
-  wasGassed = false;
   showMessage('Pump to get on foil');
-  // Hide the done button until foiling phase completes
   const btn = getDoneBtn();
   if (btn) btn.style.display = 'none';
 }
@@ -103,11 +100,10 @@ export function onTutorialStart() {
  * Only does work when the tutorial location is active.
  */
 export function updateTutorial(dt, foilSpeed, stallMs) {
-  // Skip if not in tutorial
   if (state.activeBgPreset !== 'tutorial') return;
   if (phase === 'idle') return;
 
-  // "Gassed" detection — show message when energy depleted (any phase)
+  // "Gassed" detection — energy depleted and lost foil
   if (phase !== 'gassed' && state.foil.energy <= 0.02 && foilSpeed < stallMs) {
     phase = 'gassed';
     phaseTimer = 0;
@@ -117,9 +113,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
 
   if (phase === 'gassed') {
     phaseTimer += dt;
-    // Clear after 3s, go back to pump phase so they can try again
     if (phaseTimer >= 3) {
-      hideMessage();
       phase = 'pump';
       showMessage('Pump to get on foil');
     }
@@ -127,7 +121,6 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
   }
 
   if (phase === 'pump') {
-    // Wait until the rider is foiling
     if (foilSpeed > stallMs) {
       phase = 'foiling';
       phaseTimer = 0;
@@ -139,10 +132,39 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
   if (phase === 'foiling') {
     phaseTimer += dt;
     if (phaseTimer >= 3) {
+      phase = 'doing-it';
+      phaseTimer = 0;
+      showMessage('You are doing it');
+    }
+    return;
+  }
+
+  if (phase === 'doing-it') {
+    phaseTimer += dt;
+    if (phaseTimer >= 3) {
+      phase = 'catch';
+      phaseTimer = 0;
+      showMessage('Catch the wave to keep speed');
+    }
+    return;
+  }
+
+  if (phase === 'catch') {
+    phaseTimer += dt;
+    if (phaseTimer >= 4) {
+      phase = 'pocket';
+      phaseTimer = 0;
+      showMessage('Find the pocket for max lift');
+    }
+    return;
+  }
+
+  if (phase === 'pocket') {
+    phaseTimer += dt;
+    if (phaseTimer >= 4) {
       hideMessage();
       phase = 'ramping';
       swellRampTime = 0;
-      // Show the done button
       const btn = getDoneBtn();
       if (btn) btn.style.display = 'block';
     }
@@ -152,16 +174,14 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
   if (phase === 'ramping') {
     swellRampTime += dt;
     const t = Math.min(1, swellRampTime / RAMP_DURATION);
-    // Ease swell1Height from SWELL_START down to SWELL_END
     const h = SWELL_START + (SWELL_END - SWELL_START) * t;
     setSlider('swell1Height', h.toFixed(1));
 
-    // Ease chop down proportionally
     const chop = 0.09 * (1 - t);
     setSlider('chopHeight', chop.toFixed(2));
 
     if (t >= 1) {
-      phase = 'idle'; // ramp complete, ocean is flat
+      phase = 'idle';
     }
   }
 }
@@ -172,7 +192,6 @@ export function endTutorial() {
   hideMessage();
   const btn = getDoneBtn();
   if (btn) btn.style.display = 'none';
-  // Return to main menu
   document.getElementById('menu-overlay').classList.remove('hidden');
   document.getElementById('hud-timer').style.display = 'none';
   document.getElementById('hud-boost').style.display = 'none';

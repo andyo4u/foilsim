@@ -778,13 +778,13 @@ function initOcean() {
         col = mix(col, vec3(1.0), smoothstep(0.3, 0.7, vFoam) * 0.5);
 
         // ── Pocket highlight (tutorial) ──
-        if(uShowPocket>0.5){
+        if(uShowPocket>0.01){
           float hFactor=smoothstep(-uSwell1.w*0.1,uSwell1.w*0.35,vHeight);
           float faceFactor=smoothstep(-0.05,0.2,-dot(N.xz,uSwell1.xy));
           float pocket=hFactor*faceFactor;
           float pulse=0.75+0.25*sin(uTime*2.5);
           vec3 pocketCol=vec3(0.1,1.0,0.5);
-          col=mix(col,pocketCol,pocket*pulse*0.85);
+          col=mix(col,pocketCol,pocket*pulse*0.85*uShowPocket);
         }
 
         // Distance fog
@@ -898,13 +898,13 @@ function initOcean() {
         float fp=noise(vWorldPos.xz*1.5+uTime*.2)*.5+.5;fp*=noise(vWorldPos.xz*4.-uTime*.15)*.5+.5;
         col=mix(col,uFoamColor*(.8+.2*fp),smoothstep(.15,.6,vFoam*fp)*.85);
         // ── Pocket highlight (tutorial) ──
-        if(uShowPocket>0.5){
+        if(uShowPocket>0.01){
           float hFactor=smoothstep(-uSwell1.w*0.1,uSwell1.w*0.35,vHeight);
           float faceFactor=smoothstep(-0.05,0.2,-dot(N.xz,uSwell1.xy));
           float pocket=hFactor*faceFactor;
           float pulse=0.75+0.25*sin(uTime*2.5);
           vec3 pocketCol=vec3(0.1,1.0,0.7);
-          col=mix(col,pocketCol,pocket*pulse*0.75);
+          col=mix(col,pocketCol,pocket*pulse*0.75*uShowPocket);
         }
         float fog=1.-exp(-cd*.0012);
         col=mix(col,mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),fog);

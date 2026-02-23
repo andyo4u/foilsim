@@ -10,12 +10,11 @@
 //    "drop-back"   — "Drop back a bump if you need more power" for 5s.
 //    "leapfrog"    — "Speed lets you leap-frog forward" for 5s.
 //    "turning"     — "Turning generates some speed" for 5s. Pocket glow off.
-//    "weight-back" — "Weight back will slow you down" for 5s.
-//    "lean-back"   — "Lean back to get tighter turns" for 5s.
+//    "lean-back"   — "Lean back to tighten your turn but lose some speed" for 5s.
 //    "hunt-sets"   — "Hunt for sets" for 10s. DEM render, camera zooms out.
-//    "drone"       — "Control your HoverAir AQUA Drone" for 5s.
+//    "drone"       — "Control your Drone with mouse or touch screen" for 5s.
 //                    Normal render, camera zooms back in.
-//    "ready"       — "Ready to rip". Stoked button appears.
+//    "ready"       — "You are ready to rip". Stoked button appears.
 //
 //  No timer — rider exits via "Stoked" button when ready.
 //  No power-ups in tutorial (handled in main.js).
@@ -51,7 +50,10 @@ let pumpHoldTimer = 0;            // 2s hold after reaching foiling speed
 let savedRenderMode = 0;          // stash render mode before DEM switch
 let savedCamDist = 32;            // stash camera distance before zoom-out
 let targetCamDist = 32;           // smooth zoom target
+let savedOffsetTheta = 0;         // stash camera orbit angle before drone spin
+let targetPocketGlow = 0;         // smooth pocket glow target (0→1)
 const CAM_LERP = 0.03;           // zoom smoothing factor per frame
+const GLOW_LERP = 0.05;          // pocket glow fade speed per frame
 
 // DOM refs (cached on first use)
 let hudEl = null;
@@ -100,6 +102,8 @@ export function onTutorialStart() {
   pumpHoldTimer = 0;
   savedCamDist = state.cam.dist;
   targetCamDist = state.cam.dist;
+  savedOffsetTheta = 0;
+  targetPocketGlow = 0;
   if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 0;
   showMessage('Pump to get on foil');
   const btn = getDoneBtn();
@@ -116,6 +120,13 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
 
   // Smooth camera zoom each frame
   state.cam.dist += (targetCamDist - state.cam.dist) * CAM_LERP;
+
+  // Smooth pocket glow fade each frame
+  if (state.oceanMat) {
+    const u = state.oceanMat.uniforms.uShowPocket;
+    u.value += (targetPocketGlow - u.value) * GLOW_LERP;
+    if (u.value < 0.01) u.value = 0;
+  }
 
 
   if (phase === 'pump') {
@@ -147,7 +158,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
     if (phaseTimer >= 5) {
       phase = 'pocket';
       phaseTimer = 0;
-      if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 1;
+      targetPocketGlow = 1;
       showMessage('Find the pocket for max lift');
     }
     return;
@@ -186,20 +197,10 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
   if (phase === 'turning') {
     phaseTimer += dt;
     if (phaseTimer >= 5) {
-      if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 0;
-      phase = 'weight-back';
-      phaseTimer = 0;
-      showMessage('Weight back will slow you down');
-    }
-    return;
-  }
-
-  if (phase === 'weight-back') {
-    phaseTimer += dt;
-    if (phaseTimer >= 5) {
+      targetPocketGlow = 0;
       phase = 'lean-back';
       phaseTimer = 0;
-      showMessage('Lean back to get tighter turns');
+      showMessage('Lean back to tighten your turn but lose some speed');
     }
     return;
   }
@@ -227,17 +228,24 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
       // Switch back to normal render and zoom camera in
       if (state.oceanMat) state.oceanMat.uniforms.uRenderMode.value = savedRenderMode;
       targetCamDist = savedCamDist;
-      showMessage('Control your HoverAir AQUA Drone');
+      // Start 360 camera orbit — save current offset, reset to 0
+      savedOffsetTheta = state.cam.offsetTheta;
+      state.cam.offsetTheta = 0;
+      showMessage('Control your Drone with mouse or touch screen');
     }
     return;
   }
 
   if (phase === 'drone') {
     phaseTimer += dt;
+    // Smooth 360° orbit: ramp offsetTheta from 0 → 2π over 5s
+    const t = Math.min(phaseTimer / 5, 1);
+    state.cam.offsetTheta = t * Math.PI * 2;
     if (phaseTimer >= 5) {
       phase = 'ready';
       phaseTimer = 0;
-      showMessage('Ready to rip');
+      state.cam.offsetTheta = savedOffsetTheta;
+      showMessage('You are ready to rip');
       const btn = getDoneBtn();
       if (btn) btn.style.display = 'block';
     }
@@ -250,11 +258,13 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
 /** Called when the rider clicks "Stoked, I'm done learning". */
 export function endTutorial() {
   phase = 'idle';
+  targetPocketGlow = 0;
   if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 0;
   // Restore render mode and camera in case tutorial ended mid-sequence
   if (state.oceanMat) state.oceanMat.uniforms.uRenderMode.value = savedRenderMode;
   targetCamDist = savedCamDist;
   state.cam.dist = savedCamDist;
+  state.cam.offsetTheta = savedOffsetTheta;
   hideMessage();
   const btn = getDoneBtn();
   if (btn) btn.style.display = 'none';

@@ -273,6 +273,7 @@ setQuality('auto');
 
 // Mobile detection — enable touch pads, gear button
 const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+state.isMobile = isMobile;
 if (isMobile) {
   document.body.classList.add('mobile-device');
   document.querySelectorAll('.touch-pad').forEach(p => p.classList.add('mobile-active'));

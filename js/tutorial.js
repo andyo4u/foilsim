@@ -12,7 +12,7 @@
 //    "turning"     — "Turning generates some speed" for 5s. Pocket glow off.
 //    "lean-back"   — "Lean back to tighten your turn but lose some speed" for 5s.
 //    "hunt-sets"   — "Hunt for sets" for 10s. DEM render, camera zooms out.
-//    "drone"       — "Control your Drone with mouse or touch screen" for 5s.
+//    "drone"       — "Control your drone with mouse/touchscreen" for 5s.
 //                    Normal render, camera zooms back in.
 //    "ready"       — "You are ready to rip". Stoked button appears.
 //
@@ -231,7 +231,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
       // Start 360 camera orbit — save current offset, reset to 0
       savedOffsetTheta = state.cam.offsetTheta;
       state.cam.offsetTheta = 0;
-      showMessage('Control your Drone with mouse or touch screen');
+      showMessage(state.isMobile ? 'Control your drone with touchscreen' : 'Control your drone with mouse');
     }
     return;
   }

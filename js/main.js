@@ -98,6 +98,7 @@ import { initOcean, updateEnvMap, getWaveHeight, getWaveSlope, getSwellHeight,
 import { initFoil, emitSpray, updateSpray, updateWake, updateStreamer, toggleFreeCam, updateCamera } from './foil.js';
 import { initTerrain, rebuildTerrain, restartLevel, getRealTerrainHeight,
          RT_WATER_Y, RT_WORLD_W, RT_WORLD_D, terrainConfigs } from './terrain.js';
+import { onTutorialStart, updateTutorial, endTutorial } from './tutorial.js';
 
 // ═══════════════════════════
 // THREE.JS CORE SETUP
@@ -238,6 +239,21 @@ initOcean();
 initFoil();
 initTerrain();
 
+// ── Power-up orb mesh ──
+{
+  const puGeo = new THREE.SphereGeometry(1.5, 16, 12);
+  const puMat = new THREE.MeshStandardMaterial({
+    color: 0xff8800, emissive: 0xff6600, emissiveIntensity: 0.6,
+    roughness: 0.3, metalness: 0.4,
+  });
+  const puMesh = new THREE.Mesh(puGeo, puMat);
+  const puLight = new THREE.PointLight(0xff8800, 2, 15);
+  puMesh.add(puLight);
+  puMesh.visible = false;
+  scene.add(puMesh);
+  state.powerUp.mesh = puMesh;
+}
+
 // Audio init on first user interaction
 ['click', 'keydown', 'touchstart'].forEach(evt => {
   window.addEventListener(evt, initAudio, { once: true });
@@ -245,6 +261,15 @@ initTerrain();
 
 // Start with Auto quality — self-tunes FPS from the first frame
 setQuality('auto');
+
+// Populate version displays from the hidden version label
+{
+  const ver = document.getElementById('version-label').textContent;
+  const mv = document.getElementById('menu-version');
+  const sv = document.getElementById('score-version');
+  if (mv) mv.textContent = ver;
+  if (sv) sv.textContent = ver;
+}
 
 // Mobile detection — enable touch pads, gear button
 const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -262,9 +287,10 @@ const QUALITY_PRESETS = {
   med:   { oceanSegments: 256, oceanSize: 600, pixelRatioCap: 1.5, sprayBudget: 100, wakeBudget: 50, streamerBudget: 80  },
   high:  { oceanSegments: 384, oceanSize: 800, pixelRatioCap: 2,   sprayBudget: 150, wakeBudget: 65, streamerBudget: 100 },
   ultra: { oceanSegments: 512, oceanSize: 800, pixelRatioCap: 2,   sprayBudget: 200, wakeBudget: 80, streamerBudget: 120 },
+  max:   { oceanSegments: 1000, oceanSize: 1200, pixelRatioCap: 2,   sprayBudget: 200, wakeBudget: 80, streamerBudget: 120 },
 };
 
-const QUALITY_LEVELS = ['low', 'med', 'high', 'ultra'];
+const QUALITY_LEVELS = ['low', 'med', 'high', 'ultra', 'max'];
 
 function setQuality(level) {
   if (level === 'auto') {
@@ -323,6 +349,83 @@ window.setRenderMode     = setRenderMode;
 window.setQuality        = setQuality;
 
 // ═══════════════════════════
+// GAME LOOP — Menu → Ride → Score
+// ═══════════════════════════
+
+function startRide(locationPreset) {
+  // Reset score & timer
+  state.rideTimer = 120;
+  state.rideStarted = false; // timer doesn't tick until first pump
+  state.score.distance = 0;
+  state.score.topSpeed = 0;
+  state.score.pocketTime = 0;
+  state.score.total = 0;
+  state.infoBarFadeTimer = 0;
+
+  // Reset power-up
+  const pu = state.powerUp;
+  pu.active = false;
+  pu.boostActive = false;
+  pu.boostTimer = 0;
+  pu.spawnTimer = 15 + Math.random() * 10; // first spawn 15-25s in
+  if (pu.mesh) pu.mesh.visible = false;
+
+  // Load location and restart
+  rebuildTerrain(locationPreset);
+  restartLevel();
+
+  // Tutorial: apply gentle wave/physics preset after terrain build
+  if (locationPreset === 'tutorial') {
+    onTutorialStart();
+  }
+
+  // Track starting position
+  state.ridePrevX = state.foil.x;
+  state.ridePrevZ = state.foil.z;
+
+  // UI transitions
+  const isTutorial = locationPreset === 'tutorial';
+  document.getElementById('menu-overlay').classList.add('hidden');
+  document.getElementById('score-overlay').classList.add('hidden');
+  document.getElementById('hud-timer').style.display = isTutorial ? 'none' : 'block';
+  document.getElementById('hud-timer').classList.remove('warning');
+  document.getElementById('hud-timer').textContent = '2:00';
+  document.getElementById('hud-boost').style.display = 'none';
+  document.getElementById('info-bar').style.opacity = '';
+
+  state.gamePhase = 'riding';
+}
+
+function endRide() {
+  state.gamePhase = 'score';
+
+  // Compute final score
+  const s = state.score;
+  s.total = Math.round(s.distance + 2 * s.pocketTime + 10 * s.topSpeed);
+
+  // Populate score overlay
+  document.getElementById('score-distance').textContent = (s.distance / 1609.34).toFixed(2) + ' mi';
+  document.getElementById('score-topspeed').textContent = s.topSpeed.toFixed(1) + ' mph';
+  document.getElementById('score-pocket').textContent = s.pocketTime.toFixed(1) + 's';
+  document.getElementById('score-total').textContent = s.total;
+
+  // Show score overlay, hide timer
+  document.getElementById('score-overlay').classList.remove('hidden');
+  document.getElementById('hud-timer').style.display = 'none';
+  document.getElementById('hud-boost').style.display = 'none';
+}
+
+function rideAgain() {
+  document.getElementById('score-overlay').classList.add('hidden');
+  document.getElementById('menu-overlay').classList.remove('hidden');
+  state.gamePhase = 'menu';
+}
+
+window.startRide = startRide;
+window.rideAgain = rideAgain;
+window.endTutorial = endTutorial;
+
+// ═══════════════════════════
 // MAIN LOOP
 // ═══════════════════════════
 
@@ -333,6 +436,7 @@ let prevSunAngle = -1, prevSunDir = -1;
 // FPS counter
 let fpsFrames = 0, fpsLastTime = performance.now();
 const fpsLabel = document.getElementById('fps-label');
+const hudFps = document.getElementById('hud-fps');
 
 // Auto-quality FPS tracking
 let autoQFrames = [];
@@ -359,6 +463,7 @@ function animate() {
   if (fpsNow - fpsLastTime >= 500) {
     const fps = Math.round(fpsFrames / ((fpsNow - fpsLastTime) / 1000));
     fpsLabel.textContent = fps + ' fps';
+    hudFps.textContent = fps + ' fps';
     fpsFrames = 0; fpsLastTime = fpsNow;
 
     // Auto-quality adjustment
@@ -481,10 +586,12 @@ function animate() {
     u.uShallowColor.value.set(lerp(.02, 0, db), lerp(.06, .15, db), lerp(.12, .3, db));
   }
 
-  // ── FOIL PHYSICS ──
+  const cam = state.cam;
+
+  // ── FOIL PHYSICS (only during ride) ──
+  if (state.gamePhase === 'riding') {
   const foil = state.foil;
   const input = state.input;
-  const cam = state.cam;
 
   // Banking turn
   const maxRoll = 0.55;
@@ -522,6 +629,9 @@ function animate() {
   const stallMs = stallKts / 1.94384;
   const isF = foil.speed > stallMs;
 
+  // Tutorial phase machine (only active when tutorial location is selected)
+  updateTutorial(dt, foil.speed, stallMs);
+
   // Pitch
   const autoPitch = isF ? -0.05 : 0;
   foil.pitch = lerp(foil.pitch, autoPitch, dt * 3 * getVal('sbStability'));
@@ -533,7 +643,7 @@ function animate() {
   // accumulation, and verify the sbWaveEnergy slider range/default.
   const maxEnergy = getVal('sbBatteryCap');
   const drainMul = getVal('sbBatteryDrain');
-  foil.energy = Math.min(maxEnergy, foil.energy + 0.06 * dt);
+  foil.energy = Math.min(maxEnergy, foil.energy + 0.015 * dt);
 
   let pf = 0;
   const isPump = input.up && !input.down;
@@ -545,15 +655,20 @@ function animate() {
     pf += 1.8;
   }
 
+  // Start ride timer on first pump input
+  if ((isPump || isPowerPump) && !state.rideStarted) {
+    state.rideStarted = true;
+  }
+
   if (isPump && foil.energy > 0.02) {
     pumpPhase += dt * 9;
-    const pumpCost = 0.18 * drainMul * dt;
+    const pumpCost = 0.36 * drainMul * dt;
     foil.energy = Math.max(0, foil.energy - pumpCost);
     pf += 3.0 * pumpMul * Math.min(1, foil.energy * 5);
     foil.pitch += Math.sin(pumpPhase * 2) * 0.08;
   } else if (isPowerPump && foil.energy > 0.05) {
     pumpPhase += dt * 12;
-    const powerCost = 0.35 * drainMul * dt;
+    const powerCost = 0.70 * drainMul * dt;
     foil.energy = Math.max(0, foil.energy - powerCost);
     pf += 5.5 * pumpMul * Math.min(1, foil.energy * 4);
     foil.pitch += Math.sin(pumpPhase * 2) * 0.15;
@@ -581,7 +696,8 @@ function animate() {
 
   foil.speed += (slopeForce + pf + windForce) * dt;
   foil.speed -= drag * dt;
-  foil.speed = Math.max(0, Math.min(foil.speed, getVal('sbTopSpeed')));
+  const speedCap = state.powerUp.boostActive ? getVal('sbTopSpeed') * 1.5 : getVal('sbTopSpeed');
+  foil.speed = Math.max(0, Math.min(foil.speed, speedCap));
 
   const tgtRH = isF ? .6 + foil.pitch * .5 : 0;
   foil.rideH = lerp(foil.rideH, tgtRH, dt * 3);
@@ -701,8 +817,8 @@ function animate() {
   updateStreamer(state.streamerR, state._tipRWorld.x, state._tipRWorld.y, state._tipRWorld.z, foil.speed);
 
   // HUD
-  const curKts = foil.speed * 1.94384;
-  document.getElementById('hud-speed').textContent = curKts.toFixed(1);
+  const curMph = foil.speed * 2.23694;
+  document.getElementById('hud-speed').textContent = curMph.toFixed(1);
 
   // Acceleration indicator
   const accelEl = document.getElementById('hud-accel');
@@ -724,7 +840,10 @@ function animate() {
 
   // Status
   const st = document.getElementById('hud-status');
-  if (foil.speed <= 0.3) {
+  if (foil.energy / getVal('sbBatteryCap') <= 0.10) {
+    st.textContent = '⛽ Gassed';
+    st.style.color = '#ff6040';
+  } else if (foil.speed <= 0.3) {
     st.textContent = '⚠ STALLED';
     st.style.color = '#ff5555';
   } else if (foil.speed < 2.5) {
@@ -797,9 +916,115 @@ function animate() {
 
   foil.prevWH = wH;
 
+  // ── POWER-UP: Spawn, Collect, Boost (disabled in tutorial) ──
+  if (state.activeBgPreset !== 'tutorial') {
+    const pu = state.powerUp;
+
+    // Spawn timer — only when no orb visible and not boosting
+    if (!pu.active && !pu.boostActive) {
+      pu.spawnTimer -= dt;
+      if (pu.spawnTimer <= 0) {
+        // Spawn 60-100m ahead, 30-60m to one side (requires turning)
+        const ahead = 60 + Math.random() * 40;
+        const lateral = (Math.random() < 0.5 ? -1 : 1) * (30 + Math.random() * 30);
+        const fwd_x = Math.sin(foil.heading);
+        const fwd_z = Math.cos(foil.heading);
+        pu.x = foil.x + fwd_x * ahead + fwd_z * lateral;
+        pu.z = foil.z + fwd_z * ahead - fwd_x * lateral;
+        pu.active = true;
+        pu.mesh.visible = true;
+        pu.nextSpawnDelay = 20 + Math.random() * 15;
+      }
+    }
+
+    // Orb update — bob on water, spin
+    if (pu.active && pu.mesh) {
+      const orbY = getWaveHeight(pu.x, pu.z, t) + (state.realTerrainMesh ? RT_WATER_Y() : 0) + 2;
+      pu.mesh.position.set(pu.x, orbY, pu.z);
+      pu.mesh.rotation.y += dt * 2;
+
+      // Collection check — distance < 6m
+      const cdx = foil.x - pu.x;
+      const cdz = foil.z - pu.z;
+      if (Math.sqrt(cdx * cdx + cdz * cdz) < 6) {
+        pu.active = false;
+        pu.mesh.visible = false;
+        pu.boostActive = true;
+        pu.boostTimer = pu.boostDuration;
+        document.getElementById('hud-boost').style.display = 'block';
+      }
+    }
+
+    // Active boost
+    if (pu.boostActive) {
+      foil.speed += pu.boostAmount * dt;
+      // Allow exceeding top speed by 1.5x during boost
+      const boostCap = getVal('sbTopSpeed') * 1.5;
+      foil.speed = Math.min(foil.speed, boostCap);
+
+      pu.boostTimer -= dt;
+      document.getElementById('hud-boost').textContent = 'TURBO BOOST ' + pu.boostTimer.toFixed(1) + 's';
+
+      // Extra spray during boost
+      if (foil.speed > 3 && Math.random() < 0.5) {
+        emitSpray(
+          foil.x - mx * 1.5, bY + 0.3, foil.z - mz * 1.5,
+          -mx * foil.speed * 0.5 + (Math.random() - 0.5) * 2,
+          2 + foil.speed * 0.15,
+          -mz * foil.speed * 0.5 + (Math.random() - 0.5) * 2,
+          Math.floor(Math.min(8, foil.speed * 0.6))
+        );
+      }
+
+      if (pu.boostTimer <= 0) {
+        pu.boostActive = false;
+        pu.boostTimer = 0;
+        pu.spawnTimer = pu.nextSpawnDelay;
+        document.getElementById('hud-boost').style.display = 'none';
+      }
+    }
+  }
+
+  // ── RIDE TIMER & SCORING ──
+  // Timer countdown — only starts after first pump (skipped in tutorial)
+  if (state.activeBgPreset !== 'tutorial') {
+    if (state.rideStarted) {
+      state.rideTimer -= dt;
+      if (state.rideTimer <= 0) { state.rideTimer = 0; endRide(); }
+    }
+    const mins = Math.floor(state.rideTimer / 60);
+    const secs = Math.floor(state.rideTimer % 60);
+    const timerEl = document.getElementById('hud-timer');
+    timerEl.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
+    if (state.rideTimer <= 10) timerEl.classList.add('warning');
+  }
+
+  // Distance tracking
+  const dx = foil.x - state.ridePrevX;
+  const dz = foil.z - state.ridePrevZ;
+  state.score.distance += Math.sqrt(dx * dx + dz * dz);
+  state.ridePrevX = foil.x;
+  state.ridePrevZ = foil.z;
+
+  // Top speed tracking
+  const curMphScore = foil.speed * 2.23694;
+  if (curMphScore > state.score.topSpeed) state.score.topSpeed = curMphScore;
+
+  // Pocket time tracking
+  if (normSwell > 0.8 && foil.speed > 3) state.score.pocketTime += dt;
+
+  // Info bar fade after 10 seconds of riding
+  state.infoBarFadeTimer += dt;
+  if (state.infoBarFadeTimer > 10) {
+    const fadeProgress = Math.min(1, (state.infoBarFadeTimer - 10) / 2);
+    document.getElementById('info-bar').style.opacity = 1 - fadeProgress;
+  }
+
+  } // end gamePhase === 'riding'
+
   // Camera
   if (!cam.drag && !cam.free) cam.offsetTheta *= 0.97;
-  cam.followSmooth = Math.abs(foil.roll) > 0.1 ? 0.08 : 0.04;
+  cam.followSmooth = Math.abs(state.foil.roll) > 0.1 ? 0.08 : 0.04;
   updateCamera();
 
   // Center sky, clouds, silhouettes on camera

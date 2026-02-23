@@ -1,6 +1,6 @@
 # FoilSim — Developer Notes
 
-> Last updated: v0.89
+> Last updated: v0.90
 
 ## Project Overview
 
@@ -162,6 +162,7 @@ Defined in `terrainConfigs` object in terrain.js:
 | v0.87   | HUD version/FPS below wave energy (REVERTED — caused half-screen bug) |
 | v0.88   | Version bump after revert to v0.86 baseline |
 | v0.89   | Remove mini-map tracker completely from codebase |
+| v0.90   | Version bump for repo access verification |
 
 ## Reverted Features (Available for Re-Implementation)
 
@@ -178,6 +179,10 @@ background. Featured heading arrow, distance tracking, and Strava-like red glow
 path rendering. Removed to clean up the codebase — the Strava integration is
 preserved as a future TODO for a more comprehensive implementation (ride summary
 panel with distance, time, avg speed, elevation profile, etc.).
+
+## Future Features
+
+- **Multiplayer** — Shared sessions where multiple riders are visible on the same ocean. Could use WebRTC or WebSocket relay for real-time position/state sync.
 
 ## Commit Conventions
 
@@ -212,3 +217,12 @@ C:\foilsim\
 │   └── maliko_satellite_2048.jpg
 └── mask.html               Standalone heightmap mask tool
 ```
+
+## possible names
+
+foilbrain.io
+foil-brain.com
+foil-brained.com
+foilrunner.com
+
+foilbrain.com - forsale..

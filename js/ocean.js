@@ -95,6 +95,7 @@ function initOcean() {
       uFogColor:{value:new THREE.Color(.55,.7,.85)},uFogSunColor:{value:new THREE.Color(.8,.75,.6)},
       uRiverMask:{value:null},uUseRiverMask:{value:0},
       uRiverBounds:{value:new THREE.Vector4(-RT_WORLD_W()/2, -RT_WORLD_D()/2, RT_WORLD_W()/2, RT_WORLD_D()/2)},
+      uShowPocket:{value:0},
       uRenderMode:{value:0},
     },
     vertexShader: `
@@ -136,8 +137,9 @@ function initOcean() {
     }`,
     fragmentShader: `
     precision highp float;
-    uniform float uTime;uniform float uRenderMode;
+    uniform float uTime;uniform float uRenderMode;uniform float uShowPocket;
     uniform vec3 uSunDir,uCamPos,uDeepColor,uShallowColor,uFoamColor,uFogColor,uFogSunColor;
+    uniform vec4 uSwell1;
     uniform sampler2D uRiverMask;uniform float uUseRiverMask;uniform vec4 uRiverBounds;
     varying vec3 vWorldPos,vNormal;varying float vFoam,vHeight;
     vec2 hash2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
@@ -775,6 +777,16 @@ function initOcean() {
         // Foam as white highlights
         col = mix(col, vec3(1.0), smoothstep(0.3, 0.7, vFoam) * 0.5);
 
+        // ── Pocket highlight (tutorial) ──
+        if(uShowPocket>0.5){
+          float hFactor=smoothstep(-uSwell1.w*0.1,uSwell1.w*0.35,vHeight);
+          float faceFactor=smoothstep(-0.05,0.2,-dot(N.xz,uSwell1.xy));
+          float pocket=hFactor*faceFactor;
+          float pulse=0.75+0.25*sin(uTime*2.5);
+          vec3 pocketCol=vec3(0.1,1.0,0.5);
+          col=mix(col,pocketCol,pocket*pulse*0.85);
+        }
+
         // Distance fog
         float fog = 1.0 - exp(-cd * 0.0012);
         vec3 fogCol = vec3(0.45, 0.55, 0.70);
@@ -879,11 +891,20 @@ function initOcean() {
         vec3 wc=mix(uDeepColor,uShallowColor,smoothstep(-1.,2.,vHeight)*.5+fr*.3);
         vec3 sssC=vec3(0,.35,.3)*pow(max(dot(V,-L+N*.6),0.),3.)*.3;
         vec3 H=normalize(L+V);vec3 sunS=vec3(1,.95,.8)*(pow(max(dot(N,H),0.),512.)*3.+pow(max(dot(N,H),0.),64.)*.6);
-        vec3 R=reflect(-V,N);vec3 skyR=mix(vec3(.55,.7,.85),vec3(.12,.25,.55),pow(max(R.y,0.),.5));
-        skyR+=vec3(1,.9,.7)*pow(max(dot(R,L),0.),64.)*.5;
+        vec3 R=reflect(-V,N);vec3 skyR=mix(uFogColor,uFogColor*.3+vec3(.02,.05,.15),pow(max(R.y,0.),.5));
+        float srDot=max(dot(R,L),0.);skyR+=uFogSunColor*pow(srDot,8.)*.3;skyR+=vec3(1,.9,.7)*pow(srDot,64.)*.5;
         vec3 col=mix(wc+sssC,skyR,fr)+sunS;
         float fp=noise(vWorldPos.xz*1.5+uTime*.2)*.5+.5;fp*=noise(vWorldPos.xz*4.-uTime*.15)*.5+.5;
         col=mix(col,uFoamColor*(.8+.2*fp),smoothstep(.15,.6,vFoam*fp)*.85);
+        // ── Pocket highlight (tutorial) ──
+        if(uShowPocket>0.5){
+          float hFactor=smoothstep(-uSwell1.w*0.1,uSwell1.w*0.35,vHeight);
+          float faceFactor=smoothstep(-0.05,0.2,-dot(N.xz,uSwell1.xy));
+          float pocket=hFactor*faceFactor;
+          float pulse=0.75+0.25*sin(uTime*2.5);
+          vec3 pocketCol=vec3(0.1,1.0,0.7);
+          col=mix(col,pocketCol,pocket*pulse*0.75);
+        }
         float fog=1.-exp(-cd*.0012);
         col=mix(col,mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),fog);
         gl_FragColor=vec4(col, alpha);

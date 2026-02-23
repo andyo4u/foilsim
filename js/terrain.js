@@ -556,11 +556,6 @@ export const bgPresets = {
     maxHeight: 120,
     cliffs: [] // no terrain -- pure open water
   },
-  'tutorial': {
-    label: 'Tutorial',
-    maxHeight: 120,
-    cliffs: [] // pure open water, no obstacles
-  },
   'gorge-real': {
     label: 'Gorge HD',
     maxHeight: 120,

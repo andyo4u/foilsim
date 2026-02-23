@@ -98,6 +98,7 @@ import { initOcean, updateEnvMap, getWaveHeight, getWaveSlope, getSwellHeight,
 import { initFoil, emitSpray, updateSpray, updateWake, updateStreamer, toggleFreeCam, updateCamera } from './foil.js';
 import { initTerrain, rebuildTerrain, restartLevel, getRealTerrainHeight,
          RT_WATER_Y, RT_WORLD_W, RT_WORLD_D, terrainConfigs } from './terrain.js';
+import { onTutorialStart } from './tutorial.js';
 
 // ═══════════════════════════
 // THREE.JS CORE SETUP
@@ -375,7 +376,7 @@ function startRide(locationPreset) {
 
   // Tutorial: apply gentle wave/physics preset after terrain build
   if (locationPreset === 'tutorial') {
-    applyPreset('tutorial');
+    onTutorialStart();
   }
 
   // Track starting position

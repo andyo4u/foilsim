@@ -68,16 +68,6 @@ export const presets = {
     swell2Height:1.8, swell2Period:7, swell2Dir:190,
     swell3Height:1.2, swell3Period:5.5, swell3Dir:45
   },
-  tutorial: {
-    sunAngle:12, sunDir:260, cloudCover:0.25,
-    chopHeight:0.15, chopDir:180,
-    swell1Height:0.8, swell1Period:14, swell1Dir:270,
-    swell2Height:0.3, swell2Period:10, swell2Dir:250,
-    swell3Height:0, swell3Period:16, swell3Dir:200,
-    sbGlide:1.3, sbPumpPower:1.2, sbTurnSpeed:1.0, sbTopSpeed:22, sbStallSpeed:3,
-    sbWindSpeed:8, sbWindDir:270,
-    sbBatteryCap:1.5, sbBatteryDrain:0.7, sbWaveEnergy:1.2, sbStability:1.3, sbDrag:0.8
-  },
   gorge: {
     sunAngle:11, sunDir:110, cloudCover:0.45,
     chopHeight:0.49, chopDir:0,

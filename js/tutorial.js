@@ -2,14 +2,14 @@
 //  tutorial.js  –  Guided tutorial with message sequence & swell ramp
 //
 //  Phases:
-//    "pump"     — Zero speed, waves present. "Pump to get on foil".
-//    "foiling"  — "Foiling!" for 3s.
-//    "doing-it" — "You are doing it" for 3s.
-//    "catch"    — "Catch the wave to keep speed" for 4s.
-//    "pocket"   — "Find the pocket for max lift" for 4s.
+//    "pump"      — Zero speed, waves present. "Pump to get on foil".
+//    "foiling"   — "Foiling!" for 3s.
+//    "catch"     — "Catch the wave to keep speed" for 4s.
+//    "pocket"    — "Find the pocket for max lift" for 4s.
 //    "drop-back" — "Drop back a bump if you need more power" for 4s.
-//    "leapfrog" — "Speed lets you leap-frog forward" for 4s.
-//    "ramping"  — Chop fades over 30s.
+//    "leapfrog"  — "Speed lets you leap-frog forward" for 4s.
+//    "hunt-sets" — "Hunt for sets" for 4s.
+//    "ramping"   — Chop fades over 30s.
 //    "gassed"   — Energy below 10%. "Gassed" for 3s → back to pump.
 //
 //  No timer — rider exits via "Stoked" button when ready.
@@ -136,16 +136,6 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
   if (phase === 'foiling') {
     phaseTimer += dt;
     if (phaseTimer >= 3) {
-      phase = 'doing-it';
-      phaseTimer = 0;
-      showMessage('You are doing it');
-    }
-    return;
-  }
-
-  if (phase === 'doing-it') {
-    phaseTimer += dt;
-    if (phaseTimer >= 3) {
       phase = 'catch';
       phaseTimer = 0;
       showMessage('Catch the wave to keep speed');
@@ -185,6 +175,16 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
   }
 
   if (phase === 'leapfrog') {
+    phaseTimer += dt;
+    if (phaseTimer >= 4) {
+      phase = 'hunt-sets';
+      phaseTimer = 0;
+      showMessage('Hunt for sets');
+    }
+    return;
+  }
+
+  if (phase === 'hunt-sets') {
     phaseTimer += dt;
     if (phaseTimer >= 4) {
       hideMessage();

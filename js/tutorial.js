@@ -2,10 +2,10 @@
 //  tutorial.js  –  Guided tutorial with flat start & swell ramp
 //
 //  Phases:
-//    "push"    — Flat ocean. Prompt to pump for speed.
-//    "foiling" — "Foiling!" message for 3s, then fade.
-//    "ramping" — Ramp swell1Height 0 → 3.0m, then ease down to 1.0m
-//                over 30s so the learner feels big waves then settles.
+//    "pump"    — Waves present, zero speed. "Pump to get on foil".
+//    "foiling" — "Foiling!" message for 3s, then starts swell ramp.
+//    "ramping" — Ease swell1Height from 2.0 → 0 over 30s.
+//    "gassed"  — Energy depleted. "Gassed" message.
 //
 //  No timer — rider exits via "Stoked" button when ready.
 //
@@ -17,12 +17,12 @@ import { state } from './state.js';
 import { presets, applyPreset, updateVal } from './helpers.js';
 import { bgPresets } from './terrain.js';
 
-// ── Tutorial preset: starts FLAT — all wave heights zero ──
+// ── Tutorial preset: waves present but rider starts at zero speed ──
 presets.tutorial = {
   sunAngle:12, sunDir:260, cloudCover:0.25,
-  chopHeight:0, chopDir:180,
-  swell1Height:0, swell1Period:14, swell1Dir:270,
-  swell2Height:0, swell2Period:10, swell2Dir:250,
+  chopHeight:0.09, chopDir:180,
+  swell1Height:2, swell1Period:5, swell1Dir:270,
+  swell2Height:1.9, swell2Period:10, swell2Dir:250,
   swell3Height:0, swell3Period:16, swell3Dir:200,
   sbGlide:1.3, sbPumpPower:1.2, sbTurnSpeed:1.0, sbTopSpeed:22, sbStallSpeed:3,
   sbWindSpeed:8, sbWindDir:270,
@@ -37,12 +37,13 @@ bgPresets['tutorial'] = {
 };
 
 // ── Tutorial state ──
-let phase = 'idle';    // 'idle' | 'push' | 'foiling' | 'ramping'
+let phase = 'idle';    // 'idle' | 'pump' | 'foiling' | 'ramping' | 'gassed'
 let phaseTimer = 0;
 let swellRampTime = 0;
-const SWELL_START  = 3.0;   // initial big swell after foiling
-const SWELL_END    = 1.0;   // settle-down target
-const RAMP_DURATION = 30;   // seconds to ease from start → end
+const SWELL_START   = 2.0;   // starting swell1Height
+const SWELL_END     = 0;     // ramp down to flat
+const RAMP_DURATION = 30;    // seconds to ease from start → end
+let wasGassed = false;        // track if we already showed "Gassed"
 
 // DOM refs (cached on first use)
 let hudEl = null;
@@ -84,11 +85,15 @@ function setSlider(id, val) {
 /** Called from startRide() when locationPreset === 'tutorial'. */
 export function onTutorialStart() {
   applyPreset('tutorial');
-  phase = 'push';
+  // Start at zero speed — rider must pump
+  state.foil.speed = 0;
+  state.foil.rideH = 0;
+  phase = 'pump';
   phaseTimer = 0;
   swellRampTime = 0;
-  showMessage('Push forward to gain speed');
-  // Hide the done button until ramping starts
+  wasGassed = false;
+  showMessage('Pump to get on foil');
+  // Hide the done button until foiling phase completes
   const btn = getDoneBtn();
   if (btn) btn.style.display = 'none';
 }
@@ -102,7 +107,26 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
   if (state.activeBgPreset !== 'tutorial') return;
   if (phase === 'idle') return;
 
-  if (phase === 'push') {
+  // "Gassed" detection — show message when energy depleted (any phase)
+  if (phase !== 'gassed' && state.foil.energy <= 0.02 && foilSpeed < stallMs) {
+    phase = 'gassed';
+    phaseTimer = 0;
+    showMessage('Gassed');
+    return;
+  }
+
+  if (phase === 'gassed') {
+    phaseTimer += dt;
+    // Clear after 3s, go back to pump phase so they can try again
+    if (phaseTimer >= 3) {
+      hideMessage();
+      phase = 'pump';
+      showMessage('Pump to get on foil');
+    }
+    return;
+  }
+
+  if (phase === 'pump') {
     // Wait until the rider is foiling
     if (foilSpeed > stallMs) {
       phase = 'foiling';
@@ -118,9 +142,6 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
       hideMessage();
       phase = 'ramping';
       swellRampTime = 0;
-      // Jump swell to the starting height immediately
-      setSlider('swell1Height', SWELL_START.toFixed(1));
-      setSlider('chopHeight', '0.15');
       // Show the done button
       const btn = getDoneBtn();
       if (btn) btn.style.display = 'block';
@@ -131,16 +152,16 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
   if (phase === 'ramping') {
     swellRampTime += dt;
     const t = Math.min(1, swellRampTime / RAMP_DURATION);
-    // Ease from SWELL_START down to SWELL_END
+    // Ease swell1Height from SWELL_START down to SWELL_END
     const h = SWELL_START + (SWELL_END - SWELL_START) * t;
     setSlider('swell1Height', h.toFixed(1));
 
     // Ease chop down proportionally
-    const chop = 0.15 * (1 - t * 0.5); // 0.15 → 0.075
+    const chop = 0.09 * (1 - t);
     setSlider('chopHeight', chop.toFixed(2));
 
     if (t >= 1) {
-      phase = 'idle'; // ramp complete, settled at gentle swell
+      phase = 'idle'; // ramp complete, ocean is flat
     }
   }
 }

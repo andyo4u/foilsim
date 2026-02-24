@@ -137,7 +137,7 @@ export const state = {
 
   // ── Power-up ────────────────────────────────────────────
   powerUp: {
-    mesh: null, active: false, x: 0, z: 0,
+    active: false, x: 0, z: 0,
     spawnTimer: 0, nextSpawnDelay: 25,
     boostActive: false, boostTimer: 0, boostDuration: 5, boostAmount: 4.12,
   },

@@ -239,29 +239,7 @@ initOcean();
 initFoil();
 initTerrain();
 
-// ── Power-up water glow disc ──
-{
-  const puGeo = new THREE.CircleGeometry(3, 32);
-  // Radial alpha falloff: bright center, transparent edge
-  const colors = new Float32Array(puGeo.attributes.position.count * 3);
-  for (let i = 0; i < puGeo.attributes.position.count; i++) {
-    const px = puGeo.attributes.position.getX(i);
-    const py = puGeo.attributes.position.getY(i);
-    const r = Math.sqrt(px * px + py * py) / 3;
-    const fade = Math.max(0, 1 - r * r);
-    colors[i * 3] = fade; colors[i * 3 + 1] = fade; colors[i * 3 + 2] = fade;
-  }
-  puGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  const puMat = new THREE.MeshBasicMaterial({
-    color: 0xff2020, transparent: true, opacity: 0.85,
-    blending: THREE.AdditiveBlending, depthWrite: false, vertexColors: true,
-  });
-  const puMesh = new THREE.Mesh(puGeo, puMat);
-  puMesh.rotation.x = -Math.PI / 2; // lay flat on water
-  puMesh.visible = false;
-  scene.add(puMesh);
-  state.powerUp.mesh = puMesh;
-}
+// Power-up glow is now shader-driven (no separate mesh needed)
 
 // Audio init on first user interaction
 ['click', 'keydown', 'touchstart'].forEach(evt => {
@@ -378,7 +356,7 @@ function startRide(locationPreset) {
   pu.boostActive = false;
   pu.boostTimer = 0;
   pu.spawnTimer = 15 + Math.random() * 10; // first spawn 15-25s in
-  if (pu.mesh) pu.mesh.visible = false;
+  if (state.oceanMat) state.oceanMat.uniforms.uPowerUpActive.value = 0;
 
   // Load location and restart
   rebuildTerrain(locationPreset);
@@ -959,23 +937,21 @@ function animate() {
         pu.x = foil.x + fwd_x * ahead + fwd_z * lateral;
         pu.z = foil.z + fwd_z * ahead - fwd_x * lateral;
         pu.active = true;
-        pu.mesh.visible = true;
         pu.nextSpawnDelay = 20 + Math.random() * 15;
+        // Activate shader glow
+        const puU = state.oceanMat.uniforms;
+        puU.uPowerUpPos.value.set(pu.x, 0, pu.z);
+        puU.uPowerUpActive.value = 1;
       }
     }
 
-    // Glow update — sit on water surface, pulse
-    if (pu.active && pu.mesh) {
-      const glowY = getWaveHeight(pu.x, pu.z, t) + (state.realTerrainMesh ? RT_WATER_Y() : 0) + 0.15;
-      pu.mesh.position.set(pu.x, glowY, pu.z);
-      pu.mesh.material.opacity = 0.55 + 0.3 * Math.sin(t * 3);
-
-      // Collection check — distance < 6m
+    // Collection check — distance < 6m
+    if (pu.active) {
       const cdx = foil.x - pu.x;
       const cdz = foil.z - pu.z;
       if (Math.sqrt(cdx * cdx + cdz * cdz) < 6) {
         pu.active = false;
-        pu.mesh.visible = false;
+        state.oceanMat.uniforms.uPowerUpActive.value = 0;
         pu.boostActive = true;
         pu.boostTimer = pu.boostDuration;
         document.getElementById('hud-boost').style.display = 'block';

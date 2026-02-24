@@ -97,6 +97,9 @@ function initOcean() {
       uRiverBounds:{value:new THREE.Vector4(-RT_WORLD_W()/2, -RT_WORLD_D()/2, RT_WORLD_W()/2, RT_WORLD_D()/2)},
       uShowPocket:{value:0},
       uRenderMode:{value:0},
+      uPowerUpPos:{value:new THREE.Vector3(0,-1000,0)},
+      uPowerUpColor:{value:new THREE.Vector3(1,0.12,0.08)},
+      uPowerUpActive:{value:0},
     },
     vertexShader: `
     precision highp float;
@@ -141,6 +144,7 @@ function initOcean() {
     uniform vec3 uSunDir,uCamPos,uDeepColor,uShallowColor,uFoamColor,uFogColor,uFogSunColor;
     uniform vec4 uSwell1;
     uniform sampler2D uRiverMask;uniform float uUseRiverMask;uniform vec4 uRiverBounds;
+    uniform vec3 uPowerUpPos,uPowerUpColor;uniform float uPowerUpActive;
     varying vec3 vWorldPos,vNormal;varying float vFoam,vHeight;
     vec2 hash2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
     float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);return mix(mix(dot(hash2(i),f),dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)),dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
@@ -1088,6 +1092,15 @@ function initOcean() {
         float fog=1.-exp(-cd*.0012);
         col=mix(col,mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),fog);
         gl_FragColor=vec4(col, alpha);
+      }
+
+      // ── Power-up water glow (applied after all render modes) ──
+      if (uPowerUpActive > 0.5) {
+        float puDist = length(vWorldPos.xz - uPowerUpPos.xz);
+        float puDisc = 1.0 - smoothstep(0.0, 6.0, puDist);
+        puDisc *= puDisc; // sharper falloff
+        vec3 puBlend = mix(gl_FragColor.rgb, uPowerUpColor, puDisc * 0.7);
+        gl_FragColor.rgb = puBlend;
       }
     }`
   });

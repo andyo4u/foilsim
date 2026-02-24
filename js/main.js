@@ -357,6 +357,11 @@ function startRide(locationPreset) {
   pu.boostTimer = 0;
   pu.spawnTimer = 15 + Math.random() * 10; // first spawn 15-25s in
   if (state.oceanMat) state.oceanMat.uniforms.uPowerUpActive.value = 0;
+  const eb = state.energyBoost;
+  eb.active = false;
+  eb.hudTimer = 0;
+  eb.spawnTimer = 30 + Math.random() * 10; // first spawn 30-40s in
+  if (state.oceanMat) state.oceanMat.uniforms.uEnergyBoostActive.value = 0;
 
   // Load location and restart
   rebuildTerrain(locationPreset);
@@ -985,6 +990,48 @@ function animate() {
         pu.boostTimer = 0;
         pu.spawnTimer = pu.nextSpawnDelay;
         document.getElementById('hud-boost').style.display = 'none';
+      }
+    }
+
+    // ── ENERGY BOOST power-up (yellow disc, +75% energy) ──
+    const eb = state.energyBoost;
+
+    if (!eb.active) {
+      eb.spawnTimer -= dt;
+      if (eb.spawnTimer <= 0) {
+        const ahead = 50 + Math.random() * 40;
+        const lateral = (Math.random() < 0.5 ? -1 : 1) * (25 + Math.random() * 35);
+        const fwd_x = Math.sin(foil.heading);
+        const fwd_z = Math.cos(foil.heading);
+        eb.x = foil.x + fwd_x * ahead + fwd_z * lateral;
+        eb.z = foil.z + fwd_z * ahead - fwd_x * lateral;
+        eb.active = true;
+        eb.nextSpawnDelay = 30 + Math.random() * 15;
+        const ebU = state.oceanMat.uniforms;
+        ebU.uEnergyBoostPos.value.set(eb.x, 0, eb.z);
+        ebU.uEnergyBoostActive.value = 1;
+      }
+    }
+
+    if (eb.active) {
+      const edx = foil.x - eb.x;
+      const edz = foil.z - eb.z;
+      if (Math.sqrt(edx * edx + edz * edz) < 6) {
+        eb.active = false;
+        state.oceanMat.uniforms.uEnergyBoostActive.value = 0;
+        const cap = getVal('sbBatteryCap');
+        foil.energy = Math.min(foil.energy + cap * 0.75, cap);
+        eb.hudTimer = eb.hudDuration;
+        eb.spawnTimer = eb.nextSpawnDelay;
+        document.getElementById('hud-energy-boost').style.display = 'block';
+      }
+    }
+
+    if (eb.hudTimer > 0) {
+      eb.hudTimer -= dt;
+      if (eb.hudTimer <= 0) {
+        eb.hudTimer = 0;
+        document.getElementById('hud-energy-boost').style.display = 'none';
       }
     }
   }

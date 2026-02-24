@@ -101,6 +101,9 @@ function initOcean() {
       uPowerUpPos:{value:new THREE.Vector3(0,-1000,0)},
       uPowerUpColor:{value:new THREE.Vector3(1,0.12,0.08)},
       uPowerUpActive:{value:0},
+      uEnergyBoostPos:{value:new THREE.Vector3(0,-1000,0)},
+      uEnergyBoostColor:{value:new THREE.Vector3(1,0.85,0.05)},
+      uEnergyBoostActive:{value:0},
     },
     vertexShader: `
     precision highp float;
@@ -146,6 +149,7 @@ function initOcean() {
     uniform vec4 uSwell1;
     uniform sampler2D uRiverMask;uniform float uUseRiverMask;uniform vec4 uRiverBounds;
     uniform vec3 uPowerUpPos,uPowerUpColor;uniform float uPowerUpActive;
+    uniform vec3 uEnergyBoostPos,uEnergyBoostColor;uniform float uEnergyBoostActive;
     varying vec3 vWorldPos,vNormal;varying float vFoam,vHeight;
     vec2 hash2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
     float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);return mix(mix(dot(hash2(i),f),dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)),dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
@@ -1102,6 +1106,14 @@ function initOcean() {
         puDisc *= puDisc; // sharper falloff
         vec3 puBlend = mix(gl_FragColor.rgb, uPowerUpColor, puDisc * 0.7);
         gl_FragColor.rgb = puBlend;
+      }
+      // ── Energy boost water glow ──
+      if (uEnergyBoostActive > 0.5) {
+        float ebDist = length(vWorldPos.xz - uEnergyBoostPos.xz);
+        float ebDisc = 1.0 - smoothstep(0.0, 6.0, ebDist);
+        ebDisc *= ebDisc;
+        vec3 ebBlend = mix(gl_FragColor.rgb, uEnergyBoostColor, ebDisc * 0.7);
+        gl_FragColor.rgb = ebBlend;
       }
     }`
   });

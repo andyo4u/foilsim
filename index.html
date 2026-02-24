@@ -286,6 +286,13 @@
     text-shadow: 0 0 16px rgba(255,60,60,0.6);
     pointer-events: none; display: none;
   }
+  #hud-energy-boost {
+    position: fixed; top: 76px; left: 50%; transform: translateX(-50%);
+    z-index: 60; font-family: 'DM Sans', sans-serif;
+    font-size: 16px; font-weight: 600; color: #ffe040;
+    text-shadow: 0 0 16px rgba(255,210,20,0.7);
+    pointer-events: none; display: none;
+  }
 
   @media (max-width: 480px) {
     #controls-panel { width: calc(100vw - 32px); max-height: 55vh; }
@@ -300,7 +307,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.25</div>
+<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.26</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -439,6 +446,7 @@
 <!-- Game timer & boost HUD -->
 <div id="hud-timer">2:00</div>
 <div id="hud-boost">VORTEX 5.0s</div>
+<div id="hud-energy-boost">ENERGY BOOST</div>
 
 <!-- Menu overlay -->
 <div id="menu-overlay" class="game-overlay">

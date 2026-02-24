@@ -563,6 +563,7 @@ function animate() {
   const s1 = degToDir(getVal('swell1Dir')); u.uSwell1.value.set(s1.x, s1.y, getVal('swell1Period'), getVal('swell1Height'));
   const s2 = degToDir(getVal('swell2Dir')); u.uSwell2.value.set(s2.x, s2.y, getVal('swell2Period'), getVal('swell2Height'));
   const s3 = degToDir(getVal('swell3Dir')); u.uSwell3.value.set(s3.x, s3.y, getVal('swell3Period'), getVal('swell3Height'));
+  u.uSwellSpeed.value.set(getVal('swell1Speed')*0.44704, getVal('swell2Speed')*0.44704, getVal('swell3Speed')*0.44704);
   const sy = sv.y, db = smoothstep(0, .5, sy);
 
   // Water colors — tropical override for Kauai preset

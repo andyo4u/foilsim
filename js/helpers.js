@@ -22,6 +22,7 @@ export function updateVal(el) {
   else if (id === 'cloudCover') span.textContent = Math.round(v * 100) + '%';
   else if (id.includes('Dir') || id.includes('Angle')) span.textContent = v + '\u00B0';
   else if (id.includes('Period')) span.textContent = v.toFixed(1) + 's';
+  else if (id.includes('Speed')) span.textContent = v + 'mph';
   else span.textContent = v.toFixed(2) + 'm';
 }
 
@@ -35,9 +36,9 @@ export function getVal(id) { return state.cachedParams[id]; }
 
 export function cacheAllSliders() {
   ['sunAngle','sunDir','cloudCover','chopHeight','chopDir',
-   'swell1Height','swell1Period','swell1Dir',
-   'swell2Height','swell2Period','swell2Dir',
-   'swell3Height','swell3Period','swell3Dir',
+   'swell1Height','swell1Period','swell1Dir','swell1Speed',
+   'swell2Height','swell2Period','swell2Dir','swell2Speed',
+   'swell3Height','swell3Period','swell3Dir','swell3Speed',
    'sbGlide','sbPumpPower','sbTurnSpeed','sbTopSpeed','sbStallSpeed',
    'sbWindSpeed','sbWindDir',
    'sbBatteryCap','sbBatteryDrain','sbWaveEnergy','sbStability','sbDrag'].forEach(id => {
@@ -105,9 +106,9 @@ export function showToast(msg) {
 export function getAllSettings() {
   // Ocean preset values
   const oceanIds = ['sunAngle','sunDir','cloudCover','chopHeight','chopDir',
-    'swell1Height','swell1Period','swell1Dir',
-    'swell2Height','swell2Period','swell2Dir',
-    'swell3Height','swell3Period','swell3Dir'];
+    'swell1Height','swell1Period','swell1Dir','swell1Speed',
+    'swell2Height','swell2Period','swell2Dir','swell2Speed',
+    'swell3Height','swell3Period','swell3Dir','swell3Speed'];
   const sandboxIds = ['sbGlide','sbPumpPower','sbTurnSpeed','sbTopSpeed','sbStallSpeed',
     'sbWindSpeed','sbWindDir',
     'sbBatteryCap','sbBatteryDrain','sbWaveEnergy','sbStability','sbDrag'];

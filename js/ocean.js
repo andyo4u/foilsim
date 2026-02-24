@@ -97,6 +97,7 @@ function initOcean() {
       uRiverBounds:{value:new THREE.Vector4(-RT_WORLD_W()/2, -RT_WORLD_D()/2, RT_WORLD_W()/2, RT_WORLD_D()/2)},
       uShowPocket:{value:0},
       uRenderMode:{value:0},
+      uSwellSpeed:{value:new THREE.Vector3(11.176,11.176,11.176)},
       uPowerUpPos:{value:new THREE.Vector3(0,-1000,0)},
       uPowerUpColor:{value:new THREE.Vector3(1,0.12,0.08)},
       uPowerUpActive:{value:0},
@@ -104,13 +105,13 @@ function initOcean() {
     vertexShader: `
     precision highp float;
     uniform float uTime;uniform float uChopHeight;uniform vec2 uChopDir;
-    uniform vec4 uSwell1,uSwell2,uSwell3;
+    uniform vec4 uSwell1,uSwell2,uSwell3;uniform vec3 uSwellSpeed;
     varying vec3 vWorldPos;varying vec3 vNormal;varying float vFoam;varying float vHeight;
     vec2 hash2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
     float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);return mix(mix(dot(hash2(i),f),dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)),dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
     float fbm(vec2 p){float v=0.,a=.5;mat2 r=mat2(.8,.6,-.6,.8);for(int i=0;i<6;i++){v+=a*noise(p);p=r*p*2.03;a*=.48;}return v;}
-    vec3 gw(vec2 pos,vec2 dir,float per,float ht,float t,out vec3 T,out vec3 B){
-      float wl=1.56*per*per,k=6.28318/wl,spd=sqrt(9.81/k),st=min(ht*k/2.,.4);
+    vec3 gw(vec2 pos,vec2 dir,float per,float ht,float t,float spdIn,out vec3 T,out vec3 B){
+      float wl=1.56*per*per,k=6.28318/wl,spd=spdIn>0.01?spdIn:sqrt(9.81/k),st=min(ht*k/2.,.4);
       float ph=k*dot(dir,pos)-spd*t*k,s=sin(ph),c=cos(ph),a=ht*.5;
       T=vec3(1.-st*dir.x*dir.x*c,st*dir.x*s,-st*dir.x*dir.y*c);
       B=vec3(-st*dir.x*dir.y*c,st*dir.y*s,1.-st*dir.y*dir.y*c);
@@ -119,16 +120,16 @@ function initOcean() {
     void main(){
       vec3 pos=(modelMatrix*vec4(position,1.0)).xyz;
       vec3 d=vec3(0),T=vec3(1,0,0),B_=vec3(0,0,1),t1,b1;
-      if(uSwell1.w>.01){d+=gw(pos.xz,uSwell1.xy,uSwell1.z,uSwell1.w,uTime,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
-        d+=gw(pos.xz,uSwell1.xy*1.07,uSwell1.z*.7,uSwell1.w*.22,uTime*1.05,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
-      if(uSwell2.w>.01){d+=gw(pos.xz,uSwell2.xy,uSwell2.z,uSwell2.w,uTime,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
-        d+=gw(pos.xz,uSwell2.xy*.95,uSwell2.z*.65,uSwell2.w*.2,uTime*.98,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
-      if(uSwell3.w>.01){d+=gw(pos.xz,uSwell3.xy,uSwell3.z,uSwell3.w,uTime,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+      if(uSwell1.w>.01){d+=gw(pos.xz,uSwell1.xy,uSwell1.z,uSwell1.w,uTime,uSwellSpeed.x,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,uSwell1.xy*1.07,uSwell1.z*.7,uSwell1.w*.22,uTime*1.05,uSwellSpeed.x,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+      if(uSwell2.w>.01){d+=gw(pos.xz,uSwell2.xy,uSwell2.z,uSwell2.w,uTime,uSwellSpeed.y,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,uSwell2.xy*.95,uSwell2.z*.65,uSwell2.w*.2,uTime*.98,uSwellSpeed.y,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+      if(uSwell3.w>.01){d+=gw(pos.xz,uSwell3.xy,uSwell3.z,uSwell3.w,uTime,uSwellSpeed.z,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
       if(uChopHeight>.01){float ch=uChopHeight;vec2 cd=uChopDir;
-        d+=gw(pos.xz,cd,3.,ch*.5,uTime,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
-        d+=gw(pos.xz,vec2(cd.y,-cd.x)*.8+cd*.6,2.2,ch*.35,uTime*1.1,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
-        d+=gw(pos.xz,cd*.7+vec2(-cd.y,cd.x)*.7,1.8,ch*.25,uTime*1.3,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
-        d+=gw(pos.xz,cd*.9+vec2(cd.y,-cd.x)*.4,1.3,ch*.18,uTime*.9,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+        d+=gw(pos.xz,cd,3.,ch*.5,uTime,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,vec2(cd.y,-cd.x)*.8+cd*.6,2.2,ch*.35,uTime*1.1,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,cd*.7+vec2(-cd.y,cd.x)*.7,1.8,ch*.25,uTime*1.3,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,cd*.9+vec2(cd.y,-cd.x)*.4,1.3,ch*.18,uTime*.9,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
       float det=fbm(pos.xz*mix(.08,.02,smoothstep(50.,400.,length(pos.xz)))+uTime*.15)*.3+fbm(pos.xz*.03-uTime*.08)*.15;
       d.y+=det*(uChopHeight+.2);
       pos+=d;
@@ -1120,9 +1121,9 @@ function initOcean() {
 // CPU WAVE HEIGHT (mirrors GPU)
 // ═══════════════════════════
 
-function gerstnerY(px,pz,dx,dz,per,ht,t){
+function gerstnerY(px,pz,dx,dz,per,ht,t,spdIn){
   if(ht<.01)return 0;
-  const wl=1.56*per*per,k=6.28318/wl,spd=Math.sqrt(9.81/k);
+  const wl=1.56*per*per,k=6.28318/wl,spd=spdIn>0.01?spdIn:Math.sqrt(9.81/k);
   return ht*.5*Math.cos(k*(dx*px+dz*pz)-spd*t*k);
 }
 
@@ -1157,12 +1158,13 @@ function getWaveHeight(px,pz,t){
   const s1d=degToDir(getVal('swell1Dir')),s1p=getVal('swell1Period'),s1h=getVal('swell1Height');
   const s2d=degToDir(getVal('swell2Dir')),s2p=getVal('swell2Period'),s2h=getVal('swell2Height');
   const s3d=degToDir(getVal('swell3Dir')),s3p=getVal('swell3Period'),s3h=getVal('swell3Height');
+  const sp1=getVal('swell1Speed')*0.44704,sp2=getVal('swell2Speed')*0.44704,sp3=getVal('swell3Speed')*0.44704;
   const ch=getVal('chopHeight'),cd_=degToDir(getVal('chopDir'));
-  h+=gerstnerY(px,pz,s1d.x,s1d.y,s1p,s1h,t);
-  h+=gerstnerY(px,pz,s1d.x*1.07,s1d.y*1.07,s1p*.7,s1h*.22,t*1.05);
-  h+=gerstnerY(px,pz,s2d.x,s2d.y,s2p,s2h,t);
-  h+=gerstnerY(px,pz,s2d.x*.95,s2d.y*.95,s2p*.65,s2h*.2,t*.98);
-  h+=gerstnerY(px,pz,s3d.x,s3d.y,s3p,s3h,t);
+  h+=gerstnerY(px,pz,s1d.x,s1d.y,s1p,s1h,t,sp1);
+  h+=gerstnerY(px,pz,s1d.x*1.07,s1d.y*1.07,s1p*.7,s1h*.22,t*1.05,sp1);
+  h+=gerstnerY(px,pz,s2d.x,s2d.y,s2p,s2h,t,sp2);
+  h+=gerstnerY(px,pz,s2d.x*.95,s2d.y*.95,s2p*.65,s2h*.2,t*.98,sp2);
+  h+=gerstnerY(px,pz,s3d.x,s3d.y,s3p,s3h,t,sp3);
   h+=gerstnerY(px,pz,cd_.x,cd_.y,3,ch*.5,t);
   const cx=cd_.y*.8+cd_.x*.6,cz=-cd_.x*.8+cd_.y*.6;
   h+=gerstnerY(px,pz,cx,cz,2.2,ch*.35,t*1.1);
@@ -1193,11 +1195,12 @@ function getSwellHeight(px,pz,t){
   const s1d=degToDir(getVal('swell1Dir')),s1p=getVal('swell1Period'),s1h=getVal('swell1Height');
   const s2d=degToDir(getVal('swell2Dir')),s2p=getVal('swell2Period'),s2h=getVal('swell2Height');
   const s3d=degToDir(getVal('swell3Dir')),s3p=getVal('swell3Period'),s3h=getVal('swell3Height');
-  h+=gerstnerY(px,pz,s1d.x,s1d.y,s1p,s1h,t);
-  h+=gerstnerY(px,pz,s1d.x*1.07,s1d.y*1.07,s1p*.7,s1h*.22,t*1.05);
-  h+=gerstnerY(px,pz,s2d.x,s2d.y,s2p,s2h,t);
-  h+=gerstnerY(px,pz,s2d.x*.95,s2d.y*.95,s2p*.65,s2h*.2,t*.98);
-  h+=gerstnerY(px,pz,s3d.x,s3d.y,s3p,s3h,t);
+  const sp1=getVal('swell1Speed')*0.44704,sp2=getVal('swell2Speed')*0.44704,sp3=getVal('swell3Speed')*0.44704;
+  h+=gerstnerY(px,pz,s1d.x,s1d.y,s1p,s1h,t,sp1);
+  h+=gerstnerY(px,pz,s1d.x*1.07,s1d.y*1.07,s1p*.7,s1h*.22,t*1.05,sp1);
+  h+=gerstnerY(px,pz,s2d.x,s2d.y,s2p,s2h,t,sp2);
+  h+=gerstnerY(px,pz,s2d.x*.95,s2d.y*.95,s2p*.65,s2h*.2,t*.98,sp2);
+  h+=gerstnerY(px,pz,s3d.x,s3d.y,s3p,s3h,t,sp3);
   return h;
 }
 

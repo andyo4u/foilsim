@@ -300,7 +300,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.24</div>
+<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.25</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -336,18 +336,21 @@
     <div class="control-row"><span class="control-label">Height</span><input type="range" id="swell1Height" min="0" max="6" value="2.0" step="0.1" oninput="updateVal(this)"><span class="control-value" id="swell1Height-val">2.0m</span></div>
     <div class="control-row"><span class="control-label">Period</span><input type="range" id="swell1Period" min="4" max="22" value="12" step="0.5" oninput="updateVal(this)"><span class="control-value" id="swell1Period-val">12.0s</span></div>
     <div class="control-row"><span class="control-label">Direction</span><input type="range" id="swell1Dir" min="0" max="360" value="270" step="1" oninput="updateVal(this)"><span class="control-value" id="swell1Dir-val">270°</span></div>
+    <div class="control-row"><span class="control-label">Speed</span><input type="range" id="swell1Speed" min="5" max="60" value="25" step="1" oninput="updateVal(this)"><span class="control-value" id="swell1Speed-val">25mph</span></div>
   </div>
   <div class="section">
     <div class="section-title">🌊 Swell 2</div>
     <div class="control-row"><span class="control-label">Height</span><input type="range" id="swell2Height" min="0" max="4" value="0.8" step="0.1" oninput="updateVal(this)"><span class="control-value" id="swell2Height-val">0.8m</span></div>
     <div class="control-row"><span class="control-label">Period</span><input type="range" id="swell2Period" min="4" max="22" value="8" step="0.5" oninput="updateVal(this)"><span class="control-value" id="swell2Period-val">8.0s</span></div>
     <div class="control-row"><span class="control-label">Direction</span><input type="range" id="swell2Dir" min="0" max="360" value="315" step="1" oninput="updateVal(this)"><span class="control-value" id="swell2Dir-val">315°</span></div>
+    <div class="control-row"><span class="control-label">Speed</span><input type="range" id="swell2Speed" min="5" max="60" value="25" step="1" oninput="updateVal(this)"><span class="control-value" id="swell2Speed-val">25mph</span></div>
   </div>
   <div class="section">
     <div class="section-title">🌊 Swell 3</div>
     <div class="control-row"><span class="control-label">Height</span><input type="range" id="swell3Height" min="0" max="4" value="0.3" step="0.1" oninput="updateVal(this)"><span class="control-value" id="swell3Height-val">0.3m</span></div>
     <div class="control-row"><span class="control-label">Period</span><input type="range" id="swell3Period" min="4" max="22" value="16" step="0.5" oninput="updateVal(this)"><span class="control-value" id="swell3Period-val">16.0s</span></div>
     <div class="control-row"><span class="control-label">Direction</span><input type="range" id="swell3Dir" min="0" max="360" value="200" step="1" oninput="updateVal(this)"><span class="control-value" id="swell3Dir-val">200°</span></div>
+    <div class="control-row"><span class="control-label">Speed</span><input type="range" id="swell3Speed" min="5" max="60" value="25" step="1" oninput="updateVal(this)"><span class="control-value" id="swell3Speed-val">25mph</span></div>
   </div>
   <div class="section">
     <div class="section-title">🏄 Sandbox</div>

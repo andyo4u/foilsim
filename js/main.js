@@ -239,16 +239,25 @@ initOcean();
 initFoil();
 initTerrain();
 
-// ── Power-up orb mesh ──
+// ── Power-up water glow disc ──
 {
-  const puGeo = new THREE.SphereGeometry(1.5, 16, 12);
-  const puMat = new THREE.MeshStandardMaterial({
-    color: 0xff8800, emissive: 0xff6600, emissiveIntensity: 0.6,
-    roughness: 0.3, metalness: 0.4,
+  const puGeo = new THREE.CircleGeometry(3, 32);
+  // Radial alpha falloff: bright center, transparent edge
+  const colors = new Float32Array(puGeo.attributes.position.count * 3);
+  for (let i = 0; i < puGeo.attributes.position.count; i++) {
+    const px = puGeo.attributes.position.getX(i);
+    const py = puGeo.attributes.position.getY(i);
+    const r = Math.sqrt(px * px + py * py) / 3;
+    const fade = Math.max(0, 1 - r * r);
+    colors[i * 3] = fade; colors[i * 3 + 1] = fade; colors[i * 3 + 2] = fade;
+  }
+  puGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const puMat = new THREE.MeshBasicMaterial({
+    color: 0xff2020, transparent: true, opacity: 0.85,
+    blending: THREE.AdditiveBlending, depthWrite: false, vertexColors: true,
   });
   const puMesh = new THREE.Mesh(puGeo, puMat);
-  const puLight = new THREE.PointLight(0xff8800, 2, 15);
-  puMesh.add(puLight);
+  puMesh.rotation.x = -Math.PI / 2; // lay flat on water
   puMesh.visible = false;
   scene.add(puMesh);
   state.powerUp.mesh = puMesh;
@@ -955,11 +964,11 @@ function animate() {
       }
     }
 
-    // Orb update — bob on water, spin
+    // Glow update — sit on water surface, pulse
     if (pu.active && pu.mesh) {
-      const orbY = getWaveHeight(pu.x, pu.z, t) + (state.realTerrainMesh ? RT_WATER_Y() : 0) + 2;
-      pu.mesh.position.set(pu.x, orbY, pu.z);
-      pu.mesh.rotation.y += dt * 2;
+      const glowY = getWaveHeight(pu.x, pu.z, t) + (state.realTerrainMesh ? RT_WATER_Y() : 0) + 0.15;
+      pu.mesh.position.set(pu.x, glowY, pu.z);
+      pu.mesh.material.opacity = 0.55 + 0.3 * Math.sin(t * 3);
 
       // Collection check — distance < 6m
       const cdx = foil.x - pu.x;
@@ -981,7 +990,7 @@ function animate() {
       foil.speed = Math.min(foil.speed, boostCap);
 
       pu.boostTimer -= dt;
-      document.getElementById('hud-boost').textContent = 'TURBO BOOST ' + pu.boostTimer.toFixed(1) + 's';
+      document.getElementById('hud-boost').textContent = 'VORTEX ' + pu.boostTimer.toFixed(1) + 's';
 
       // Extra spray during boost
       if (foil.speed > 3 && Math.random() < 0.5) {

@@ -408,6 +408,7 @@ function startRide(locationPreset) {
   document.getElementById('hud-timer').textContent = '2:00';
   document.getElementById('hud-boost').style.display = 'none';
   document.getElementById('info-bar').style.opacity = '';
+  document.getElementById('settings-btn').style.display = 'none';
 
   state.gamePhase = 'riding';
 }
@@ -429,11 +430,13 @@ function endRide() {
   document.getElementById('score-overlay').classList.remove('hidden');
   document.getElementById('hud-timer').style.display = 'none';
   document.getElementById('hud-boost').style.display = 'none';
+  document.getElementById('settings-btn').style.display = '';
 }
 
 function rideAgain() {
   document.getElementById('score-overlay').classList.add('hidden');
   document.getElementById('menu-overlay').classList.remove('hidden');
+  document.getElementById('settings-btn').style.display = '';
   state.gamePhase = 'menu';
 }
 

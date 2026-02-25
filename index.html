@@ -329,12 +329,12 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.28</div>
+<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.29</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
-<!-- Gear button — hidden by default, shown on mobile via JS -->
-<button id="controls-toggle" onclick="toggleControls()">⚙</button>
+<!-- Controls panel toggle — Tab key only, button hidden -->
+<button id="controls-toggle" onclick="toggleControls()" style="display:none;">⚙</button>
 
 <!-- Settings gear button -->
 <button id="settings-btn" onclick="openSettings()"
@@ -515,7 +515,7 @@
     <div class="stat-row"><span class="stat-label">Pocket Time</span><span class="stat-value" id="score-pocket">0.0s</span></div>
     <div class="stat-row stat-total"><span class="stat-label">Total Score</span><span class="stat-value" id="score-total">0</span></div>
   </div>
-  <button class="game-btn" onclick="rideAgain()">Ride Again</button>
+  <button class="game-btn" onclick="rideAgain()">Main Menu</button>
   <div class="sponsor-bar">Powered by <strong>SLINGSHOT</strong></div>
   <div id="score-version" style="margin-top:8px;font-size:10px;color:rgba(140,180,230,0.3);letter-spacing:1px;"></div>
 </div>

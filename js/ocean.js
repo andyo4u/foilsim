@@ -196,19 +196,15 @@ function initOcean() {
         float fp=noise(vWorldPos.xz*1.5+uTime*.2)*.5+.5;fp*=noise(vWorldPos.xz*4.-uTime*.15)*.5+.5;
         col=mix(col,uFoamColor*(.8+.2*fp),smoothstep(.15,.6,vFoam*fp)*.85);
         // ── Pocket highlight (always on) ──
-        // Pocket zone: front face only, peaks just below the lip
+        // pocketLo: zero below mid-wave, full at upper face
+        // pocketHi: full just below the lip, zero at the crest
         float pocketLo=smoothstep(uSwell1.w*0.30,uSwell1.w*0.65,vHeight);
         float pocketHi=1.0-smoothstep(uSwell1.w*0.80,uSwell1.w*1.0,vHeight);
         float faceFactor=smoothstep(0.08,0.35,-dot(N.xz,uSwell1.xy));
         float pocket=pocketLo*pocketHi*faceFactor;
-        // Lip glow: all faces, peaks at crest so every lip glows
-        float lipGlow=smoothstep(uSwell1.w*0.50,uSwell1.w*1.05,vHeight)*0.55;
-        // Taller waves glow more intensely
-        float wScale=clamp(uSwell1.w*0.35,0.4,1.6);
-        float totalGlow=min((pocket+lipGlow)*wScale,1.0);
         float pulse=0.75+0.25*sin(uTime*2.5);
         vec3 pocketCol=vec3(0.1,1.0,0.7);
-        col=mix(col,pocketCol,totalGlow*pulse*0.85);
+        col=mix(col,pocketCol,pocket*pulse*0.75);
         float fog=1.-exp(-cd*.0012);
         col=mix(col,mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),fog);
         gl_FragColor=vec4(col, alpha);
@@ -977,12 +973,9 @@ function initOcean() {
           float pocketHi=1.0-smoothstep(uSwell1.w*0.80,uSwell1.w*1.0,vHeight);
           float faceFactor=smoothstep(-0.05,0.2,-dot(N.xz,uSwell1.xy));
           float pocket=pocketLo*pocketHi*faceFactor;
-          float lipGlow=smoothstep(uSwell1.w*0.50,uSwell1.w*1.05,vHeight)*0.55;
-          float wScale=clamp(uSwell1.w*0.35,0.4,1.6);
-          float totalGlow=min((pocket+lipGlow)*wScale,1.0);
           float pulse=0.75+0.25*sin(uTime*2.5);
           vec3 pocketCol=vec3(0.1,1.0,0.5);
-          col=mix(col,pocketCol,totalGlow*pulse*0.85*uShowPocket);
+          col=mix(col,pocketCol,pocket*pulse*0.85*uShowPocket);
         }
 
         // Distance fog
@@ -1101,12 +1094,9 @@ function initOcean() {
           float pocketHi=1.0-smoothstep(uSwell1.w*0.80,uSwell1.w*1.0,vHeight);
           float faceFactor=smoothstep(-0.05,0.2,-dot(N.xz,uSwell1.xy));
           float pocket=pocketLo*pocketHi*faceFactor;
-          float lipGlow=smoothstep(uSwell1.w*0.50,uSwell1.w*1.05,vHeight)*0.55;
-          float wScale=clamp(uSwell1.w*0.35,0.4,1.6);
-          float totalGlow=min((pocket+lipGlow)*wScale,1.0);
           float pulse=0.75+0.25*sin(uTime*2.5);
           vec3 pocketCol=vec3(0.1,1.0,0.7);
-          col=mix(col,pocketCol,totalGlow*pulse*0.85*uShowPocket);
+          col=mix(col,pocketCol,pocket*pulse*0.75*uShowPocket);
         }
         float fog=1.-exp(-cd*.0012);
         col=mix(col,mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),fog);

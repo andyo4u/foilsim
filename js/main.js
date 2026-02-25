@@ -373,6 +373,9 @@ function startRide(locationPreset) {
   state.score.pocketTime = 0;
   state.score.total = 0;
   state.infoBarFadeTimer = 0;
+  state._swell3ShoreH = undefined;   // reset shore-swell so it re-inits from preset
+  state._shoreCheckTick = 0;
+  state._shoreDist = 999;
 
   // Reset power-up
   const pu = state.powerUp;
@@ -475,6 +478,21 @@ const PANO_DIST = 1600;
 // Loading screen → menu transition: triggered after 2 rendered frames so GL
 // shaders have time to compile before the scene is revealed.
 let _readyFrames = 0;
+
+// Shore-proximity swell: scan outward in 8 directions to find nearest land.
+// Returns distance in metres; 999 if no land within 300 m (or no terrain data).
+function _getShoreDistM(px, pz) {
+  if (!state.realTerrainHeightData) return 999;
+  const wY = RT_WATER_Y();
+  for (let r = 25; r <= 300; r += 25) {
+    for (let a = 0; a < 8; a++) {
+      const th = (a / 8) * Math.PI * 2;
+      const h = getRealTerrainHeight(px + Math.cos(th) * r, pz + Math.sin(th) * r);
+      if (h !== null && h > wY + 2) return r;
+    }
+  }
+  return 999;
+}
 
 function animate() {
   requestAnimationFrame(animate);
@@ -751,6 +769,29 @@ function animate() {
     state.shallowTimer += dt;
     if (state.shallowTimer >= 5) shallowWarningEl.classList.remove('show');
     if (state.shallowTimer >= 10) restartBtnEl.style.display = 'block';
+  }
+
+  // Shore-proximity swell: swell3Height rises to 1.5 m within 100 m of shore,
+  // falls to 0.1 m beyond 250 m.  Only active in real-terrain modes.
+  if (state.realTerrainHeightData) {
+    // Throttle the shore-distance scan to every 30 frames (~0.5 s)
+    state._shoreCheckTick = (state._shoreCheckTick || 0) + 1;
+    if (state._shoreCheckTick >= 30) {
+      state._shoreCheckTick = 0;
+      state._shoreDist = _getShoreDistM(foil.x, foil.z);
+    }
+    const dist = state._shoreDist ?? 999;
+    // Map distance → target height (1.5 m close, 0.1 m far)
+    const CLOSE = 100, FAR = 250;
+    const t = Math.max(0, Math.min(1, (dist - CLOSE) / (FAR - CLOSE)));
+    const target = lerp(1.5, 0.1, t);
+    // Init from slider on first run
+    if (state._swell3ShoreH === undefined) state._swell3ShoreH = getVal('swell3Height');
+    // Linear ramp: 20 s to travel the full 0.1→1.5 range
+    const MAX_RATE = (1.5 - 0.1) / 20;
+    const diff = target - state._swell3ShoreH;
+    state._swell3ShoreH += Math.sign(diff) * Math.min(Math.abs(diff), MAX_RATE * dt);
+    state.cachedParams['swell3Height'] = state._swell3ShoreH;
   }
 
   // Move ocean mesh to follow foil

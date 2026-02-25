@@ -88,6 +88,8 @@ function initOcean() {
   // ── ShaderMaterial ──────────────────────────────────────
   const oceanMat = new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
+    transparent: true,
+    depthWrite: true,
     uniforms: {
       uTime:{value:0},uSunDir:{value:new THREE.Vector3(0,.4,-1).normalize()},uCamPos:{value:new THREE.Vector3()},
       uChopHeight:{value:.4},uChopDir:{value:new THREE.Vector2(.707,.707)},
@@ -170,6 +172,10 @@ function initOcean() {
 
       // Soft shoreline edge alpha (used by both paths)
       float alpha = 1.0;
+      // Far-edge fade: dissolve mesh to transparent so the real sky shows through.
+      // No colour-matching needed — the sky behind the mesh IS the correct colour.
+      float edgeCd = length(uCamPos - vWorldPos);
+      alpha *= 1.0 - smoothstep(uOceanHalf * 0.72, uOceanHalf * 0.96, edgeCd);
       if (uUseRiverMask > 0.5) {
         vec2 muv = vec2(
           (vWorldPos.x - uRiverBounds.x) / (uRiverBounds.z - uRiverBounds.x),

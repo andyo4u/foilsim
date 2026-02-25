@@ -114,6 +114,7 @@ export const state = {
   realTerrainSatTex     : null,
   realTerrainRiverMask  : null,
   waterFillPlane        : null,
+  horizonFill           : null,
   panoCylinder          : null,
   panoMat               : null,
   panoTexture           : null,

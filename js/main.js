@@ -801,6 +801,16 @@ function animate() {
         fu.uFogColor.value.set(0.55, 0.7, 0.85);
       }
     }
+
+    // Horizon fill — disabled in real-terrain mode (waterFillPlane handles that)
+    if (state.horizonFill) {
+      const half = state.oceanSize / 2;
+      const hfu = state.horizonFill.material.uniforms;
+      hfu.uOceanMin.value.set(state.oceanMesh.position.x - half, state.oceanMesh.position.z - half);
+      hfu.uOceanMax.value.set(state.oceanMesh.position.x + half, state.oceanMesh.position.z + half);
+      hfu.uFogColor.value.copy(u.uFogColor.value);
+      state.horizonFill.visible = !state.waterFillPlane;
+    }
   }
 
   // Terrain ring follows player

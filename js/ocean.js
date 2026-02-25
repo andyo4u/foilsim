@@ -172,10 +172,6 @@ function initOcean() {
 
       // Soft shoreline edge alpha (used by both paths)
       float alpha = 1.0;
-      // Far-edge fade: dissolve mesh to transparent so the real sky shows through.
-      // No colour-matching needed — the sky behind the mesh IS the correct colour.
-      float edgeCd = length(uCamPos - vWorldPos);
-      alpha *= 1.0 - smoothstep(uOceanHalf * 0.72, uOceanHalf * 0.96, edgeCd);
       if (uUseRiverMask > 0.5) {
         vec2 muv = vec2(
           (vWorldPos.x - uRiverBounds.x) / (uRiverBounds.z - uRiverBounds.x),
@@ -1141,6 +1137,45 @@ function initOcean() {
   const oceanMesh = new THREE.Mesh(oceanGeo, oceanMat);
   state.scene.add(oceanMesh);
   state.oceanMesh = oceanMesh;
+
+  // ── Horizon fill plane ──────────────────────────────────
+  // Fills the dark sky gap beyond the ocean mesh edge with fog colour.
+  // renderOrder 1 → renders AFTER ocean (which writes depth at renderOrder 0),
+  // so it only paints sky pixels (depth = FAR) and fails where ocean/terrain wrote.
+  {
+    const hGeo = new THREE.PlaneGeometry(50000, 50000, 1, 1);
+    hGeo.rotateX(-Math.PI / 2);
+    const hMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uOceanMin: { value: new THREE.Vector2(-300, -300) },
+        uOceanMax: { value: new THREE.Vector2(300, 300) },
+        uFogColor: { value: new THREE.Color(0.55, 0.7, 0.85) },
+      },
+      vertexShader: `
+        varying vec3 vWorldPos;
+        void main() {
+          vWorldPos = (modelMatrix * vec4(position,1.0)).xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+        }`,
+      fragmentShader: `
+        uniform vec2 uOceanMin, uOceanMax;
+        uniform vec3 uFogColor;
+        varying vec3 vWorldPos;
+        void main() {
+          if (vWorldPos.x > uOceanMin.x && vWorldPos.x < uOceanMax.x &&
+              vWorldPos.z > uOceanMin.y && vWorldPos.z < uOceanMax.y) discard;
+          gl_FragColor = vec4(uFogColor, 1.0);
+        }`,
+      transparent: true,
+      depthTest: true,
+      depthWrite: false,
+    });
+    const hMesh = new THREE.Mesh(hGeo, hMat);
+    hMesh.position.y = -0.5;
+    hMesh.renderOrder = 1;
+    state.scene.add(hMesh);
+    state.horizonFill = hMesh;
+  }
 
   // ── Wave chart DOM refs ─────────────────────────────────
   waveChartCanvas = document.getElementById('wave-chart');

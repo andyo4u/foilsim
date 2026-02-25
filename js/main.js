@@ -690,7 +690,8 @@ function animate() {
 
   foil.speed += (slopeForce + pf + windForce) * dt;
   foil.speed -= drag * dt;
-  const speedCap = state.powerUp.boostActive ? getVal('sbTopSpeed') * 1.5 : getVal('sbTopSpeed');
+  const speedCapMs = getVal('sbTopSpeed') / 1.94384;
+  const speedCap = state.powerUp.boostActive ? speedCapMs * 1.5 : speedCapMs;
   foil.speed = Math.max(0, Math.min(foil.speed, speedCap));
 
   const tgtRH = isF ? .6 + foil.pitch * .5 : 0;
@@ -968,7 +969,7 @@ function animate() {
     if (pu.boostActive) {
       foil.speed += pu.boostAmount * dt;
       // Allow exceeding top speed by 1.5x during boost
-      const boostCap = getVal('sbTopSpeed') * 1.5;
+      const boostCap = getVal('sbTopSpeed') / 1.94384 * 1.5;
       foil.speed = Math.min(foil.speed, boostCap);
 
       pu.boostTimer -= dt;

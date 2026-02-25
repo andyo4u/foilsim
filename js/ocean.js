@@ -87,6 +87,7 @@ function initOcean() {
 
   // ── ShaderMaterial ──────────────────────────────────────
   const oceanMat = new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
     uniforms: {
       uTime:{value:0},uSunDir:{value:new THREE.Vector3(0,.4,-1).normalize()},uCamPos:{value:new THREE.Vector3()},
       uChopHeight:{value:.4},uChopDir:{value:new THREE.Vector2(.707,.707)},

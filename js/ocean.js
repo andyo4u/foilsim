@@ -210,6 +210,7 @@ function initOcean() {
         vec3 pocketCol=vec3(0.1,1.0,0.7);
         col=mix(col,pocketCol,pocket*pulse*0.75);
         float fog=1.-exp(-cd*.0012);
+        fog=max(fog,smoothstep(uOceanHalf*0.55,uOceanHalf*0.90,cd));
         col=mix(col,mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),fog);
         gl_FragColor=vec4(col, alpha);
       } else if (uRenderMode > 10.5) {
@@ -1105,6 +1106,7 @@ function initOcean() {
           col=mix(col,pocketCol,pocket*pulse*0.75*uShowPocket);
         }
         float fog=1.-exp(-cd*.0012);
+        fog=max(fog,smoothstep(uOceanHalf*0.55,uOceanHalf*0.90,cd));
         col=mix(col,mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),fog);
         gl_FragColor=vec4(col, alpha);
       }

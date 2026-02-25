@@ -12,6 +12,7 @@ let audioCtx = null;
 let audioInited = false;
 let noiseGain, toneOsc, toneGain, toneFilter, masterGain;
 let musicAudio = null;
+let musicWaitingForFoil = false;
 
 export function initAudio() {
   if (audioInited) return;
@@ -141,13 +142,22 @@ export function loadLocalMusic(file) {
   musicAudio._url = url;
   musicAudio.loop = true;
   musicAudio.volume = 0.65;
-  musicAudio.play().catch(() => {});
-  state.audioSettings.musicPlaying = true;
+  musicWaitingForFoil = true;  // play deferred until first foil liftoff
+  state.audioSettings.musicPlaying = false;
   state.audioSettings.musicFileName = file.name;
   const el = document.getElementById('settings-music-status');
-  if (el) el.textContent = 'Playing: ' + file.name;
+  if (el) el.textContent = 'Ready — plays when foiling';
   const btn = document.getElementById('settings-music-stop');
   if (btn) btn.style.display = 'inline-block';
+}
+
+export function onFoilStart() {
+  if (!musicWaitingForFoil || !musicAudio) return;
+  musicWaitingForFoil = false;
+  musicAudio.play().catch(() => {});
+  state.audioSettings.musicPlaying = true;
+  const el = document.getElementById('settings-music-status');
+  if (el) el.textContent = 'Playing: ' + state.audioSettings.musicFileName;
 }
 
 export function stopMusic() {
@@ -155,6 +165,7 @@ export function stopMusic() {
   musicAudio.pause();
   URL.revokeObjectURL(musicAudio._url);
   musicAudio = null;
+  musicWaitingForFoil = false;
   state.audioSettings.musicPlaying = false;
   const el = document.getElementById('settings-music-status');
   if (el) el.textContent = '';

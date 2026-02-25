@@ -93,7 +93,7 @@ import { state } from './state.js';
 import { updateVal, toggleControls, getVal, cacheAllSliders, applyPreset, showToast,
          copySettings, copySettingsJSON, lerp, smoothstep, degToDir,
          convertSpeedToMs, convertSpeedFromMs, formatSpeed, formatDistance, setUnits } from './helpers.js';
-import { initAudio, updateAudio, toggleAmbient, loadLocalMusic, stopMusic } from './audio.js';
+import { initAudio, updateAudio, toggleAmbient, loadLocalMusic, stopMusic, onFoilStart } from './audio.js';
 import { initOcean, updateEnvMap, getWaveHeight, getWaveSlope, getSwellHeight,
          getSwellSlope, setRenderMode, updateWaveChart, rebuildOceanGeometry } from './ocean.js';
 import { initFoil, emitSpray, updateSpray, updateWake, updateStreamer, toggleFreeCam, updateCamera, applyFoilPreset } from './foil.js';
@@ -327,7 +327,7 @@ function setQuality(level) {
 // ═══════════════════════════
 
 function openSettings() {
-  document.getElementById('settings-overlay').classList.remove('hidden');
+  document.getElementById('settings-overlay').style.display = 'flex';
   document.querySelectorAll('.settings-foil-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.foil === state.foilPreset));
   document.querySelectorAll('.settings-unit-btn').forEach(b =>
@@ -336,7 +336,7 @@ function openSettings() {
   if (amb) amb.checked = state.audioSettings.ambientOn;
 }
 function closeSettings() {
-  document.getElementById('settings-overlay').classList.add('hidden');
+  document.getElementById('settings-overlay').style.display = 'none';
 }
 
 window.updateVal         = updateVal;
@@ -365,6 +365,7 @@ function startRide(locationPreset) {
   // Reset score & timer
   state.rideTimer = 120;
   state.rideStarted = false; // timer doesn't tick until first pump
+  foilMusicTriggered = false;
   state.score.distance = 0;
   state.score.topSpeed = 0;
   state.score.topSpeedMs = 0;
@@ -447,6 +448,7 @@ window.endTutorial = endTutorial;
 const clock = new THREE.Clock();
 let pumpPhase = 0, sprayT = 0;
 let prevSunAngle = -1, prevSunDir = -1;
+let foilMusicTriggered = false;
 
 // FPS counter
 let fpsFrames = 0, fpsLastTime = performance.now();
@@ -643,6 +645,7 @@ function animate() {
   // Foiling state
   const stallMs = convertSpeedToMs(getVal('sbStallSpeed'));
   const isF = foil.speed > stallMs;
+  if (isF && !foilMusicTriggered) { foilMusicTriggered = true; onFoilStart(); }
 
   // Tutorial phase machine (only active when tutorial location is selected)
   updateTutorial(dt, foil.speed, stallMs);

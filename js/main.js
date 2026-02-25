@@ -110,6 +110,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.65;
+renderer.setClearColor(new THREE.Color(0.55, 0.70, 0.85)); // match ocean uFogColor so beyond-mesh is horizon, not black
 document.body.appendChild(renderer.domElement);
 state.renderer = renderer;
 

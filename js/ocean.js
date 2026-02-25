@@ -99,6 +99,7 @@ function initOcean() {
       uShowPocket:{value:0},
       uRenderMode:{value:0},
       uSwellSpeed:{value:new THREE.Vector3(11.176,11.176,11.176)},
+      uOceanHalf:{value:state.oceanSize/2},
       uPowerUpPos:{value:new THREE.Vector3(0,-1000,0)},
       uPowerUpColor:{value:new THREE.Vector3(1,0.12,0.08)},
       uPowerUpActive:{value:0},
@@ -145,7 +146,7 @@ function initOcean() {
     }`,
     fragmentShader: `
     precision highp float;
-    uniform float uTime;uniform float uRenderMode;uniform float uShowPocket;
+    uniform float uTime;uniform float uRenderMode;uniform float uShowPocket;uniform float uOceanHalf;
     uniform vec3 uSunDir,uCamPos,uDeepColor,uShallowColor,uFoamColor,uFogColor,uFogSunColor;
     uniform vec4 uSwell1;
     uniform sampler2D uRiverMask;uniform float uUseRiverMask;uniform vec4 uRiverBounds;
@@ -183,11 +184,11 @@ function initOcean() {
         vec3 N=normalize(vNormal),V=normalize(uCamPos-vWorldPos),L=normalize(uSunDir);
         float e=.5;vec2 p=vWorldPos.xz;
         float cd=length(uCamPos-vWorldPos);
-        float nFade=1.0-smoothstep(30.0,150.0,cd);
+        float nFade=1.0-smoothstep(uOceanHalf*0.05,uOceanHalf*0.30,cd);
         N=normalize(N+vec3(noise(p*.8+uTime*.3+vec2(e,0))-noise(p*.8+uTime*.3-vec2(e,0)),0,noise(p*.8+uTime*.3+vec2(0,e))-noise(p*.8+uTime*.3-vec2(0,e)))*.12*nFade);
-        if(cd<100.){float d2=1.-smoothstep(0.,100.,cd);
+        if(cd<uOceanHalf*0.25){float d2=1.-smoothstep(0.,uOceanHalf*0.25,cd);
           N=normalize(N+vec3(noise(p*3.+uTime*.5+vec2(e,0))-noise(p*3.+uTime*.5-vec2(e,0)),0,noise(p*3.+uTime*.5+vec2(0,e))-noise(p*3.+uTime*.5-vec2(0,e)))*.06*d2);}
-        N=normalize(mix(N,vec3(0.0,1.0,0.0),smoothstep(80.0,350.0,cd)*0.75));
+        N=normalize(mix(N,vec3(0.0,1.0,0.0),smoothstep(uOceanHalf*0.15,uOceanHalf*0.85,cd)*0.80));
         float fr=pow(1.-max(dot(N,V),0.),4.);fr=mix(.04,1.,fr);
         vec3 wc=mix(uDeepColor,uShallowColor,smoothstep(-1.,2.,vHeight)*.5+fr*.3);
         vec3 sssC=vec3(0,.35,.3)*pow(max(dot(V,-L+N*.6),0.),3.)*.1;
@@ -1078,11 +1079,11 @@ function initOcean() {
         vec3 N=normalize(vNormal),V=normalize(uCamPos-vWorldPos),L=normalize(uSunDir);
         float e=.5;vec2 p=vWorldPos.xz;
         float cd=length(uCamPos-vWorldPos);
-        float nFade=1.0-smoothstep(30.0,150.0,cd);
+        float nFade=1.0-smoothstep(uOceanHalf*0.05,uOceanHalf*0.30,cd);
         N=normalize(N+vec3(noise(p*.8+uTime*.3+vec2(e,0))-noise(p*.8+uTime*.3-vec2(e,0)),0,noise(p*.8+uTime*.3+vec2(0,e))-noise(p*.8+uTime*.3-vec2(0,e)))*.12*nFade);
-        if(cd<100.){float d2=1.-smoothstep(0.,100.,cd);
+        if(cd<uOceanHalf*0.25){float d2=1.-smoothstep(0.,uOceanHalf*0.25,cd);
           N=normalize(N+vec3(noise(p*3.+uTime*.5+vec2(e,0))-noise(p*3.+uTime*.5-vec2(e,0)),0,noise(p*3.+uTime*.5+vec2(0,e))-noise(p*3.+uTime*.5-vec2(0,e)))*.06*d2);}
-        N=normalize(mix(N,vec3(0.0,1.0,0.0),smoothstep(80.0,350.0,cd)*0.75));
+        N=normalize(mix(N,vec3(0.0,1.0,0.0),smoothstep(uOceanHalf*0.15,uOceanHalf*0.85,cd)*0.80));
         float fr=pow(1.-max(dot(N,V),0.),4.);fr=mix(.04,1.,fr);
         vec3 wc=mix(uDeepColor,uShallowColor,smoothstep(-1.,2.,vHeight)*.5+fr*.3);
         vec3 sssC=vec3(0,.35,.3)*pow(max(dot(V,-L+N*.6),0.),3.)*.1;
@@ -1321,6 +1322,8 @@ function rebuildOceanGeometry() {
   geo.rotateX(-Math.PI / 2);
   state.oceanMesh.geometry = geo;
   state.oceanGeo = geo;
+  // Keep uniform in sync so shader fades scale with mesh size
+  if (state.oceanMat) state.oceanMat.uniforms.uOceanHalf.value = state.oceanSize / 2;
 }
 
 // ═══════════════════════════

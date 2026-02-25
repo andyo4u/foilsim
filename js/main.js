@@ -550,17 +550,17 @@ function animate() {
   dirLight.color.setRGB(1.0, lerp(0.95, 0.55, warmth), lerp(0.92, 0.3, warmth));
   ambLight.intensity = 0.15 + sunBright * 0.55;
 
-  // Dynamic fog color — must stay bright enough to survive ACES tonemapping at 0.65 exposure
-  // Low sun / sunset: warm orange-gold; high sun: clear blue
+  // Dynamic fog color — match Preetham sky horizon brightness (linear 1.5-2.0+ at low sun).
+  // warmth ≈ 1 at low sun, ≈ 0 at noon. Values must survive ACES at 0.65 exposure.
   u.uFogColor.value.setRGB(
-    lerp(0.38, 0.55, sunBright) + warmth * 0.28,   // warm orange glow near horizon
-    lerp(0.28, 0.70, sunBright),
-    lerp(0.32, 0.85, sunBright) - warmth * 0.18    // less blue when warm
+    lerp(0.50, 0.50, sunBright) + warmth * 1.20,   // low sun: ~1.7, noon: ~0.50
+    lerp(0.35, 0.65, sunBright) + warmth * 0.60,   // low sun: ~0.95, noon: ~0.65
+    lerp(0.30, 0.90, sunBright) - warmth * 0.15    // low sun: ~0.15, noon: ~0.90
   );
   u.uFogSunColor.value.setRGB(
-    lerp(0.5, 0.8, sunBright),
-    lerp(0.3, 0.75, sunBright),
-    lerp(0.15, 0.6, sunBright)
+    lerp(1.2, 1.0, sunBright),    // bright warm sun glow at horizon
+    lerp(0.7, 0.85, sunBright),
+    lerp(0.2, 0.70, sunBright)
   );
   // Keep clear color in sync so beyond-mesh areas match horizon (sky addon covers most of it)
   renderer.setClearColor(u.uFogColor.value);

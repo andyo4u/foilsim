@@ -91,11 +91,12 @@
 
 import { state } from './state.js';
 import { updateVal, toggleControls, getVal, cacheAllSliders, applyPreset, showToast,
-         copySettings, copySettingsJSON, lerp, smoothstep, degToDir } from './helpers.js';
-import { initAudio, updateAudio } from './audio.js';
+         copySettings, copySettingsJSON, lerp, smoothstep, degToDir,
+         convertSpeedToMs, convertSpeedFromMs, formatSpeed, formatDistance, setUnits } from './helpers.js';
+import { initAudio, updateAudio, toggleAmbient, loadLocalMusic, stopMusic } from './audio.js';
 import { initOcean, updateEnvMap, getWaveHeight, getWaveSlope, getSwellHeight,
          getSwellSlope, setRenderMode, updateWaveChart, rebuildOceanGeometry } from './ocean.js';
-import { initFoil, emitSpray, updateSpray, updateWake, updateStreamer, toggleFreeCam, updateCamera } from './foil.js';
+import { initFoil, emitSpray, updateSpray, updateWake, updateStreamer, toggleFreeCam, updateCamera, applyFoilPreset } from './foil.js';
 import { initTerrain, rebuildTerrain, restartLevel, getRealTerrainHeight,
          RT_WATER_Y, RT_WORLD_W, RT_WORLD_D, terrainConfigs } from './terrain.js';
 import { onTutorialStart, updateTutorial, endTutorial } from './tutorial.js';
@@ -325,6 +326,19 @@ function setQuality(level) {
 // WINDOW.* BRIDGE — expose functions for inline HTML event handlers
 // ═══════════════════════════
 
+function openSettings() {
+  document.getElementById('settings-overlay').classList.remove('hidden');
+  document.querySelectorAll('.settings-foil-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.foil === state.foilPreset));
+  document.querySelectorAll('.settings-unit-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.unit === state.units));
+  const amb = document.getElementById('settings-ambient-toggle');
+  if (amb) amb.checked = state.audioSettings.ambientOn;
+}
+function closeSettings() {
+  document.getElementById('settings-overlay').classList.add('hidden');
+}
+
 window.updateVal         = updateVal;
 window.toggleControls    = toggleControls;
 window.applyPreset       = applyPreset;
@@ -335,6 +349,13 @@ window.copySettingsJSON  = copySettingsJSON;
 window.toggleFreeCam     = toggleFreeCam;
 window.setRenderMode     = setRenderMode;
 window.setQuality        = setQuality;
+window.openSettings    = openSettings;
+window.closeSettings   = closeSettings;
+window.setUnits        = setUnits;
+window.applyFoilPreset = applyFoilPreset;
+window.toggleAmbient   = toggleAmbient;
+window.loadLocalMusic  = loadLocalMusic;
+window.stopMusic       = stopMusic;
 
 // ═══════════════════════════
 // GAME LOOP — Menu → Ride → Score
@@ -346,6 +367,7 @@ function startRide(locationPreset) {
   state.rideStarted = false; // timer doesn't tick until first pump
   state.score.distance = 0;
   state.score.topSpeed = 0;
+  state.score.topSpeedMs = 0;
   state.score.pocketTime = 0;
   state.score.total = 0;
   state.infoBarFadeTimer = 0;
@@ -394,11 +416,11 @@ function endRide() {
 
   // Compute final score
   const s = state.score;
-  s.total = Math.round(s.distance + 2 * s.pocketTime + 10 * s.topSpeed);
+  s.total = Math.round(s.distance + 2 * s.pocketTime + 10 * (s.topSpeedMs * 2.23694));
 
   // Populate score overlay
-  document.getElementById('score-distance').textContent = (s.distance / 1609.34).toFixed(2) + ' mi';
-  document.getElementById('score-topspeed').textContent = s.topSpeed.toFixed(1) + ' mph';
+  document.getElementById('score-distance').textContent = formatDistance(s.distance);
+  document.getElementById('score-topspeed').textContent = formatSpeed(s.topSpeedMs);
   document.getElementById('score-pocket').textContent = s.pocketTime.toFixed(1) + 's';
   document.getElementById('score-total').textContent = s.total;
 
@@ -568,7 +590,7 @@ function animate() {
   const s1 = degToDir(getVal('swell1Dir')); u.uSwell1.value.set(s1.x, s1.y, getVal('swell1Period'), getVal('swell1Height'));
   const s2 = degToDir(getVal('swell2Dir')); u.uSwell2.value.set(s2.x, s2.y, getVal('swell2Period'), getVal('swell2Height'));
   const s3 = degToDir(getVal('swell3Dir')); u.uSwell3.value.set(s3.x, s3.y, getVal('swell3Period'), getVal('swell3Height'));
-  u.uSwellSpeed.value.set(getVal('swell1Speed')*0.44704, getVal('swell2Speed')*0.44704, getVal('swell3Speed')*0.44704);
+  u.uSwellSpeed.value.set(convertSpeedToMs(getVal('swell1Speed')), convertSpeedToMs(getVal('swell2Speed')), convertSpeedToMs(getVal('swell3Speed')));
   const sy = sv.y, db = smoothstep(0, .5, sy);
 
   // Water colors — tropical override for Kauai preset
@@ -619,8 +641,7 @@ function animate() {
   }
 
   // Foiling state
-  const stallKts = getVal('sbStallSpeed');
-  const stallMs = stallKts / 1.94384;
+  const stallMs = convertSpeedToMs(getVal('sbStallSpeed'));
   const isF = foil.speed > stallMs;
 
   // Tutorial phase machine (only active when tutorial location is selected)
@@ -681,7 +702,7 @@ function animate() {
   const baseDrag = isF ? .35 : .7;
   const drag = baseDrag * getVal('sbDrag') / getVal('sbGlide');
 
-  const windSpeedMs = getVal('sbWindSpeed') / 1.94384;
+  const windSpeedMs = convertSpeedToMs(getVal('sbWindSpeed'));
   const windDirRad = (getVal('sbWindDir') + 180) * Math.PI / 180;
   const windX = Math.sin(windDirRad) * windSpeedMs;
   const windZ = Math.cos(windDirRad) * windSpeedMs;
@@ -690,7 +711,7 @@ function animate() {
 
   foil.speed += (slopeForce + pf + windForce) * dt;
   foil.speed -= drag * dt;
-  const speedCapMs = getVal('sbTopSpeed') / 1.94384;
+  const speedCapMs = convertSpeedToMs(getVal('sbTopSpeed'));
   const speedCap = state.powerUp.boostActive ? speedCapMs * 1.5 : speedCapMs;
   foil.speed = Math.max(0, Math.min(foil.speed, speedCap));
 
@@ -812,8 +833,7 @@ function animate() {
   updateStreamer(state.streamerR, state._tipRWorld.x, state._tipRWorld.y, state._tipRWorld.z, foil.speed);
 
   // HUD
-  const curMph = foil.speed * 2.23694;
-  document.getElementById('hud-speed').textContent = curMph.toFixed(1);
+  document.getElementById('hud-speed').textContent = convertSpeedFromMs(foil.speed).toFixed(1);
 
   // Acceleration indicator
   const accelEl = document.getElementById('hud-accel');
@@ -969,7 +989,7 @@ function animate() {
     if (pu.boostActive) {
       foil.speed += pu.boostAmount * dt;
       // Allow exceeding top speed by 1.5x during boost
-      const boostCap = getVal('sbTopSpeed') / 1.94384 * 1.5;
+      const boostCap = convertSpeedToMs(getVal('sbTopSpeed')) * 1.5;
       foil.speed = Math.min(foil.speed, boostCap);
 
       pu.boostTimer -= dt;
@@ -1059,8 +1079,7 @@ function animate() {
   state.ridePrevZ = foil.z;
 
   // Top speed tracking
-  const curMphScore = foil.speed * 2.23694;
-  if (curMphScore > state.score.topSpeed) state.score.topSpeed = curMphScore;
+  if (foil.speed > state.score.topSpeedMs) state.score.topSpeedMs = foil.speed;
 
   // Pocket time tracking
   if (normSwell > 0.8 && foil.speed > 3) state.score.pocketTime += dt;

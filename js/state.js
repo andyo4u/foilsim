@@ -131,7 +131,7 @@ export const state = {
   // ── Game Loop ───────────────────────────────────────────
   gamePhase      : 'menu',       // 'menu' | 'riding' | 'score'
   rideTimer      : 120,          // seconds remaining
-  score          : { distance: 0, topSpeed: 0, pocketTime: 0, total: 0 },
+  score          : { distance: 0, topSpeed: 0, topSpeedMs: 0, pocketTime: 0, total: 0 },
   ridePrevX      : 0,
   ridePrevZ      : 0,
 
@@ -169,4 +169,19 @@ export const state = {
   sprayBudget     : 200,
   wakeBudget      : 80,
   streamerBudget  : 120,
+
+  // ── Units ─────────────────────────────────────────
+  units: 'mph',       // 'mph' | 'kph' | 'kts'
+
+  // ── Foil preset ───────────────────────────────────
+  foilPreset: 'lift',
+  foilPresets: {
+    grom:      { name:'Grom',        desc:'Beginner · stable, wide margin',      topSpeedMs:9.26,  stallSpeedMs:1.54, glide:1.1, pump:0.8,  drag:0.9,  stability:1.5, color:0x4488ff },
+    lift:      { name:'Lift HA',     desc:'All-round · balanced',                topSpeedMs:11.32, stallSpeedMs:2.57, glide:0.8, pump:1.0,  drag:1.0,  stability:1.0, color:0xf0f0f0 },
+    armstrong: { name:'Armstrong',   desc:'Performance · efficient, responsive', topSpeedMs:14.40, stallSpeedMs:3.09, glide:1.2, pump:1.2,  drag:0.85, stability:0.8, color:0x222222 },
+    race:      { name:'Race HA',     desc:'Expert · fast, narrow margin',        topSpeedMs:18.00, stallSpeedMs:4.63, glide:1.4, pump:1.4,  drag:0.7,  stability:0.6, color:0xff4400 },
+  },
+
+  // ── Audio settings ────────────────────────────────
+  audioSettings: { ambientOn:true, musicPlaying:false, musicFileName:'' },
 };

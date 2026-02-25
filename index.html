@@ -302,17 +302,48 @@
     .touch-zone { font-size: 28px; }
     #hud .speed { font-size: 22px; }
   }
+
+  /* ── Settings overlay ──────────────────────────── */
+  .settings-section { margin-bottom:14px; padding:13px;
+    background:rgba(255,255,255,0.03); border-radius:10px;
+    border:1px solid rgba(100,160,255,0.08); }
+  .settings-title { color:#7eb8ff; font-size:10px; font-weight:600;
+    text-transform:uppercase; letter-spacing:1.2px; margin-bottom:10px; }
+  .settings-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .settings-label { color:#8aa4c8; font-size:12px; }
+  .settings-foil-btn {
+    padding:10px 8px; border-radius:8px; text-align:left; cursor:pointer; font-family:inherit;
+    background:rgba(100,160,255,0.06); border:1px solid rgba(100,160,255,0.2); color:#8ab8e8; }
+  .settings-foil-name { font-size:12px; font-weight:600; color:#b0d4ff; margin-bottom:2px; }
+  .settings-foil-desc { font-size:10px; color:rgba(140,180,230,0.5); }
+  .settings-unit-btn {
+    flex:1; padding:9px 4px; border-radius:8px; cursor:pointer; font-family:inherit;
+    font-size:11px; font-weight:500;
+    background:rgba(100,160,255,0.06); border:1px solid rgba(100,160,255,0.2); color:#8ab8e8; }
+  .settings-foil-btn.active, .settings-unit-btn.active {
+    background:rgba(74,158,255,0.25); border-color:rgba(100,180,255,0.5); color:#fff; }
+  .settings-foil-btn:hover, .settings-unit-btn:hover {
+    background:rgba(100,160,255,0.18); border-color:rgba(100,160,255,0.35); color:#b0d4ff; }
 </style>
 </head>
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.27</div>
+<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.28</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
 <!-- Gear button — hidden by default, shown on mobile via JS -->
 <button id="controls-toggle" onclick="toggleControls()">⚙</button>
+
+<!-- Settings gear button -->
+<button id="settings-btn" onclick="openSettings()"
+  style="position:fixed;top:16px;right:64px;z-index:100;width:40px;height:40px;
+         border-radius:10px;background:rgba(8,18,38,0.85);backdrop-filter:blur(12px);
+         border:1px solid rgba(100,160,255,0.2);color:#7eb8ff;font-size:18px;
+         cursor:pointer;display:flex;align-items:center;justify-content:center;">
+  ⚙
+</button>
 
 <div id="controls-panel" class="hidden">
   <div class="panel-header">
@@ -364,9 +395,9 @@
     <div class="control-row"><span class="control-label">Glide</span><input type="range" id="sbGlide" min="0.1" max="2.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbGlide-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Pump Power</span><input type="range" id="sbPumpPower" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbPumpPower-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Turn Speed</span><input type="range" id="sbTurnSpeed" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbTurnSpeed-val">1.00×</span></div>
-    <div class="control-row"><span class="control-label">Top Speed</span><input type="range" id="sbTopSpeed" min="8" max="40" value="22" step="1" oninput="updateVal(this)"><span class="control-value" id="sbTopSpeed-val">22 kts</span></div>
-    <div class="control-row"><span class="control-label">Stall Speed</span><input type="range" id="sbStallSpeed" min="0" max="10" value="5" step="0.5" oninput="updateVal(this)"><span class="control-value" id="sbStallSpeed-val">5.0 kts</span></div>
-    <div class="control-row"><span class="control-label">Wind Speed</span><input type="range" id="sbWindSpeed" min="0" max="40" value="12" step="1" oninput="updateVal(this)"><span class="control-value" id="sbWindSpeed-val">12 kts</span></div>
+    <div class="control-row"><span class="control-label">Top Speed</span><input type="range" id="sbTopSpeed" min="9" max="46" value="25" step="1" oninput="updateVal(this)"><span class="control-value" id="sbTopSpeed-val">25 mph</span></div>
+    <div class="control-row"><span class="control-label">Stall Speed</span><input type="range" id="sbStallSpeed" min="0" max="12" value="6" step="0.5" oninput="updateVal(this)"><span class="control-value" id="sbStallSpeed-val">6.0 mph</span></div>
+    <div class="control-row"><span class="control-label">Wind Speed</span><input type="range" id="sbWindSpeed" min="0" max="46" value="14" step="1" oninput="updateVal(this)"><span class="control-value" id="sbWindSpeed-val">14 mph</span></div>
     <div class="control-row"><span class="control-label">Wind Dir</span><input type="range" id="sbWindDir" min="0" max="360" value="270" step="1" oninput="updateVal(this)"><span class="control-value" id="sbWindDir-val">270°</span></div>
     <div class="control-row"><span class="control-label">Drag</span><input type="range" id="sbDrag" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbDrag-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Battery Cap</span><input type="range" id="sbBatteryCap" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbBatteryCap-val">1.00×</span></div>
@@ -404,7 +435,7 @@
 <div id="hud">
   <div class="label">Speed</div>
   <div style="display:flex;align-items:baseline;gap:6px">
-    <span class="speed" id="hud-speed">0</span><span class="unit">mph</span>
+    <span class="speed" id="hud-speed">0</span><span class="unit" id="speed-unit">mph</span>
     <span id="hud-accel" style="font-size:18px;font-weight:600;transition:opacity 0.2s;"></span>
   </div>
   <div class="label" style="margin-top:6px">Status</div>
@@ -487,6 +518,91 @@
   <button class="game-btn" onclick="rideAgain()">Ride Again</button>
   <div class="sponsor-bar">Powered by <strong>SLINGSHOT</strong></div>
   <div id="score-version" style="margin-top:8px;font-size:10px;color:rgba(140,180,230,0.3);letter-spacing:1px;"></div>
+</div>
+
+<div id="settings-overlay" class="hidden"
+  style="position:fixed;inset:0;z-index:300;display:flex;align-items:center;
+         justify-content:center;background:rgba(6,14,30,0.88);backdrop-filter:blur(18px);">
+  <div style="width:340px;max-height:88vh;overflow-y:auto;
+              background:rgba(8,18,38,0.95);border-radius:18px;
+              border:1px solid rgba(100,160,255,0.2);padding:20px;
+              scrollbar-width:thin;scrollbar-color:rgba(100,160,255,0.2) transparent;
+              font-family:'DM Sans',sans-serif;">
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:center;
+                margin-bottom:16px;padding-bottom:12px;
+                border-bottom:1px solid rgba(100,160,255,0.12);">
+      <span style="color:#c0d8ff;font-size:14px;font-weight:600;">Settings</span>
+      <button onclick="closeSettings()"
+        style="width:28px;height:28px;border-radius:7px;border:none;
+               background:rgba(255,255,255,0.06);color:#7eb8ff;font-size:16px;cursor:pointer;">✕</button>
+    </div>
+    <!-- FOIL -->
+    <div class="settings-section">
+      <div class="settings-title">FOIL</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;">
+        <button class="settings-foil-btn" data-foil="grom" onclick="applyFoilPreset('grom')">
+          <div class="settings-foil-name">Grom</div>
+          <div class="settings-foil-desc">Beginner</div>
+        </button>
+        <button class="settings-foil-btn active" data-foil="lift" onclick="applyFoilPreset('lift')">
+          <div class="settings-foil-name">Lift HA</div>
+          <div class="settings-foil-desc">All-round</div>
+        </button>
+        <button class="settings-foil-btn" data-foil="armstrong" onclick="applyFoilPreset('armstrong')">
+          <div class="settings-foil-name">Armstrong</div>
+          <div class="settings-foil-desc">Performance</div>
+        </button>
+        <button class="settings-foil-btn" data-foil="race" onclick="applyFoilPreset('race')">
+          <div class="settings-foil-name">Race HA</div>
+          <div class="settings-foil-desc">Expert</div>
+        </button>
+      </div>
+    </div>
+    <!-- UNITS -->
+    <div class="settings-section">
+      <div class="settings-title">UNITS</div>
+      <div style="display:flex;gap:7px;">
+        <button class="settings-unit-btn active" data-unit="mph" onclick="setUnits('mph')">mph · miles</button>
+        <button class="settings-unit-btn" data-unit="kph" onclick="setUnits('kph')">kph · km</button>
+        <button class="settings-unit-btn" data-unit="kts" onclick="setUnits('kts')">kts · nm</button>
+      </div>
+    </div>
+    <!-- AUDIO -->
+    <div class="settings-section">
+      <div class="settings-title">AUDIO</div>
+      <div class="settings-row">
+        <span class="settings-label">Ambient sounds</span>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" id="settings-ambient-toggle" checked
+            style="width:15px;height:15px;accent-color:#4a9eff;"
+            onchange="toggleAmbient(this.checked)">
+          <span style="color:#a0c4f0;font-size:11px;">ON</span>
+        </label>
+      </div>
+      <div class="settings-row" style="opacity:0.4;">
+        <span class="settings-label">Music tracks</span>
+        <span style="color:#7eb8ff;font-size:11px;">coming soon</span>
+      </div>
+      <div>
+        <div class="settings-label" style="margin-bottom:6px;">Local MP3</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <label style="padding:7px 13px;border-radius:8px;cursor:pointer;
+                        background:rgba(74,158,255,0.15);border:1px solid rgba(74,158,255,0.3);
+                        color:#7eb8ff;font-size:12px;">
+            Browse…
+            <input type="file" accept="audio/mp3,audio/*" style="display:none;"
+              onchange="loadLocalMusic(this.files[0])">
+          </label>
+          <button id="settings-music-stop" onclick="stopMusic()"
+            style="display:none;padding:7px 10px;border-radius:8px;
+                   background:rgba(255,60,60,0.15);border:1px solid rgba(255,60,60,0.3);
+                   color:#ff8080;font-size:12px;cursor:pointer;">Stop</button>
+        </div>
+        <div id="settings-music-status" style="margin-top:5px;font-size:10px;color:#5ef0a0;"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

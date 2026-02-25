@@ -6,9 +6,12 @@
 // Event-listener wiring (click/keydown/touchstart -> initAudio)
 // is left to the caller.
 
+import { state } from './state.js';
+
 let audioCtx = null;
 let audioInited = false;
 let noiseGain, toneOsc, toneGain, toneFilter, masterGain;
+let musicAudio = null;
 
 export function initAudio() {
   if (audioInited) return;
@@ -18,6 +21,7 @@ export function initAudio() {
   masterGain = audioCtx.createGain();
   masterGain.gain.value = 0.5;
   masterGain.connect(audioCtx.destination);
+  if (!state.audioSettings.ambientOn) masterGain.gain.value = 0;
 
   // -- Surf whoosh: filtered noise --
   const bufSize = audioCtx.sampleRate * 2;
@@ -121,4 +125,39 @@ export function updateAudio(slopeForce, normForce, speed) {
     toneGain.gain.linearRampToValueAtTime(0, now + sm * 2);
     toneGain._g2.gain.linearRampToValueAtTime(0, now + sm * 2);
   }
+}
+
+export function toggleAmbient(on) {
+  state.audioSettings.ambientOn = on;
+  if (!masterGain) return;
+  masterGain.gain.setTargetAtTime(on ? 0.5 : 0.0, audioCtx.currentTime, 0.1);
+}
+
+export function loadLocalMusic(file) {
+  if (!file) return;
+  if (musicAudio) { musicAudio.pause(); URL.revokeObjectURL(musicAudio._url); }
+  const url = URL.createObjectURL(file);
+  musicAudio = new Audio(url);
+  musicAudio._url = url;
+  musicAudio.loop = true;
+  musicAudio.volume = 0.65;
+  musicAudio.play().catch(() => {});
+  state.audioSettings.musicPlaying = true;
+  state.audioSettings.musicFileName = file.name;
+  const el = document.getElementById('settings-music-status');
+  if (el) el.textContent = 'Playing: ' + file.name;
+  const btn = document.getElementById('settings-music-stop');
+  if (btn) btn.style.display = 'inline-block';
+}
+
+export function stopMusic() {
+  if (!musicAudio) return;
+  musicAudio.pause();
+  URL.revokeObjectURL(musicAudio._url);
+  musicAudio = null;
+  state.audioSettings.musicPlaying = false;
+  const el = document.getElementById('settings-music-status');
+  if (el) el.textContent = '';
+  const btn = document.getElementById('settings-music-stop');
+  if (btn) btn.style.display = 'none';
 }

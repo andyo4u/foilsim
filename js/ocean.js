@@ -35,7 +35,7 @@
 //        • Could measure FPS over N frames and auto-step down
 
 import { state } from './state.js';
-import { getVal, degToDir, lerp, smoothstep } from './helpers.js';
+import { getVal, degToDir, lerp, smoothstep, convertSpeedToMs } from './helpers.js';
 
 /* ── Module-local helpers (terrain accessors) ──────────────── */
 function RT_WORLD_W() { return state.activeTerrainCfg ? state.activeTerrainCfg.worldW : 14382; }
@@ -1170,7 +1170,7 @@ function getWaveHeight(px,pz,t){
   const s1d=degToDir(getVal('swell1Dir')),s1p=getVal('swell1Period'),s1h=getVal('swell1Height');
   const s2d=degToDir(getVal('swell2Dir')),s2p=getVal('swell2Period'),s2h=getVal('swell2Height');
   const s3d=degToDir(getVal('swell3Dir')),s3p=getVal('swell3Period'),s3h=getVal('swell3Height');
-  const sp1=getVal('swell1Speed')*0.44704,sp2=getVal('swell2Speed')*0.44704,sp3=getVal('swell3Speed')*0.44704;
+  const sp1=convertSpeedToMs(getVal('swell1Speed')),sp2=convertSpeedToMs(getVal('swell2Speed')),sp3=convertSpeedToMs(getVal('swell3Speed'));
   const ch=getVal('chopHeight'),cd_=degToDir(getVal('chopDir'));
   h+=gerstnerY(px,pz,s1d.x,s1d.y,s1p,s1h,t,sp1);
   h+=gerstnerY(px,pz,s1d.x*1.07,s1d.y*1.07,s1p*.7,s1h*.22,t*1.05,sp1);
@@ -1207,7 +1207,7 @@ function getSwellHeight(px,pz,t){
   const s1d=degToDir(getVal('swell1Dir')),s1p=getVal('swell1Period'),s1h=getVal('swell1Height');
   const s2d=degToDir(getVal('swell2Dir')),s2p=getVal('swell2Period'),s2h=getVal('swell2Height');
   const s3d=degToDir(getVal('swell3Dir')),s3p=getVal('swell3Period'),s3h=getVal('swell3Height');
-  const sp1=getVal('swell1Speed')*0.44704,sp2=getVal('swell2Speed')*0.44704,sp3=getVal('swell3Speed')*0.44704;
+  const sp1=convertSpeedToMs(getVal('swell1Speed')),sp2=convertSpeedToMs(getVal('swell2Speed')),sp3=convertSpeedToMs(getVal('swell3Speed'));
   h+=gerstnerY(px,pz,s1d.x,s1d.y,s1p,s1h,t,sp1);
   h+=gerstnerY(px,pz,s1d.x*1.07,s1d.y*1.07,s1p*.7,s1h*.22,t*1.05,sp1);
   h+=gerstnerY(px,pz,s2d.x,s2d.y,s2p,s2h,t,sp2);

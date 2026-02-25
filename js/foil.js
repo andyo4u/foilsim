@@ -66,7 +66,7 @@
 //        zones, on-screen joystick, or tilt-to-steer option.
 
 import { state } from './state.js';
-import { lerp, toggleControls } from './helpers.js';
+import { lerp, toggleControls, convertSpeedFromMs, updateVal, cacheAllSliders } from './helpers.js';
 
 /* ── Constants ────────────────────────────────────────────── */
 
@@ -625,4 +625,31 @@ export function initFoil() {
 
   // ── Camera controls ─────────────────────────────────────
   setupCameraControls();
+}
+
+export function applyFoilPreset(key) {
+  const preset = state.foilPresets[key];
+  if (!preset) return;
+  state.foilPreset = key;
+
+  const topVal   = +convertSpeedFromMs(preset.topSpeedMs).toFixed(1);
+  const stallVal = +convertSpeedFromMs(preset.stallSpeedMs).toFixed(1);
+
+  const updates = {
+    sbTopSpeed: topVal, sbStallSpeed: stallVal,
+    sbGlide: preset.glide, sbPumpPower: preset.pump,
+    sbDrag: preset.drag, sbStability: preset.stability,
+  };
+  Object.entries(updates).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = val;
+    updateVal(el);
+  });
+  cacheAllSliders();
+
+  if (boardMat) boardMat.color.setHex(preset.color);
+
+  document.querySelectorAll('.settings-foil-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.foil === key));
 }

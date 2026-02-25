@@ -31,8 +31,8 @@ presets.tutorial = {
   swell1Height:2, swell1Period:5, swell1Dir:270,
   swell2Height:1.9, swell2Period:10, swell2Dir:250,
   swell3Height:0, swell3Period:16, swell3Dir:200,
-  sbGlide:1.3, sbPumpPower:1.2, sbTurnSpeed:1.0, sbTopSpeed:22, sbStallSpeed:3,
-  sbWindSpeed:8, sbWindDir:270,
+  sbGlide:1.3, sbPumpPower:1.2, sbTurnSpeed:1.0, sbTopSpeed:25, sbStallSpeed:3.5,
+  sbWindSpeed:9, sbWindDir:270,
   sbBatteryCap:1.5, sbBatteryDrain:0.7, sbWaveEnergy:1.2, sbStability:1.3, sbDrag:0.8
 };
 

@@ -802,13 +802,10 @@ function animate() {
       }
     }
 
-    // Horizon fill — disabled in real-terrain mode (waterFillPlane handles that)
+    // Horizon fill — depth testing prevents it rendering over ocean/terrain;
+    // disabled in real-terrain mode (waterFillPlane handles that instead)
     if (state.horizonFill) {
-      const half = state.oceanSize / 2;
-      const hfu = state.horizonFill.material.uniforms;
-      hfu.uOceanMin.value.set(state.oceanMesh.position.x - half, state.oceanMesh.position.z - half);
-      hfu.uOceanMax.value.set(state.oceanMesh.position.x + half, state.oceanMesh.position.z + half);
-      hfu.uFogColor.value.copy(u.uFogColor.value);
+      state.horizonFill.material.uniforms.uFogColor.value.copy(u.uFogColor.value);
       state.horizonFill.visible = !state.waterFillPlane;
     }
   }

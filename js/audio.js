@@ -134,6 +134,63 @@ export function toggleAmbient(on) {
   masterGain.gain.setTargetAtTime(on ? 0.5 : 0.0, audioCtx.currentTime, 0.1);
 }
 
+// ── ID3v2 tag parser (covers v2.2, v2.3, v2.4) ──────────────────────────────
+// Reads the first 64 KB of the file to extract artist and title without any
+// external library.  Returns { artist, title } or null if no ID3 header found.
+function _parseID3(buffer) {
+  try {
+    const b = new Uint8Array(buffer);
+    if (b[0] !== 0x49 || b[1] !== 0x44 || b[2] !== 0x33) return null; // no "ID3"
+    const ver = b[3]; // major version: 2, 3 or 4
+    const tagSize = ((b[6]&0x7f)<<21)|((b[7]&0x7f)<<14)|((b[8]&0x7f)<<7)|(b[9]&0x7f);
+    const end = Math.min(10 + tagSize, buffer.byteLength);
+    const result = {};
+    let pos = 10;
+
+    const decode = (enc, slice) => {
+      if (enc === 1) return new TextDecoder('utf-16').decode(slice);
+      if (enc === 2) return new TextDecoder('utf-16be').decode(slice);
+      if (enc === 3) return new TextDecoder('utf-8').decode(slice);
+      return new TextDecoder('iso-8859-1').decode(slice);
+    };
+
+    if (ver === 2) {
+      // ID3v2.2: 3-char frame IDs, 3-byte sizes
+      while (pos < end - 6) {
+        const id = String.fromCharCode(b[pos], b[pos+1], b[pos+2]);
+        if (id === '\x00\x00\x00') break;
+        const size = (b[pos+3]<<16)|(b[pos+4]<<8)|b[pos+5];
+        pos += 6;
+        if (size <= 0 || pos + size > end) break;
+        if (id === 'TT2' || id === 'TP1') {
+          const text = decode(b[pos], b.slice(pos+1, pos+size)).replace(/\0/g,'').trim();
+          if (id === 'TT2') result.title  = text;
+          if (id === 'TP1') result.artist = text;
+        }
+        pos += size;
+      }
+    } else {
+      // ID3v2.3/2.4: 4-char frame IDs, 4-byte sizes
+      while (pos < end - 10) {
+        const id = String.fromCharCode(b[pos], b[pos+1], b[pos+2], b[pos+3]);
+        if (id === '\x00\x00\x00\x00') break;
+        const size = ver === 4
+          ? ((b[pos+4]&0x7f)<<21)|((b[pos+5]&0x7f)<<14)|((b[pos+6]&0x7f)<<7)|(b[pos+7]&0x7f)
+          : (b[pos+4]<<24)|(b[pos+5]<<16)|(b[pos+6]<<8)|b[pos+7];
+        pos += 10;
+        if (size <= 0 || pos + size > end) break;
+        if (id === 'TIT2' || id === 'TPE1') {
+          const text = decode(b[pos], b.slice(pos+1, pos+size)).replace(/\0/g,'').trim();
+          if (id === 'TIT2') result.title  = text;
+          if (id === 'TPE1') result.artist = text;
+        }
+        pos += size;
+      }
+    }
+    return (result.title || result.artist) ? result : null;
+  } catch { return null; }
+}
+
 export function loadLocalMusic(file) {
   if (!file) return;
   if (musicAudio) { musicAudio.pause(); URL.revokeObjectURL(musicAudio._url); }
@@ -144,11 +201,24 @@ export function loadLocalMusic(file) {
   musicAudio.volume = 0.65;
   musicWaitingForFoil = true;  // play deferred until first foil liftoff
   state.audioSettings.musicPlaying = false;
-  state.audioSettings.musicFileName = file.name;
+  // Show filename immediately; ID3 read will update it asynchronously
+  state.audioSettings.musicFileName = file.name.replace(/\.[^.]+$/, '');
   const el = document.getElementById('settings-music-status');
   if (el) el.textContent = 'Ready — plays when foiling';
   const btn = document.getElementById('settings-music-stop');
   if (btn) btn.style.display = 'inline-block';
+
+  // Read first 64 KB to parse ID3 tags (they live at the very start of the file)
+  const reader = new FileReader();
+  reader.onload = e => {
+    const tags = _parseID3(e.target.result);
+    if (tags) {
+      const parts = [tags.artist, tags.title].filter(Boolean);
+      state.audioSettings.musicFileName = parts.join(' — ');
+    }
+    if (el) el.textContent = 'Ready · ' + state.audioSettings.musicFileName;
+  };
+  reader.readAsArrayBuffer(file.slice(0, 65536));
 }
 
 export function onFoilStart() {
@@ -157,7 +227,7 @@ export function onFoilStart() {
   musicAudio.play().catch(() => {});
   state.audioSettings.musicPlaying = true;
   const el = document.getElementById('settings-music-status');
-  if (el) el.textContent = 'Playing: ' + state.audioSettings.musicFileName;
+  if (el) el.textContent = 'Now playing · ' + state.audioSettings.musicFileName;
 }
 
 export function stopMusic() {

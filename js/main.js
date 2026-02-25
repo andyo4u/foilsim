@@ -741,7 +741,7 @@ function animate() {
   foil.speed += (slopeForce + pf + windForce) * dt;
   foil.speed -= drag * dt;
   const speedCapMs = convertSpeedToMs(getVal('sbTopSpeed'));
-  const speedCap = state.powerUp.boostActive ? speedCapMs * 1.5 : speedCapMs;
+  const speedCap = speedCapMs; // power-ups disabled; was: state.powerUp.boostActive ? speedCapMs * 1.5 : speedCapMs
   foil.speed = Math.max(0, Math.min(foil.speed, speedCap));
 
   const tgtRH = isF ? .6 + foil.pitch * .5 : 0;
@@ -1007,8 +1007,8 @@ function animate() {
 
   foil.prevWH = wH;
 
-  // ── POWER-UP: Spawn, Collect, Boost (disabled in tutorial) ──
-  if (state.activeBgPreset !== 'tutorial') {
+  // ── POWER-UP: Spawn, Collect, Boost — DISABLED (code preserved for future re-enabling) ──
+  if (false && state.activeBgPreset !== 'tutorial') {
     const pu = state.powerUp;
 
     // Spawn timer — only when no orb visible and not boosting

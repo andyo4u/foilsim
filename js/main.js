@@ -550,17 +550,20 @@ function animate() {
   dirLight.color.setRGB(1.0, lerp(0.95, 0.55, warmth), lerp(0.92, 0.3, warmth));
   ambLight.intensity = 0.15 + sunBright * 0.55;
 
-  // Dynamic fog color
+  // Dynamic fog color — must stay bright enough to survive ACES tonemapping at 0.65 exposure
+  // Low sun / sunset: warm orange-gold; high sun: clear blue
   u.uFogColor.value.setRGB(
-    lerp(0.15, 0.55, sunBright) + warmth * 0.15,
-    lerp(0.12, 0.70, sunBright),
-    lerp(0.18, 0.85, sunBright)
+    lerp(0.38, 0.55, sunBright) + warmth * 0.28,   // warm orange glow near horizon
+    lerp(0.28, 0.70, sunBright),
+    lerp(0.32, 0.85, sunBright) - warmth * 0.18    // less blue when warm
   );
   u.uFogSunColor.value.setRGB(
     lerp(0.5, 0.8, sunBright),
     lerp(0.3, 0.75, sunBright),
     lerp(0.15, 0.6, sunBright)
   );
+  // Keep clear color in sync so beyond-mesh areas match horizon (sky addon covers most of it)
+  renderer.setClearColor(u.uFogColor.value);
 
   // Terrain uniforms — share fog/sun with ocean
   state.silhouetteMat.uniforms.uSunDir.value.copy(sv);

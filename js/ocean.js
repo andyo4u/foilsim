@@ -211,7 +211,7 @@ function initOcean() {
         col=mix(col,pocketCol,pocket*pulse*0.75);
         float fog=1.-exp(-cd*.0012);
         fog=max(fog,smoothstep(uOceanHalf*0.55,uOceanHalf*0.90,cd));
-        col=mix(col,mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),fog);
+        col=mix(col,max(mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),vec3(0.25,0.22,0.38)),fog);
         gl_FragColor=vec4(col, alpha);
       } else if (uRenderMode > 10.5) {
         // ═══ WATERCOLOR PATH ═══
@@ -1107,7 +1107,7 @@ function initOcean() {
         }
         float fog=1.-exp(-cd*.0012);
         fog=max(fog,smoothstep(uOceanHalf*0.55,uOceanHalf*0.90,cd));
-        col=mix(col,mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),fog);
+        col=mix(col,max(mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),vec3(0.25,0.22,0.38)),fog);
         gl_FragColor=vec4(col, alpha);
       }
 

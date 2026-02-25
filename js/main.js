@@ -93,7 +93,7 @@ import { state } from './state.js';
 import { updateVal, toggleControls, getVal, cacheAllSliders, applyPreset, showToast,
          copySettings, copySettingsJSON, lerp, smoothstep, degToDir,
          convertSpeedToMs, convertSpeedFromMs, formatSpeed, formatDistance, setUnits } from './helpers.js';
-import { initAudio, updateAudio, toggleAmbient, loadLocalMusic, stopMusic, onFoilStart } from './audio.js';
+import { initAudio, updateAudio, toggleAmbient, loadLocalMusic, stopMusic, onFoilStart, loadRandomTrackIfNeeded } from './audio.js';
 import { initOcean, updateEnvMap, getWaveHeight, getWaveSlope, getSwellHeight,
          getSwellSlope, setRenderMode, updateWaveChart, rebuildOceanGeometry } from './ocean.js';
 import { initFoil, emitSpray, updateSpray, updateWake, updateStreamer, toggleFreeCam, updateCamera, applyFoilPreset } from './foil.js';
@@ -402,6 +402,9 @@ function startRide(locationPreset) {
   // Track starting position
   state.ridePrevX = state.foil.x;
   state.ridePrevZ = state.foil.z;
+
+  // Auto-load a random track from music/ if user hasn't picked one
+  loadRandomTrackIfNeeded();
 
   // UI transitions
   const isTutorial = locationPreset === 'tutorial';

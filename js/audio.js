@@ -13,6 +13,7 @@ let audioInited = false;
 let noiseGain, toneOsc, toneGain, toneFilter, masterGain;
 let musicAudio = null;
 let musicWaitingForFoil = false;
+let _autoMusicArmed = false;  // true once loadRandomTrackIfNeeded() has run this ride
 
 export function initAudio() {
   if (audioInited) return;
@@ -233,12 +234,55 @@ export function onFoilStart() {
 export function stopMusic() {
   if (!musicAudio) return;
   musicAudio.pause();
-  URL.revokeObjectURL(musicAudio._url);
+  if (musicAudio._url) URL.revokeObjectURL(musicAudio._url);  // null for server-loaded tracks
   musicAudio = null;
   musicWaitingForFoil = false;
+  _autoMusicArmed = false;
   state.audioSettings.musicPlaying = false;
   const el = document.getElementById('settings-music-status');
   if (el) el.textContent = '';
   const btn = document.getElementById('settings-music-stop');
   if (btn) btn.style.display = 'none';
+}
+
+async function _loadRandomTrack() {
+  try {
+    const res = await fetch('music/playlist.json');
+    if (!res.ok) return;
+    const playlist = await res.json();
+    if (!playlist.length) return;
+    const file = playlist[Math.floor(Math.random() * playlist.length)];
+    const url = 'music/' + file;
+
+    musicAudio = new Audio(url);
+    musicAudio._url = null;  // server URL — nothing to revoke
+    musicAudio.loop = true;
+    musicAudio.volume = 0.65;
+    musicWaitingForFoil = true;
+    state.audioSettings.musicFileName = file.replace(/\.[^.]+$/, '');
+    state.audioSettings.musicPlaying = false;
+
+    const el = document.getElementById('settings-music-status');
+    if (el) el.textContent = 'Ready — plays when foiling';
+    const btn = document.getElementById('settings-music-stop');
+    if (btn) btn.style.display = 'inline-block';
+
+    // Fetch first 64 KB to parse ID3 tags
+    const hdrRes = await fetch(url, { headers: { Range: 'bytes=0-65535' } });
+    if (hdrRes.ok) {
+      const buf = await hdrRes.arrayBuffer();
+      const tags = _parseID3(buf);
+      if (tags) {
+        const parts = [tags.artist, tags.title].filter(Boolean);
+        state.audioSettings.musicFileName = parts.join(' — ');
+      }
+    }
+    if (el) el.textContent = 'Ready · ' + state.audioSettings.musicFileName;
+  } catch { /* network not available — silently skip */ }
+}
+
+export async function loadRandomTrackIfNeeded() {
+  if (musicAudio || _autoMusicArmed) return;  // user already loaded a track, or already armed
+  _autoMusicArmed = true;
+  await _loadRandomTrack();
 }

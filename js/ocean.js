@@ -196,7 +196,7 @@ function initOcean() {
         vec3 sunS=vec3(1,.95,.8)*(pow(NdH,256.)*2.5+pow(NdH,64.)*.5);
         vec3 R=reflect(-V,N);vec3 skyR=mix(uFogColor,uFogColor*.3+vec3(.02,.05,.15),pow(max(R.y,0.),.5));
         float srDot=max(dot(R,L),0.);skyR+=uFogSunColor*pow(srDot,8.)*.3;skyR+=vec3(1,.9,.7)*pow(srDot,64.)*.5;
-        vec3 col=mix(wc+sssC,skyR+sunS,fr);
+        vec3 col=mix(wc+sssC,skyR+sunS,fr);col+=uFogColor*(0.06+smoothstep(0.,0.25,uSunDir.y)*0.04);
         float fp=noise(vWorldPos.xz*1.5+uTime*.2)*.5+.5;fp*=noise(vWorldPos.xz*4.-uTime*.15)*.5+.5;
         col=mix(col,uFoamColor*(.8+.2*fp),smoothstep(.15,.6,vFoam*fp)*.85);
         // ── Pocket highlight (always on) ──
@@ -209,7 +209,7 @@ function initOcean() {
         float pulse=0.75+0.25*sin(uTime*2.5);
         vec3 pocketCol=vec3(0.1,1.0,0.7);
         col=mix(col,pocketCol,pocket*pulse*0.75);
-        float fog=1.-exp(-cd*.0012);
+        float fog=1.-exp(-cd*.002);
         fog=max(fog,smoothstep(uOceanHalf*0.55,uOceanHalf*0.90,cd));
         col=mix(col,max(mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),vec3(0.25,0.22,0.38)),fog);
         gl_FragColor=vec4(col, alpha);
@@ -1092,7 +1092,7 @@ function initOcean() {
         vec3 sunS=vec3(1,.95,.8)*(pow(NdH,256.)*2.5+pow(NdH,64.)*.5);
         vec3 R=reflect(-V,N);vec3 skyR=mix(uFogColor,uFogColor*.3+vec3(.02,.05,.15),pow(max(R.y,0.),.5));
         float srDot=max(dot(R,L),0.);skyR+=uFogSunColor*pow(srDot,8.)*.3;skyR+=vec3(1,.9,.7)*pow(srDot,64.)*.5;
-        vec3 col=mix(wc+sssC,skyR+sunS,fr);
+        vec3 col=mix(wc+sssC,skyR+sunS,fr);col+=uFogColor*(0.06+smoothstep(0.,0.25,uSunDir.y)*0.04);
         float fp=noise(vWorldPos.xz*1.5+uTime*.2)*.5+.5;fp*=noise(vWorldPos.xz*4.-uTime*.15)*.5+.5;
         col=mix(col,uFoamColor*(.8+.2*fp),smoothstep(.15,.6,vFoam*fp)*.85);
         // ── Pocket highlight (tutorial) ──
@@ -1105,7 +1105,7 @@ function initOcean() {
           vec3 pocketCol=vec3(0.1,1.0,0.7);
           col=mix(col,pocketCol,pocket*pulse*0.75*uShowPocket);
         }
-        float fog=1.-exp(-cd*.0012);
+        float fog=1.-exp(-cd*.002);
         fog=max(fog,smoothstep(uOceanHalf*0.55,uOceanHalf*0.90,cd));
         col=mix(col,max(mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),vec3(0.25,0.22,0.38)),fog);
         gl_FragColor=vec4(col, alpha);

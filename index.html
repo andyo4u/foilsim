@@ -199,6 +199,7 @@
     transition: opacity 0.4s ease;
   }
   .game-overlay.hidden { opacity: 0; pointer-events: none; }
+  @keyframes foil-spin { to { transform: rotate(360deg); } }
 
   .game-overlay h1 {
     font-size: 56px; font-weight: 300; color: #fff;
@@ -329,7 +330,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.42</div>
+<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.43</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -471,7 +472,7 @@
 <div id="hud-energy-boost">ENERGY BOOST</div>
 
 <!-- Menu overlay -->
-<div id="menu-overlay" class="game-overlay">
+<div id="menu-overlay" class="game-overlay hidden">
   <h1>FOILBRAIN</h1>
   <div class="subtitle">Hydrofoil Simulator</div>
   <div style="display:flex;gap:10px;margin-bottom:24px;">
@@ -599,5 +600,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/objects/Sky.js"></script>
 <script type="module" src="js/main.js"></script>
+
+<!-- Loading screen — visible on page load, dismissed after first GL frames render -->
+<div id="loading-screen" class="game-overlay" style="z-index:500;background:rgb(4,10,22);transition:opacity 0.7s ease;">
+  <h1 style="font-weight:300;letter-spacing:6px;margin-bottom:4px;">FOILBRAIN</h1>
+  <div style="font-size:13px;color:rgba(180,210,255,0.55);letter-spacing:3px;margin-bottom:52px;">Hydrofoil Simulator</div>
+  <div style="width:36px;height:36px;border-radius:50%;border:2px solid rgba(100,160,255,0.12);border-top-color:rgba(100,160,255,0.8);animation:foil-spin 0.85s linear infinite;"></div>
+</div>
 </body>
 </html>

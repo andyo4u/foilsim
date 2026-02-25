@@ -472,6 +472,10 @@ const restartBtnEl = document.getElementById('restart-btn');
 const PANO_ANGLE = Math.PI;
 const PANO_DIST = 1600;
 
+// Loading screen → menu transition: triggered after 2 rendered frames so GL
+// shaders have time to compile before the scene is revealed.
+let _readyFrames = 0;
+
 function animate() {
   requestAnimationFrame(animate);
 
@@ -1125,6 +1129,15 @@ function animate() {
   }
 
   renderer.render(scene, camera);
+
+  // Dismiss loading screen after second render (shaders compiled, scene visible)
+  if (_readyFrames < 2) {
+    _readyFrames++;
+    if (_readyFrames === 2) {
+      document.getElementById('loading-screen').classList.add('hidden');
+      document.getElementById('menu-overlay').classList.remove('hidden');
+    }
+  }
 }
 
 animate();

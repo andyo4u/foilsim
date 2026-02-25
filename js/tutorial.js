@@ -271,7 +271,5 @@ export function endTutorial() {
   document.getElementById('menu-overlay').classList.remove('hidden');
   document.getElementById('hud-timer').style.display = 'none';
   document.getElementById('hud-boost').style.display = 'none';
-  const sb = document.getElementById('settings-btn');
-  if (sb) sb.style.display = '';
   state.gamePhase = 'menu';
 }

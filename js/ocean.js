@@ -1147,12 +1147,25 @@ function initOcean() {
     hGeo.rotateX(-Math.PI / 2);
     const hMat = new THREE.ShaderMaterial({
       uniforms: {
+        uOceanMin: { value: new THREE.Vector2(-300, -300) },
+        uOceanMax: { value: new THREE.Vector2(300, 300) },
         uFogColor: { value: new THREE.Color(0.55, 0.7, 0.85) },
       },
-      vertexShader: `void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+      vertexShader: `
+        varying vec3 vWorldPos;
+        void main() {
+          vWorldPos = (modelMatrix * vec4(position,1.0)).xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+        }`,
       fragmentShader: `
+        uniform vec2 uOceanMin, uOceanMax;
         uniform vec3 uFogColor;
-        void main() { gl_FragColor = vec4(uFogColor, 1.0); }`,
+        varying vec3 vWorldPos;
+        void main() {
+          if (vWorldPos.x > uOceanMin.x && vWorldPos.x < uOceanMax.x &&
+              vWorldPos.z > uOceanMin.y && vWorldPos.z < uOceanMax.y) discard;
+          gl_FragColor = vec4(uFogColor, 1.0);
+        }`,
       transparent: true,
       depthTest: true,
       depthWrite: false,

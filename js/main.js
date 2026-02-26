@@ -93,7 +93,7 @@ import { state } from './state.js';
 import { updateVal, toggleControls, getVal, cacheAllSliders, applyPreset, showToast,
          copySettings, copySettingsJSON, lerp, smoothstep, degToDir,
          convertSpeedToMs, convertSpeedFromMs, formatSpeed, formatDistance, setUnits } from './helpers.js';
-import { initAudio, updateAudio, toggleAmbient, loadLocalMusic, stopMusic, onFoilStart, loadRandomTrackIfNeeded } from './audio.js';
+import { initAudio, updateAudio, toggleAmbient, loadLocalMusic, stopMusic, fadeOutMusic, onFoilStart, loadRandomTrackIfNeeded } from './audio.js';
 import { initOcean, updateEnvMap, getWaveHeight, getWaveSlope, getSwellHeight,
          getSwellSlope, setRenderMode, updateWaveChart, rebuildOceanGeometry } from './ocean.js';
 import { initFoil, emitSpray, updateSpray, updateWake, updateStreamer, toggleFreeCam, updateCamera, applyFoilPreset } from './foil.js';
@@ -340,6 +340,19 @@ function closeSettings() {
   document.getElementById('settings-overlay').style.display = 'none';
 }
 
+function exitToMenu() {
+  fadeOutMusic(1500);
+  if (state.activeBgPreset === 'tutorial') {
+    endTutorial();   // handles its own phase cleanup + shows menu
+  } else {
+    document.getElementById('exit-btn').style.display = 'none';
+    document.getElementById('hud-timer').style.display = 'none';
+    document.getElementById('hud-boost').style.display = 'none';
+    document.getElementById('menu-overlay').classList.remove('hidden');
+    state.gamePhase = 'menu';
+  }
+}
+
 window.updateVal         = updateVal;
 window.toggleControls    = toggleControls;
 window.applyPreset       = applyPreset;
@@ -357,6 +370,7 @@ window.applyFoilPreset = applyFoilPreset;
 window.toggleAmbient   = toggleAmbient;
 window.loadLocalMusic  = loadLocalMusic;
 window.stopMusic       = stopMusic;
+window.exitToMenu      = exitToMenu;
 
 // ═══════════════════════════
 // GAME LOOP — Menu → Ride → Score
@@ -403,7 +417,8 @@ function startRide(locationPreset) {
   state.ridePrevX = state.foil.x;
   state.ridePrevZ = state.foil.z;
 
-  // Auto-load a random track from music/ if user hasn't picked one
+  // Auto-load a random track from music/ if user hasn't picked one.
+  // Music waits for first foil liftoff (onFoilStart) before playing.
   loadRandomTrackIfNeeded();
 
   // UI transitions
@@ -415,12 +430,16 @@ function startRide(locationPreset) {
   document.getElementById('hud-timer').textContent = '2:00';
   document.getElementById('hud-boost').style.display = 'none';
   document.getElementById('info-bar').style.opacity = '';
+  document.getElementById('exit-btn').style.display = 'flex';
 
   state.gamePhase = 'riding';
 }
 
 function endRide() {
   state.gamePhase = 'score';
+
+  // Fade out music over 2s
+  fadeOutMusic(2000);
 
   // Compute final score
   const s = state.score;
@@ -432,15 +451,17 @@ function endRide() {
   document.getElementById('score-pocket').textContent = s.pocketTime.toFixed(1) + 's';
   document.getElementById('score-total').textContent = s.total;
 
-  // Show score overlay, hide timer
+  // Show score overlay, hide timer and exit
   document.getElementById('score-overlay').classList.remove('hidden');
   document.getElementById('hud-timer').style.display = 'none';
   document.getElementById('hud-boost').style.display = 'none';
+  document.getElementById('exit-btn').style.display = 'none';
 }
 
 function rideAgain() {
   document.getElementById('score-overlay').classList.add('hidden');
   document.getElementById('menu-overlay').classList.remove('hidden');
+  document.getElementById('exit-btn').style.display = 'none';
   state.gamePhase = 'menu';
 }
 
@@ -468,7 +489,9 @@ const AUTO_Q_WINDOW    = 6;   // 500ms samples → 3 seconds
 const AUTO_Q_DOWN_FPS  = 45;  // step down if avg below this
 const AUTO_Q_UP_FPS    = 55;  // step up if avg above this
 const AUTO_Q_UP_HOLD   = 10;  // consecutive above-thresh samples before stepping up (5s)
+const AUTO_Q_INTERVAL  = 30000; // minimum ms between quality changes
 let autoQUpCount = 0;
+let autoQLastChange = performance.now() - AUTO_Q_INTERVAL; // allow first check immediately
 
 // DOM refs for shallow water
 const shallowWarningEl = document.getElementById('shallow-warning');
@@ -517,23 +540,27 @@ function animate() {
       if (autoQFrames.length >= AUTO_Q_WINDOW) {
         const avgFps = autoQFrames.reduce((a, b) => a + b, 0) / autoQFrames.length;
         const curIdx = QUALITY_LEVELS.indexOf(state.quality);
+        const nowQ = performance.now();
 
-        if (avgFps < AUTO_Q_DOWN_FPS && curIdx > 0) {
-          // Step down immediately
-          setQuality(QUALITY_LEVELS[curIdx - 1]);
-          state.autoQuality = true;  // re-enable (setQuality disables it)
-          autoQFrames.length = 0;
-          autoQUpCount = 0;
-        } else if (avgFps > AUTO_Q_UP_FPS && curIdx < QUALITY_LEVELS.length - 1) {
-          autoQUpCount++;
-          if (autoQUpCount >= AUTO_Q_UP_HOLD) {
-            setQuality(QUALITY_LEVELS[curIdx + 1]);
-            state.autoQuality = true;  // re-enable
+        if (nowQ - autoQLastChange >= AUTO_Q_INTERVAL) {
+          if (avgFps < AUTO_Q_DOWN_FPS && curIdx > 0) {
+            setQuality(QUALITY_LEVELS[curIdx - 1]);
+            state.autoQuality = true;  // re-enable (setQuality disables it)
             autoQFrames.length = 0;
             autoQUpCount = 0;
+            autoQLastChange = nowQ;
+          } else if (avgFps > AUTO_Q_UP_FPS && curIdx < QUALITY_LEVELS.length - 1) {
+            autoQUpCount++;
+            if (autoQUpCount >= AUTO_Q_UP_HOLD) {
+              setQuality(QUALITY_LEVELS[curIdx + 1]);
+              state.autoQuality = true;  // re-enable
+              autoQFrames.length = 0;
+              autoQUpCount = 0;
+              autoQLastChange = nowQ;
+            }
+          } else {
+            autoQUpCount = 0;
           }
-        } else {
-          autoQUpCount = 0;
         }
       }
     }

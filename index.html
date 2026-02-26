@@ -148,18 +148,17 @@
   }
   #hud-tutorial.show { opacity: 1; }
 
-  #tutorial-done-btn {
-    position: fixed; top: 14%; left: 50%; transform: translateX(-50%);
-    z-index: 80; padding: 14px 36px;
-    font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 600;
-    color: #fff; background: rgba(74,158,255,0.75); border: 2px solid rgba(100,180,255,0.5);
-    border-radius: 12px; cursor: pointer; display: none;
-    backdrop-filter: blur(8px);
-    transition: background 0.2s, transform 0.15s;
-    letter-spacing: 1px;
+  /* Exit-to-menu button — shown during rides, top-right below controls toggle */
+  #exit-btn {
+    display: none; position: fixed; top: 68px; right: 16px; z-index: 100;
+    width: 44px; height: 44px; border-radius: 12px;
+    background: rgba(8,18,38,0.85); backdrop-filter: blur(12px);
+    border: 1px solid rgba(100,160,255,0.2);
+    color: #7eb8ff; font-size: 18px; cursor: pointer;
+    align-items: center; justify-content: center;
+    transition: background 0.2s;
   }
-  #tutorial-done-btn:hover { background: rgba(74,158,255,0.95); transform: translateX(-50%) translateY(-2px); }
-  #tutorial-done-btn:active { transform: translateX(-50%) scale(0.97); }
+  #exit-btn:hover { background: rgba(20,40,70,0.9); color: #fff; }
 
   /* Shallow water warning overlay */
   #shallow-warning {
@@ -330,7 +329,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.49</div>
+<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.50</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -447,7 +446,7 @@
 
 <div id="hud-pocket">In the Pocket!</div>
 <div id="hud-tutorial"></div>
-<button id="tutorial-done-btn" onclick="endTutorial()">Stoked</button>
+<button id="exit-btn" onclick="exitToMenu()" title="Back to Menu">✕</button>
 <div id="shallow-warning">Shallow Water!</div>
 <button id="restart-btn" onclick="restartLevel()">↻ Restart</button>
 
@@ -475,9 +474,13 @@
 <div id="menu-overlay" class="game-overlay hidden">
   <h1>FOILBRAIN</h1>
   <div class="subtitle">Hydrofoil Simulator</div>
-  <div style="display:flex;gap:10px;margin-bottom:24px;">
+  <div style="display:flex;gap:10px;margin-bottom:10px;">
     <button class="game-btn" style="padding:10px 32px;font-size:14px;" onclick="startRide('tutorial')">Tutorial</button>
     <button class="game-btn" style="padding:10px 28px;font-size:14px;background:rgba(100,160,255,0.15);box-shadow:none;border:1px solid rgba(100,160,255,0.3);" onclick="openSettings()">⚙ Settings</button>
+  </div>
+  <div style="display:flex;gap:10px;margin-bottom:24px;">
+    <button class="game-btn" disabled style="padding:8px 20px;font-size:12px;opacity:0.38;cursor:not-allowed;background:rgba(100,160,255,0.07);box-shadow:none;border:1px solid rgba(100,160,255,0.18);">Advanced Tutorial <span style="font-size:10px;opacity:0.7;">· Coming Soon</span></button>
+    <button class="game-btn" disabled style="padding:8px 20px;font-size:12px;opacity:0.38;cursor:not-allowed;background:rgba(100,160,255,0.07);box-shadow:none;border:1px solid rgba(100,160,255,0.18);">Foil Designer <span style="font-size:10px;opacity:0.7;">· Coming Soon</span></button>
   </div>
   <div class="location-grid" style="grid-template-columns:repeat(3,1fr);width:min(480px,95vw);margin-bottom:28px;">
     <div class="location-card" onclick="startRide('gorge-real')">

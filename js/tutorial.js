@@ -23,6 +23,7 @@
 import { state } from './state.js';
 import { presets, applyPreset, updateVal, getVal } from './helpers.js';
 import { bgPresets } from './terrain.js';
+import { fadeOutMusic } from './audio.js';
 
 // ── Tutorial preset: waves present but rider starts at zero speed ──
 presets.tutorial = {
@@ -255,8 +256,6 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
       phaseTimer = 0;
       state.cam.offsetTheta = savedOffsetTheta;
       showMessage('You are ready to rip');
-      const btn = getDoneBtn();
-      if (btn) btn.style.display = 'block';
     }
     return;
   }
@@ -264,7 +263,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
   // "ready" phase — just wait for Stoked button click
 }
 
-/** Called when the rider clicks "Stoked, I'm done learning". */
+/** Called when the rider exits the tutorial (via exit button). */
 export function endTutorial() {
   phase = 'idle';
   targetPocketGlow = 0;
@@ -272,8 +271,8 @@ export function endTutorial() {
   // Restore default Preetham sky uniforms for other locations
   const su = state.skyUniforms;
   if (su) {
-    su['turbidity'].value    = 4;
-    su['rayleigh'].value     = 2;
+    su['turbidity'].value         = 4;
+    su['rayleigh'].value          = 2;
     su['mieCoefficient'].value    = 0;
     su['mieDirectionalG'].value   = 0;
   }
@@ -284,8 +283,8 @@ export function endTutorial() {
   state.cam.dist = savedCamDist;
   state.cam.offsetTheta = savedOffsetTheta;
   hideMessage();
-  const btn = getDoneBtn();
-  if (btn) btn.style.display = 'none';
+  fadeOutMusic(1500);
+  document.getElementById('exit-btn').style.display = 'none';
   document.getElementById('menu-overlay').classList.remove('hidden');
   document.getElementById('hud-timer').style.display = 'none';
   document.getElementById('hud-boost').style.display = 'none';

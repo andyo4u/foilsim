@@ -245,6 +245,29 @@ export function stopMusic() {
   if (btn) btn.style.display = 'none';
 }
 
+export function fadeOutMusic(duration = 2000) {
+  if (!musicAudio) return;
+  const audio = musicAudio;      // capture before nulling
+  musicAudio = null;             // null immediately so next ride loads fresh
+  musicWaitingForFoil = false;
+  _autoMusicArmed = false;
+  state.audioSettings.musicPlaying = false;
+  const btn = document.getElementById('settings-music-stop');
+  if (btn) btn.style.display = 'none';
+  const el = document.getElementById('settings-music-status');
+  if (el) el.textContent = '';
+  // Fade then release
+  const startVol = audio.volume;
+  const startTime = performance.now();
+  function fade() {
+    const t = Math.min((performance.now() - startTime) / duration, 1);
+    audio.volume = startVol * (1 - t);
+    if (t < 1) { requestAnimationFrame(fade); }
+    else { audio.pause(); if (audio._url) URL.revokeObjectURL(audio._url); }
+  }
+  requestAnimationFrame(fade);
+}
+
 async function _loadRandomTrack() {
   try {
     const res = await fetch('music/playlist.json');

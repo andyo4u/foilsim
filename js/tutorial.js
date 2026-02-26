@@ -26,7 +26,7 @@ import { bgPresets } from './terrain.js';
 
 // ── Tutorial preset: waves present but rider starts at zero speed ──
 presets.tutorial = {
-  sunAngle:3, sunDir:147, cloudCover:0.25,
+  sunAngle:68, sunDir:180, cloudCover:0.15,
   chopHeight:0.09, chopDir:180,
   swell1Height:2, swell1Period:5, swell1Dir:270,
   swell2Height:1.9, swell2Period:10, swell2Dir:250,
@@ -98,6 +98,15 @@ export function onTutorialStart() {
   state.foil.speed = 0;
   state.foil.rideH = 0;
   phase = 'pump';
+
+  // Tropical skybox: override Preetham uniforms for vivid Caribbean blue
+  const su = state.skyUniforms;
+  if (su) {
+    su['turbidity'].value    = 1.5;   // crystal-clear tropical air
+    su['rayleigh'].value     = 3.5;   // deep rich blue
+    su['mieCoefficient'].value    = 0.003;
+    su['mieDirectionalG'].value   = 0.85;
+  }
   phaseTimer = 0;
   pumpHoldTimer = 0;
   savedCamDist = state.cam.dist;
@@ -259,6 +268,15 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
 export function endTutorial() {
   phase = 'idle';
   targetPocketGlow = 0;
+
+  // Restore default Preetham sky uniforms for other locations
+  const su = state.skyUniforms;
+  if (su) {
+    su['turbidity'].value    = 4;
+    su['rayleigh'].value     = 2;
+    su['mieCoefficient'].value    = 0;
+    su['mieDirectionalG'].value   = 0;
+  }
   if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 0;
   // Restore render mode and camera in case tutorial ended mid-sequence
   if (state.oceanMat) state.oceanMat.uniforms.uRenderMode.value = savedRenderMode;

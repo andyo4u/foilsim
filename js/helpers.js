@@ -142,9 +142,9 @@ export const presets = {
     swell1Height:2.3, swell1Period:5, swell1Dir:297,
     swell2Height:0.7, swell2Period:4.5, swell2Dir:347,
     swell3Height:0.5, swell3Period:6, swell3Dir:268,
-    sbGlide:0.8, sbPumpPower:1, sbTurnSpeed:1, sbTopSpeed:25, sbStallSpeed:6,
+    sbGlide:0.8, sbPumpPower:2, sbTurnSpeed:1, sbTopSpeed:25, sbStallSpeed:6,
     sbWindSpeed:14, sbWindDir:270,
-    sbBatteryCap:1, sbBatteryDrain:1, sbWaveEnergy:1, sbStability:1, sbDrag:1
+    sbBatteryCap:1.5, sbBatteryDrain:1, sbWaveEnergy:1, sbStability:1, sbDrag:1
   }
 };
 

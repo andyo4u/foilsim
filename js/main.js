@@ -40,8 +40,7 @@
 // ║  • Fix foil riding too high above the water – adjust         ║
 // ║    rideH clamp / visual offset so board sits closer to       ║
 // ║    the surface at normal speeds                              ║
-// ║  • BUG: Wave energy never goes very high — check the energy  ║
-// ║    gain formula in animate(); multiplier or clamp may be off ║
+// ║  • Wave energy regen now scales with slopeForce (fixed)      ║
 // ║  • BUG: Board is too bouncy in high wind chop — add more     ║
 // ║    smoothing / damping to rideH when chop amplitude is high  ║
 // ║  • Easy / Pro modes: Easy = forgiving physics, auto-balance, ║
@@ -731,19 +730,24 @@ function animate() {
   foil.pitch = lerp(foil.pitch, autoPitch, dt * 3 * getVal('sbStability'));
 
   // Energy system
-  // BUG: Wave energy never seems to go very high — the passive
-  // regen (0.06 * dt) is tiny and slopeForce contribution may be
-  // getting lost. Check that slopeForce actually feeds into energy
-  // accumulation, and verify the sbWaveEnergy slider range/default.
+  // Energy passively regens at a low baseline rate. When slopeForce > 0
+  // (foil is on the downhill face of a swell — especially the pocket) the
+  // wave feeds extra energy into the battery, making it actually useful.
   const maxEnergy = getVal('sbBatteryCap');
   const drainMul = getVal('sbBatteryDrain');
-  foil.energy = Math.min(maxEnergy, foil.energy + 0.015 * dt);
+  const waveRegen = 0.015 + Math.max(0, slopeForce) * 0.035;
+  foil.energy = Math.min(maxEnergy, foil.energy + waveRegen * dt);
 
   let pf = 0;
   const isPump = input.up && !input.down;
   const isPowerPump = input.up && input.down;
   const isBoost = input.pump;
   const pumpMul = getVal('sbPumpPower');
+
+  // Wave-assisted pump: pump is more effective when riding a wave face.
+  // slopeForce > 0 = downhill swell face; highest in the pocket.
+  // Pocket (slopeForce ≈ 1.75) gives ~1.7× boost; max capped at 2.5×.
+  const wavePumpBoost = Math.min(2.5, 1.0 + Math.max(0, slopeForce) * 0.40);
 
   if (isBoost) {
     pf += 1.8;
@@ -758,13 +762,13 @@ function animate() {
     pumpPhase += dt * 9;
     const pumpCost = 0.36 * drainMul * dt;
     foil.energy = Math.max(0, foil.energy - pumpCost);
-    pf += 3.0 * pumpMul * Math.min(1, foil.energy * 5);
+    pf += 3.0 * pumpMul * wavePumpBoost * Math.min(1, foil.energy * 5);
     foil.pitch += Math.sin(pumpPhase * 2) * 0.08;
   } else if (isPowerPump && foil.energy > 0.05) {
     pumpPhase += dt * 12;
     const powerCost = 0.70 * drainMul * dt;
     foil.energy = Math.max(0, foil.energy - powerCost);
-    pf += 5.5 * pumpMul * Math.min(1, foil.energy * 4);
+    pf += 5.5 * pumpMul * wavePumpBoost * Math.min(1, foil.energy * 4);
     foil.pitch += Math.sin(pumpPhase * 2) * 0.15;
   } else {
     pumpPhase *= 0.9;

@@ -7,13 +7,26 @@
 //  `state` object, or is module-local where appropriate.
 // ──────────────────────────────────────────────────────────────
 //
-//  TODO: Distant water blending — the flat far-plane water
-//        doesn't match the 3D wave mesh at the boundary. Options:
-//        • LOD rings that progressively flatten towards the horizon
-//        • Shader-based distant wave approximation on a far plane
-//        • Horizon fog/fade to hide the seam
-//        • Vertex displacement on a second larger plane that
-//          samples simplified wave functions
+//  TODO: Distant water blending — dark seam / black band at far ocean
+//        mesh edge where sky meets water.  Ten approaches tried in
+//        v0.1.33–v0.1.42 and reverted in v0.1.49:
+//          • Alpha fade at mesh edge → transparent pixels revealed
+//            the dark Preetham sky behind the ocean plane
+//          • Horizon fill plane (50k×50k, y=-0.5, renderOrder=1,
+//            depthTest:true/write:false) → still dark; transparent-
+//            pass ordering likely puts the fill behind the sky dome
+//          • Various fog color / clear-color tweaks → cosmetic only
+//        Fresh approaches to try:
+//          • Make ocean material transparent:false (opaque pass) so it
+//            writes depth during opaque pass; then horizon fill (opaque,
+//            renderOrder=1) paints only pixels where depth=FAR (sky)
+//          • Match renderer.setClearColor exactly to uFogColor each
+//            frame — simplest option: background IS the fog color so
+//            there is no gap to fill
+//          • LOD rings that progressively flatten wave mesh toward
+//            horizon — eliminates the hard boundary altogether
+//          • Vertex displacement on a second larger low-res plane that
+//            samples simplified wave functions at distance
 //
 //  TODO: Reduce wave tiling — the gerstner pattern repeats
 //        visibly at distance. Options:

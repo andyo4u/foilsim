@@ -16,6 +16,13 @@
 // ║    dolphin mode, ghost foil, giant mode, kraken boost,      ║
 // ║    ice mode, ramp spawn, tailwind burst, grapple hook…      ║
 // ║    (full list in foil.js TODO)                               ║
+// ║  • Green power-up — "Pocket Highlights": riding over it      ║
+// ║    turns on the pocket glow overlay for ~20s (uShowPocket)  ║
+// ║    to help beginners find the energy sweet spot              ║
+// ║  • Pinchy auto-features: AI assistant that detects rider     ║
+// ║    skill level in real-time and automatically tweaks foil    ║
+// ║    presets, wave difficulty, and tip messages to keep the    ║
+// ║    session fun — a dynamic difficulty system with personality║
 // ║  • Game loop: location-select menu → ride → score screen     ║
 // ║  • Achievements system: unlock new locations, new render     ║
 // ║    modes / visualization styles as rewards                   ║
@@ -75,10 +82,23 @@
 // ║    Map the ride to a fun real-world location so it shows up  ║
 // ║    on your Strava feed somewhere ridiculous (eFoiling across ║
 // ║    Lake Geneva? Down the Amazon? Around Alcatraz?)           ║
+// ║  • Backend data storage: server-side persistence for scores, ║
+// ║    ride history, settings, and unlocks. Options: Firebase    ║
+// ║    Firestore (fast, free tier), Supabase (Postgres + REST),  ║
+// ║    or a simple Cloudflare Worker + KV store. Sync on login   ║
+// ║    so progress follows the player across devices.            ║
+// ║  • Music leaderboard: track which songs riders play most,    ║
+// ║    most-played track wins featured placement in the UI.      ║
+// ║    Could seed a curated "community playlist" shown in the    ║
+// ║    settings panel. Requires opt-in and backend storage.      ║
+// ║  • Collect feedback: in-game feedback button (thumb up/down  ║
+// ║    + optional text) after each ride or in settings. POST to  ║
+// ║    a lightweight backend (Formspree, Netlify Forms, or own   ║
+// ║    Worker). Surface top requests in the roadmap.             ║
 // ║  • Save progress: persist achievements, unlocked locations,  ║
 // ║    unlocked render modes, best scores, lifetime stats,      ║
 // ║    power-up inventory, and preferred settings to             ║
-// ║    localStorage (or cloud save via Firebase for cross-device ║
+// ║    localStorage (or cloud save via backend for cross-device  ║
 // ║    sync). Auto-save after each ride. (details in state.js)  ║
 // ║                                                              ║
 // ║  BUSINESS                                                    ║
@@ -1041,6 +1061,15 @@ function animate() {
   foil.prevWH = wH;
 
   // ── POWER-UP: Spawn, Collect, Boost — DISABLED (code preserved for future re-enabling) ──
+  // TODO: Re-enable power-ups — change `if (false &&` → `if (` and restore speed-cap ternary:
+  //       const speedCap = state.powerUp.boostActive ? speedCapMs * 1.5 : speedCapMs;
+  //       Polish: spawn sound FX, HUD countdown, balance intervals, animate disc glow.
+  //
+  // TODO: Green power-up — "Pocket Highlights" activator
+  //       Green glowing disc on the water. Riding over it sets uShowPocket=1 on
+  //       state.oceanMat for ~20s, helping riders visually locate the pocket.
+  //       Fade uShowPocket back to 0 smoothly after timer expires.
+  //       Spawn cadence: once per ~60s, never during tutorial.
   if (false && state.activeBgPreset !== 'tutorial') {
     const pu = state.powerUp;
 

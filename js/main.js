@@ -747,6 +747,7 @@ function animate() {
   // Wave-assisted pump: pump is more effective when riding a wave face.
   // slopeForce > 0 = downhill swell face; highest in the pocket.
   // Pocket (slopeForce ≈ 1.75) gives ~1.7× boost; max capped at 2.5×.
+  // REF: https://foilien.com/foilphysics/ — pumpfoil dynamics simulator
   const wavePumpBoost = Math.min(2.5, 1.0 + Math.max(0, slopeForce) * 0.40);
 
   if (isBoost) {

@@ -4,6 +4,13 @@
 //  Creates the foil 3D model (board, mast, fuselage, wings),
 //  spray particle system, wake trail, wingtip streamers,
 //  input handlers, and camera controls.
+//
+//  REFERENCE — Pumpfoil physics simulator (interactive):
+//    https://foilien.com/foilphysics/
+//  Covers: pumping dynamics, oscillation frequency/amplitude,
+//  power efficiency, force distribution on rider legs, wave
+//  interaction. Useful for tuning pump parameters and modeling
+//  asymmetric motion in forward-kinematics studies.
 // ──────────────────────────────────────────────────────────────
 //
 //  TODO: Fix foil visual height — board appears too far above the

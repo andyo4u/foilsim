@@ -158,7 +158,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
     if (phaseTimer >= 5) {
       phase = 'catch';
       phaseTimer = 0;
-      showMessage('Catch the wave to keep speed');
+      showMessage('Catch the wave to maintain lift');
     }
     return;
   }
@@ -169,7 +169,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
       phase = 'pocket';
       phaseTimer = 0;
       targetPocketGlow = 1;
-      showMessage('Find the pocket for max lift');
+      showMessage('Ride in the pocket for max lift');
     }
     return;
   }
@@ -210,7 +210,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
       targetPocketGlow = 0;
       phase = 'lean-back';
       phaseTimer = 0;
-      showMessage('Lean back to tighten your turn but lose some speed');
+      showMessage('Lean back to increase drag');
     }
     return;
   }

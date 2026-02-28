@@ -256,6 +256,27 @@
     color: rgba(160,200,240,0.55); font-weight: 600; letter-spacing: 3px;
   }
 
+  .menu-footer {
+    display: flex; gap: 20px; align-items: center; margin-top: 18px;
+  }
+  .menu-footer a, .menu-footer button {
+    font-size: 13px; color: rgba(160,200,240,0.5);
+    text-decoration: none; letter-spacing: 0.4px;
+    background: none; border: none; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; padding: 0;
+    transition: color 0.2s;
+  }
+  .menu-footer a:hover, .menu-footer button:hover { color: rgba(160,200,240,0.95); }
+  .menu-footer .sep { color: rgba(160,200,240,0.2); font-size: 13px; }
+
+  /* About overlay */
+  #about-overlay .about-body {
+    max-width: 420px; text-align: center;
+    color: rgba(180,210,255,0.8); font-size: 14px; line-height: 1.75;
+    margin-bottom: 28px;
+  }
+  #about-overlay .about-body p + p { margin-top: 14px; }
+
   /* Score screen stats */
   .score-stats { margin-bottom: 28px; width: 280px; }
   .stat-row {
@@ -329,7 +350,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.53</div>
+<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.59</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -496,8 +517,12 @@
       <div class="loc-tag">Coming Soon</div>
     </div>
   </div>
-  <div class="sponsor-bar">Powered By</div>
   <div id="menu-version" style="margin-top:8px;font-size:11px;color:rgba(255,255,255,0.75);letter-spacing:1px;font-weight:500;"></div>
+  <div class="menu-footer">
+    <button onclick="document.getElementById('about-overlay').classList.remove('hidden')">ⓘ About</button>
+    <span class="sep">·</span>
+    <a href="https://docs.google.com/forms/d/e/1FAIpQLSfpHm03fe2uqrfpB896EXzCWRtpbtSMuymm_SmQtjS0wyqJmQ/viewform" target="_blank" rel="noopener">✉ Send Feedback</a>
+  </div>
 </div>
 
 <!-- Score overlay -->
@@ -511,8 +536,22 @@
     <div class="stat-row stat-total"><span class="stat-label">Total Score</span><span class="stat-value" id="score-total">0</span></div>
   </div>
   <button class="game-btn" onclick="rideAgain()">Main Menu</button>
-  <div class="sponsor-bar">Powered by <strong>SLINGSHOT</strong></div>
   <div id="score-version" style="margin-top:8px;font-size:10px;color:rgba(140,180,230,0.3);letter-spacing:1px;"></div>
+</div>
+
+<!-- About overlay -->
+<div id="about-overlay" class="game-overlay hidden">
+  <h1 style="font-size:36px;letter-spacing:4px;">FOILBRAIN</h1>
+  <div class="subtitle" style="margin-bottom:24px;">Hydrofoil Simulator</div>
+  <div class="about-body">
+    <p>FoilBrain is a real-time physics simulator for eFoil and hydrofoil riding, built entirely in the browser with Three.js. Three Gerstner ocean swells combine with wind chop to generate authentic open-ocean wave conditions — the same math used in film VFX and marine simulation.</p>
+    <p>Your goal: find <em>the pocket</em> — the fast-moving face of the wave where gravity-driven slope acceleration keeps your board flying. Pump to build speed, manage your battery, and stay airborne.</p>
+    <p>Wave height, period, direction, and board physics are all fully adjustable. Terrain is rendered from real elevation and satellite data, starting with <strong>Swell City</strong> on the Columbia River Gorge. More locations coming soon.</p>
+  </div>
+  <button class="game-btn" style="padding:10px 32px;font-size:14px;background:rgba(100,160,255,0.15);box-shadow:none;border:1px solid rgba(100,160,255,0.3);" onclick="document.getElementById('about-overlay').classList.add('hidden')">Back</button>
+  <div class="menu-footer" style="margin-top:16px;">
+    <a href="https://docs.google.com/forms/d/e/1FAIpQLSfpHm03fe2uqrfpB896EXzCWRtpbtSMuymm_SmQtjS0wyqJmQ/viewform" target="_blank" rel="noopener">✉ Send Feedback</a>
+  </div>
 </div>
 
 <div id="settings-overlay"

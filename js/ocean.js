@@ -141,15 +141,15 @@ function initOcean() {
       vec3 pos=(modelMatrix*vec4(position,1.0)).xyz;
       vec3 d=vec3(0),T=vec3(1,0,0),B_=vec3(0,0,1),t1,b1;
       if(uSwell1.w>.01){d+=gw(pos.xz,uSwell1.xy,uSwell1.z,uSwell1.w,uTime,uSwellSpeed.x,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
-        d+=gw(pos.xz,uSwell1.xy*1.07,uSwell1.z*.7,uSwell1.w*.22,uTime*1.05,uSwellSpeed.x,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+        d+=gw(pos.xz,uSwell1.xy*1.07,uSwell1.z*.7,uSwell1.w*.22,uTime*1.05+7.3,uSwellSpeed.x,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
       if(uSwell2.w>.01){d+=gw(pos.xz,uSwell2.xy,uSwell2.z,uSwell2.w,uTime,uSwellSpeed.y,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
-        d+=gw(pos.xz,uSwell2.xy*.95,uSwell2.z*.65,uSwell2.w*.2,uTime*.98,uSwellSpeed.y,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+        d+=gw(pos.xz,uSwell2.xy*.95,uSwell2.z*.65,uSwell2.w*.2,uTime*.98+13.7,uSwellSpeed.y,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
       if(uSwell3.w>.01){d+=gw(pos.xz,uSwell3.xy,uSwell3.z,uSwell3.w,uTime,uSwellSpeed.z,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
       if(uChopHeight>.01){float ch=uChopHeight;vec2 cd=uChopDir;
         d+=gw(pos.xz,cd,3.,ch*.5,uTime,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
-        d+=gw(pos.xz,vec2(cd.y,-cd.x)*.8+cd*.6,2.2,ch*.35,uTime*1.1,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
-        d+=gw(pos.xz,cd*.7+vec2(-cd.y,cd.x)*.7,1.8,ch*.25,uTime*1.3,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
-        d+=gw(pos.xz,cd*.9+vec2(cd.y,-cd.x)*.4,1.3,ch*.18,uTime*.9,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+        d+=gw(pos.xz,vec2(cd.y,-cd.x)*.8+cd*.6,2.2,ch*.35,uTime*1.1+4.7,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,cd*.7+vec2(-cd.y,cd.x)*.7,1.8,ch*.25,uTime*1.3+11.1,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,cd*.9+vec2(cd.y,-cd.x)*.4,1.3,ch*.18,uTime*.9+8.3,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
       float det=fbm(pos.xz*mix(.08,.02,smoothstep(50.,400.,length(pos.xz)))+uTime*.15)*.3+fbm(pos.xz*.03-uTime*.08)*.15;
       d.y+=det*(uChopHeight+.2);
       pos+=d;
@@ -206,9 +206,14 @@ function initOcean() {
         N=normalize(mix(N,vec3(0.0,1.0,0.0),smoothstep(uOceanHalf*0.15,uOceanHalf*0.85,cd)*0.80));
         float fr=pow(1.-max(dot(N,V),0.),4.);fr=mix(.04,1.,fr);
         vec3 wc=mix(uDeepColor,uShallowColor,smoothstep(-1.,2.,vHeight)*.5+fr*.3);
-        vec3 sssC=vec3(0,.35,.3)*pow(max(dot(V,-L+N*.6),0.),3.)*.1;
+        // Wave crest: upper faces shift to vivid turquoise (backlit thin water)
+        float crestF=smoothstep(0.4,1.8,vHeight);wc=mix(wc,vec3(0.02,0.48,0.40),crestF*0.40);
+        // SSS: backlit wave crests glow teal — height-modulated for thin-water effect
+        float sssMask=smoothstep(0.1,1.5,vHeight);
+        vec3 sssC=vec3(0.02,.62,.45)*pow(max(dot(V,-L+N*.6),0.),2.5)*(0.06+sssMask*.35);
         vec3 H=normalize(L+V);float NdH=max(dot(N,H),0.);
-        vec3 sunS=vec3(1,.95,.8)*(pow(NdH,256.)*2.5+pow(NdH,64.)*.5);
+        // Primary sun disk + broad glitter scatter across wave facets
+        vec3 sunS=vec3(1,.95,.8)*(pow(NdH,256.)*2.5+pow(NdH,64.)*.5+pow(NdH,8.)*.12);
         vec3 R=reflect(-V,N);vec3 skyR=mix(uFogColor,uFogColor*.3+vec3(.02,.05,.15),pow(max(R.y,0.),.5));
         float srDot=max(dot(R,L),0.);skyR+=uFogSunColor*pow(srDot,8.)*.3;skyR+=vec3(1,.9,.7)*pow(srDot,64.)*.5;
         vec3 col=mix(wc+sssC,skyR+sunS,fr);col+=uFogColor*(0.06+smoothstep(0.,0.25,uSunDir.y)*0.04);
@@ -1102,9 +1107,14 @@ function initOcean() {
         N=normalize(mix(N,vec3(0.0,1.0,0.0),smoothstep(uOceanHalf*0.15,uOceanHalf*0.85,cd)*0.80));
         float fr=pow(1.-max(dot(N,V),0.),4.);fr=mix(.04,1.,fr);
         vec3 wc=mix(uDeepColor,uShallowColor,smoothstep(-1.,2.,vHeight)*.5+fr*.3);
-        vec3 sssC=vec3(0,.35,.3)*pow(max(dot(V,-L+N*.6),0.),3.)*.1;
+        // Wave crest: upper faces shift to vivid turquoise (backlit thin water)
+        float crestF=smoothstep(0.4,1.8,vHeight);wc=mix(wc,vec3(0.02,0.48,0.40),crestF*0.40);
+        // SSS: backlit wave crests glow teal — height-modulated for thin-water effect
+        float sssMask=smoothstep(0.1,1.5,vHeight);
+        vec3 sssC=vec3(0.02,.62,.45)*pow(max(dot(V,-L+N*.6),0.),2.5)*(0.06+sssMask*.35);
         vec3 H=normalize(L+V);float NdH=max(dot(N,H),0.);
-        vec3 sunS=vec3(1,.95,.8)*(pow(NdH,256.)*2.5+pow(NdH,64.)*.5);
+        // Primary sun disk + broad glitter scatter across wave facets
+        vec3 sunS=vec3(1,.95,.8)*(pow(NdH,256.)*2.5+pow(NdH,64.)*.5+pow(NdH,8.)*.12);
         vec3 R=reflect(-V,N);vec3 skyR=mix(uFogColor,uFogColor*.3+vec3(.02,.05,.15),pow(max(R.y,0.),.5));
         float srDot=max(dot(R,L),0.);skyR+=uFogSunColor*pow(srDot,8.)*.3;skyR+=vec3(1,.9,.7)*pow(srDot,64.)*.5;
         vec3 col=mix(wc+sssC,skyR+sunS,fr);col+=uFogColor*(0.06+smoothstep(0.,0.25,uSunDir.y)*0.04);
@@ -1225,7 +1235,9 @@ function cpuFbm(x,y){
   let v=0,a=.5,px=x,py=y;
   for(let i=0;i<6;i++){
     v+=a*cpuNoise2D(px,py);
-    const nx=.8*px+.6*py, ny=-.6*px+.8*py;
+    // Rotation must match GPU mat2(.8,.6,-.6,.8) which is column-major:
+    // col0=(0.8,0.6), col1=(-0.6,0.8) → r*p = (0.8px-0.6py, 0.6px+0.8py)
+    const nx=.8*px-.6*py, ny=.6*px+.8*py;
     px=nx*2.03; py=ny*2.03; a*=.48;
   }
   return v;
@@ -1239,18 +1251,18 @@ function getWaveHeight(px,pz,t){
   const sp1=convertSpeedToMs(getVal('swell1Speed')),sp2=convertSpeedToMs(getVal('swell2Speed')),sp3=convertSpeedToMs(getVal('swell3Speed'));
   const ch=getVal('chopHeight'),cd_=degToDir(getVal('chopDir'));
   h+=gerstnerY(px,pz,s1d.x,s1d.y,s1p,s1h,t,sp1);
-  h+=gerstnerY(px,pz,s1d.x*1.07,s1d.y*1.07,s1p*.7,s1h*.22,t*1.05,sp1);
+  h+=gerstnerY(px,pz,s1d.x*1.07,s1d.y*1.07,s1p*.7,s1h*.22,t*1.05+7.3,sp1);
   h+=gerstnerY(px,pz,s2d.x,s2d.y,s2p,s2h,t,sp2);
-  h+=gerstnerY(px,pz,s2d.x*.95,s2d.y*.95,s2p*.65,s2h*.2,t*.98,sp2);
+  h+=gerstnerY(px,pz,s2d.x*.95,s2d.y*.95,s2p*.65,s2h*.2,t*.98+13.7,sp2);
   h+=gerstnerY(px,pz,s3d.x,s3d.y,s3p,s3h,t,sp3);
   h+=gerstnerY(px,pz,cd_.x,cd_.y,3,ch*.5,t);
   const cx=cd_.y*.8+cd_.x*.6,cz=-cd_.x*.8+cd_.y*.6;
-  h+=gerstnerY(px,pz,cx,cz,2.2,ch*.35,t*1.1);
+  h+=gerstnerY(px,pz,cx,cz,2.2,ch*.35,t*1.1+4.7);
   // Extra chop components matching GPU vertex shader
   const cx2=cd_.x*.7+(-cd_.y)*.7, cz2=cd_.y*.7+cd_.x*.7;
-  h+=gerstnerY(px,pz,cx2,cz2,1.8,ch*.25,t*1.3);
+  h+=gerstnerY(px,pz,cx2,cz2,1.8,ch*.25,t*1.3+11.1);
   const cx3=cd_.x*.9+cd_.y*.4, cz3=cd_.y*.9+(-cd_.x)*.4;
-  h+=gerstnerY(px,pz,cx3,cz3,1.3,ch*.18,t*.9);
+  h+=gerstnerY(px,pz,cx3,cz3,1.3,ch*.18,t*.9+8.3);
   // Detail fbm displacement matching GPU (line 1645-1646)
   const detScale=.08; // GPU uses mix(.08,.02,...) — close range uses .08
   const det=cpuFbm(px*detScale+t*.15,pz*detScale+t*.15)*.3
@@ -1275,9 +1287,9 @@ function getSwellHeight(px,pz,t){
   const s3d=degToDir(getVal('swell3Dir')),s3p=getVal('swell3Period'),s3h=getVal('swell3Height');
   const sp1=convertSpeedToMs(getVal('swell1Speed')),sp2=convertSpeedToMs(getVal('swell2Speed')),sp3=convertSpeedToMs(getVal('swell3Speed'));
   h+=gerstnerY(px,pz,s1d.x,s1d.y,s1p,s1h,t,sp1);
-  h+=gerstnerY(px,pz,s1d.x*1.07,s1d.y*1.07,s1p*.7,s1h*.22,t*1.05,sp1);
+  h+=gerstnerY(px,pz,s1d.x*1.07,s1d.y*1.07,s1p*.7,s1h*.22,t*1.05+7.3,sp1);
   h+=gerstnerY(px,pz,s2d.x,s2d.y,s2p,s2h,t,sp2);
-  h+=gerstnerY(px,pz,s2d.x*.95,s2d.y*.95,s2p*.65,s2h*.2,t*.98,sp2);
+  h+=gerstnerY(px,pz,s2d.x*.95,s2d.y*.95,s2p*.65,s2h*.2,t*.98+13.7,sp2);
   h+=gerstnerY(px,pz,s3d.x,s3d.y,s3p,s3h,t,sp3);
   return h;
 }

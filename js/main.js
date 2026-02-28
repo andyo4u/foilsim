@@ -799,9 +799,11 @@ function animate() {
   const speedCap = speedCapMs; // power-ups disabled; was: state.powerUp.boostActive ? speedCapMs * 1.5 : speedCapMs
   foil.speed = Math.max(0, Math.min(foil.speed, speedCap));
 
-  const tgtRH = isF ? .6 + foil.pitch * .5 : 0;
-  foil.rideH = lerp(foil.rideH, tgtRH, dt * 3);
-  if (!isF) foil.rideH = lerp(foil.rideH, 0, dt * 5);
+  // Ride height scales with speed: barely lifts off at stall (~6cm), rises to ~60cm at top speed.
+  // Wing tip only breaches the surface at ~77%+ of top speed with full roll — "fast and turning."
+  const speedFrac = Math.max(0, Math.min(1, (foil.speed - stallMs) / Math.max(1, speedCapMs - stallMs)));
+  const tgtRH = isF ? 0.06 + 0.54 * Math.pow(speedFrac, 1.2) + foil.pitch * 0.4 : -0.04;
+  foil.rideH = lerp(foil.rideH, tgtRH, dt * (isF ? 3 : 6));
 
   foil.x += mx * foil.speed * dt;
   foil.z += mz * foil.speed * dt;

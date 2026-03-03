@@ -206,14 +206,14 @@ function initOcean() {
         N=normalize(mix(N,vec3(0.0,1.0,0.0),smoothstep(uOceanHalf*0.15,uOceanHalf*0.85,cd)*0.80));
         float fr=pow(1.-max(dot(N,V),0.),4.);fr=mix(.04,1.,fr);
         vec3 wc=mix(uDeepColor,uShallowColor,smoothstep(-1.,2.,vHeight)*.5+fr*.3);
-        // Wave crest: upper faces shift to vivid turquoise (backlit thin water)
-        float crestF=smoothstep(0.4,1.8,vHeight);wc=mix(wc,vec3(0.02,0.48,0.40),crestF*0.40);
-        // SSS: backlit wave crests glow teal — height-modulated for thin-water effect
-        float sssMask=smoothstep(0.1,1.5,vHeight);
-        vec3 sssC=vec3(0.02,.62,.45)*pow(max(dot(V,-L+N*.6),0.),2.5)*(0.06+sssMask*.35);
+        // TODO: re-enable crest SSS + sun glitter for locations that benefit (see v0.1.59)
+        // - Wave crest turquoise shift (backlit thin water): crestF, wc mix
+        // - Height-modulated SSS teal glow: sssMask, sssC with pow 2.5
+        // - Broad sun glitter: pow(NdH,8)*.12 term
+        // Reverted for FPS — revisit per-location
+        vec3 sssC=vec3(0,.35,.3)*pow(max(dot(V,-L+N*.6),0.),3.)*.1;
         vec3 H=normalize(L+V);float NdH=max(dot(N,H),0.);
-        // Primary sun disk + broad glitter scatter across wave facets
-        vec3 sunS=vec3(1,.95,.8)*(pow(NdH,256.)*2.5+pow(NdH,64.)*.5+pow(NdH,8.)*.12);
+        vec3 sunS=vec3(1,.95,.8)*(pow(NdH,256.)*2.5+pow(NdH,64.)*.5);
         vec3 R=reflect(-V,N);vec3 skyR=mix(uFogColor,uFogColor*.3+vec3(.02,.05,.15),pow(max(R.y,0.),.5));
         float srDot=max(dot(R,L),0.);skyR+=uFogSunColor*pow(srDot,8.)*.3;skyR+=vec3(1,.9,.7)*pow(srDot,64.)*.5;
         vec3 col=mix(wc+sssC,skyR+sunS,fr);col+=uFogColor*(0.06+smoothstep(0.,0.25,uSunDir.y)*0.04);
@@ -1107,14 +1107,10 @@ function initOcean() {
         N=normalize(mix(N,vec3(0.0,1.0,0.0),smoothstep(uOceanHalf*0.15,uOceanHalf*0.85,cd)*0.80));
         float fr=pow(1.-max(dot(N,V),0.),4.);fr=mix(.04,1.,fr);
         vec3 wc=mix(uDeepColor,uShallowColor,smoothstep(-1.,2.,vHeight)*.5+fr*.3);
-        // Wave crest: upper faces shift to vivid turquoise (backlit thin water)
-        float crestF=smoothstep(0.4,1.8,vHeight);wc=mix(wc,vec3(0.02,0.48,0.40),crestF*0.40);
-        // SSS: backlit wave crests glow teal — height-modulated for thin-water effect
-        float sssMask=smoothstep(0.1,1.5,vHeight);
-        vec3 sssC=vec3(0.02,.62,.45)*pow(max(dot(V,-L+N*.6),0.),2.5)*(0.06+sssMask*.35);
+        // TODO: re-enable crest SSS + sun glitter for locations that benefit (see v0.1.59)
+        vec3 sssC=vec3(0,.35,.3)*pow(max(dot(V,-L+N*.6),0.),3.)*.1;
         vec3 H=normalize(L+V);float NdH=max(dot(N,H),0.);
-        // Primary sun disk + broad glitter scatter across wave facets
-        vec3 sunS=vec3(1,.95,.8)*(pow(NdH,256.)*2.5+pow(NdH,64.)*.5+pow(NdH,8.)*.12);
+        vec3 sunS=vec3(1,.95,.8)*(pow(NdH,256.)*2.5+pow(NdH,64.)*.5);
         vec3 R=reflect(-V,N);vec3 skyR=mix(uFogColor,uFogColor*.3+vec3(.02,.05,.15),pow(max(R.y,0.),.5));
         float srDot=max(dot(R,L),0.);skyR+=uFogSunColor*pow(srDot,8.)*.3;skyR+=vec3(1,.9,.7)*pow(srDot,64.)*.5;
         vec3 col=mix(wc+sssC,skyR+sunS,fr);col+=uFogColor*(0.06+smoothstep(0.,0.25,uSunDir.y)*0.04);

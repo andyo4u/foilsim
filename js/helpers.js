@@ -137,13 +137,13 @@ export const presets = {
     swell3Height:1.2, swell3Period:5.5, swell3Dir:45
   },
   gorge: {
-    sunAngle:11, sunDir:110, cloudCover:0.45,
+    sunAngle:8, sunDir:110, cloudCover:0.45,
     chopHeight:0.49, chopDir:0,
-    swell1Height:2.3, swell1Period:5, swell1Dir:297,
-    swell2Height:0.7, swell2Period:4.5, swell2Dir:347,
-    swell3Height:0.5, swell3Period:6, swell3Dir:268,
-    sbGlide:0.8, sbPumpPower:2, sbTurnSpeed:1, sbTopSpeed:25, sbStallSpeed:6,
-    sbWindSpeed:14, sbWindDir:270,
+    swell1Height:2.8, swell1Period:5, swell1Dir:297, swell1Speed:15,
+    swell2Height:0.7, swell2Period:4.5, swell2Dir:347, swell2Speed:16,
+    swell3Height:0.57, swell3Period:6, swell3Dir:268, swell3Speed:25,
+    sbGlide:0.8, sbPumpPower:2.35, sbTurnSpeed:1, sbTopSpeed:18, sbStallSpeed:6,
+    sbWindSpeed:20, sbWindDir:270,
     sbBatteryCap:1.5, sbBatteryDrain:1, sbWaveEnergy:1, sbStability:1, sbDrag:1
   }
 };

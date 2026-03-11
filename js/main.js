@@ -292,11 +292,11 @@ if (isMobile) {
 // ═══════════════════════════
 
 const QUALITY_PRESETS = {
-  low:   { oceanSegments: 128, oceanSize: 400, pixelRatioCap: 1,   sprayBudget: 50,  wakeBudget: 30, streamerBudget: 40  },
-  med:   { oceanSegments: 256, oceanSize: 600, pixelRatioCap: 1.5, sprayBudget: 100, wakeBudget: 50, streamerBudget: 80  },
-  high:  { oceanSegments: 384, oceanSize: 800, pixelRatioCap: 2,   sprayBudget: 150, wakeBudget: 65, streamerBudget: 100 },
-  ultra: { oceanSegments: 512, oceanSize: 800, pixelRatioCap: 2,   sprayBudget: 200, wakeBudget: 80, streamerBudget: 120 },
-  max:   { oceanSegments: 1000, oceanSize: 1200, pixelRatioCap: 2,   sprayBudget: 200, wakeBudget: 80, streamerBudget: 120 },
+  low:   { oceanSegments: 128, oceanSize: 400, pixelRatioCap: 1,   sprayBudget: 50,  wakeBudget: 30, streamerBudget: 40,  fbmOctaves: 3, detailLevel: 0 },
+  med:   { oceanSegments: 256, oceanSize: 600, pixelRatioCap: 1.5, sprayBudget: 100, wakeBudget: 50, streamerBudget: 80,  fbmOctaves: 4, detailLevel: 1 },
+  high:  { oceanSegments: 384, oceanSize: 800, pixelRatioCap: 2,   sprayBudget: 150, wakeBudget: 65, streamerBudget: 100, fbmOctaves: 5, detailLevel: 2 },
+  ultra: { oceanSegments: 512, oceanSize: 800, pixelRatioCap: 2,   sprayBudget: 200, wakeBudget: 80, streamerBudget: 120, fbmOctaves: 5, detailLevel: 2 },
+  max:   { oceanSegments: 1000, oceanSize: 1200, pixelRatioCap: 2,   sprayBudget: 200, wakeBudget: 80, streamerBudget: 120, fbmOctaves: 6, detailLevel: 2 },
 };
 
 const QUALITY_LEVELS = ['low', 'med', 'high', 'ultra', 'max'];
@@ -325,6 +325,8 @@ function setQuality(level) {
   state.sprayBudget    = preset.sprayBudget;
   state.wakeBudget     = preset.wakeBudget;
   state.streamerBudget = preset.streamerBudget;
+  state.fbmOctaves     = preset.fbmOctaves;
+  state.detailLevel    = preset.detailLevel;
 
   // Apply pixel ratio
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.pixelRatioCap));
@@ -590,6 +592,8 @@ function animate() {
   const u = state.oceanMat.uniforms;
   u.uTime.value = t;
   u.uCamPos.value.copy(camera.position);
+  u.uFbmOctaves.value = state.fbmOctaves;
+  u.uDetailLevel.value = state.detailLevel != null ? state.detailLevel : 2;
 
   // Sun direction
   const sa = getVal('sunAngle') * Math.PI / 180, sd = getVal('sunDir') * Math.PI / 180;

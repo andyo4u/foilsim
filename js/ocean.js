@@ -121,15 +121,18 @@ function initOcean() {
       uEnergyBoostPos:{value:new THREE.Vector3(0,-1000,0)},
       uEnergyBoostColor:{value:new THREE.Vector3(1,0.85,0.05)},
       uEnergyBoostActive:{value:0},
+      uFbmOctaves:{value:5},
+      uDetailLevel:{value:2},
     },
     vertexShader: `
     precision highp float;
     uniform float uTime;uniform float uChopHeight;uniform vec2 uChopDir;
     uniform vec4 uSwell1,uSwell2,uSwell3;uniform vec3 uSwellSpeed;
+    uniform float uFbmOctaves;uniform float uDetailLevel;
     varying vec3 vWorldPos;varying vec3 vNormal;varying float vFoam;varying float vHeight;
     vec2 hash2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
     float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);return mix(mix(dot(hash2(i),f),dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)),dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
-    float fbm(vec2 p){float v=0.,a=.5;mat2 r=mat2(.8,.6,-.6,.8);for(int i=0;i<6;i++){v+=a*noise(p);p=r*p*2.03;a*=.48;}return v;}
+    float fbm(vec2 p){float v=0.,a=.5;mat2 r=mat2(.8,.6,-.6,.8);for(int i=0;i<6;i++){if(float(i)>=uFbmOctaves)break;v+=a*noise(p);p=r*p*2.03;a*=.48;}return v;}
     vec3 gw(vec2 pos,vec2 dir,float per,float ht,float t,float spdIn,out vec3 T,out vec3 B){
       float wl=1.56*per*per,k=6.28318/wl,spd=spdIn>0.01?spdIn:sqrt(9.81/k),st=min(ht*k/2.,.4);
       float ph=k*dot(dir,pos)-spd*t*k,s=sin(ph),c=cos(ph),a=ht*.5;
@@ -150,12 +153,15 @@ function initOcean() {
         d+=gw(pos.xz,vec2(cd.y,-cd.x)*.8+cd*.6,2.2,ch*.35,uTime*1.1+4.7,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
         d+=gw(pos.xz,cd*.7+vec2(-cd.y,cd.x)*.7,1.8,ch*.25,uTime*1.3+11.1,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
         d+=gw(pos.xz,cd*.9+vec2(cd.y,-cd.x)*.4,1.3,ch*.18,uTime*.9+8.3,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
-      float det=fbm(pos.xz*mix(.08,.02,smoothstep(50.,400.,length(pos.xz)))+uTime*.15)*.3+fbm(pos.xz*.03-uTime*.08)*.15;
-      d.y+=det*(uChopHeight+.2);
+      if(uDetailLevel>0.5){
+        float det=fbm(pos.xz*mix(.08,.02,smoothstep(50.,400.,length(pos.xz)))+uTime*.15)*.3+fbm(pos.xz*.03-uTime*.08)*.15;
+        d.y+=det*(uChopHeight+.2);
+      }
       pos+=d;
       vNormal=normalize(cross(B_,T));if(vNormal.y<0.)vNormal=-vNormal;
       float jac=T.x*B_.z-T.z*B_.x;vFoam=smoothstep(.3,-.1,jac)*.8;
-      vFoam+=smoothstep(.4,.8,fbm(pos.xz*.15+uTime*.2))*.2*uChopHeight;vFoam=clamp(vFoam,0.,1.);
+      if(uDetailLevel>0.5){vFoam+=smoothstep(.4,.8,fbm(pos.xz*.15+uTime*.2))*.2*uChopHeight;}
+      vFoam=clamp(vFoam,0.,1.);
       vWorldPos=pos;vHeight=d.y;
       gl_Position=projectionMatrix*viewMatrix*vec4(pos,1.0);
     }`,
@@ -167,10 +173,11 @@ function initOcean() {
     uniform sampler2D uRiverMask;uniform float uUseRiverMask;uniform vec4 uRiverBounds;
     uniform vec3 uPowerUpPos,uPowerUpColor;uniform float uPowerUpActive;
     uniform vec3 uEnergyBoostPos,uEnergyBoostColor;uniform float uEnergyBoostActive;
+    uniform float uFbmOctaves;
     varying vec3 vWorldPos,vNormal;varying float vFoam,vHeight;
     vec2 hash2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
     float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);return mix(mix(dot(hash2(i),f),dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)),dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
-    float fbm(vec2 p){float v=0.,a=.5;mat2 r=mat2(.8,.6,-.6,.8);for(int i=0;i<5;i++){v+=a*noise(p);p=r*p*2.03;a*=.48;}return v;}
+    float fbm(vec2 p){float v=0.,a=.5;mat2 r=mat2(.8,.6,-.6,.8);for(int i=0;i<6;i++){if(float(i)>=uFbmOctaves)break;v+=a*noise(p);p=r*p*2.03;a*=.48;}return v;}
     void main(){
       // River mask: discard fragments outside the river
       if (uUseRiverMask > 0.5) {
@@ -1227,9 +1234,10 @@ function cpuNoise2D(x,y){
   return va+(vb-va)*ux+(vc-va)*uy+(va-vb-vc+vd)*ux*uy;
 }
 
-function cpuFbm(x,y){
+function cpuFbm(x,y,octaves){
+  const n=octaves||state.fbmOctaves||6;
   let v=0,a=.5,px=x,py=y;
-  for(let i=0;i<6;i++){
+  for(let i=0;i<n;i++){
     v+=a*cpuNoise2D(px,py);
     // Rotation must match GPU mat2(.8,.6,-.6,.8) which is column-major:
     // col0=(0.8,0.6), col1=(-0.6,0.8) → r*p = (0.8px-0.6py, 0.6px+0.8py)

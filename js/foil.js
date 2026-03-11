@@ -360,6 +360,7 @@ function setupInput() {
   document.querySelectorAll('.touch-pad').forEach(pad => {
     const zones = pad.querySelectorAll('.touch-zone');
     let activeZone = null;
+    let activeTouchId = null;
 
     function activateZone(touch) {
       const el = document.elementFromPoint(touch.clientX, touch.clientY);
@@ -384,19 +385,24 @@ function setupInput() {
         activeZone.classList.remove('active');
         activeZone = null;
       }
+      activeTouchId = null;
     }
 
     pad.addEventListener('touchstart', e => {
       e.preventDefault(); e.stopPropagation();
-      activateZone(e.touches[0]);
+      // Only claim this touch if pad doesn't already have one
+      if (activeTouchId !== null) return;
+      const touch = e.changedTouches[0];
+      activeTouchId = touch.identifier;
+      activateZone(touch);
     }, { passive: false });
 
     pad.addEventListener('touchmove', e => {
       e.preventDefault();
-      // Find the touch that belongs to this pad
+      if (activeTouchId === null) return;
+      // Find the tracked touch by identifier
       for (let i = 0; i < e.touches.length; i++) {
-        const el = document.elementFromPoint(e.touches[i].clientX, e.touches[i].clientY);
-        if (el && el.closest('.touch-pad') === pad) {
+        if (e.touches[i].identifier === activeTouchId) {
           activateZone(e.touches[i]);
           break;
         }
@@ -405,16 +411,23 @@ function setupInput() {
 
     pad.addEventListener('touchend', e => {
       e.preventDefault();
-      // Check if any touches remain on this pad
-      let stillOnPad = false;
-      for (let i = 0; i < e.touches.length; i++) {
-        const el = document.elementFromPoint(e.touches[i].clientX, e.touches[i].clientY);
-        if (el && el.closest('.touch-pad') === pad) { stillOnPad = true; break; }
+      // Check if our tracked touch ended
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === activeTouchId) {
+          clearAll();
+          break;
+        }
       }
-      if (!stillOnPad) clearAll();
     }, { passive: false });
 
-    pad.addEventListener('touchcancel', clearAll);
+    pad.addEventListener('touchcancel', e => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === activeTouchId) {
+          clearAll();
+          break;
+        }
+      }
+    });
 
     // Mouse fallback for desktop testing
     let mouseDown = false;

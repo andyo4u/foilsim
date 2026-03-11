@@ -269,10 +269,11 @@ initTerrain();
 
 // Mobile detection — enable touch pads, gear button
 const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-
-// Start with Auto quality — begin from low on mobile, med on desktop, then scale up
-setQuality(isMobile ? 'low' : 'med');
-setQuality('auto');
+state.isMobile = isMobile;
+if (isMobile) {
+  document.body.classList.add('mobile-device');
+  document.querySelectorAll('.touch-pad').forEach(p => p.classList.add('mobile-active'));
+}
 
 // Populate version displays from the hidden version label
 {
@@ -281,11 +282,6 @@ setQuality('auto');
   const sv = document.getElementById('score-version');
   if (mv) mv.textContent = ver;
   if (sv) sv.textContent = ver;
-}
-state.isMobile = isMobile;
-if (isMobile) {
-  document.body.classList.add('mobile-device');
-  document.querySelectorAll('.touch-pad').forEach(p => p.classList.add('mobile-active'));
 }
 
 // ═══════════════════════════
@@ -344,6 +340,10 @@ function setQuality(level) {
   const sel = document.getElementById('sbQuality');
   if (sel && sel.value !== level && sel.value !== 'auto') sel.value = level;
 }
+
+// Start with Auto quality — begin from low on mobile, med on desktop, then scale up
+setQuality(isMobile ? 'low' : 'med');
+setQuality('auto');
 
 // ═══════════════════════════
 // WINDOW.* BRIDGE — expose functions for inline HTML event handlers

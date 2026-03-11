@@ -162,14 +162,16 @@ export const state = {
   _tipRWorld : null,   // will be THREE.Vector3
 
   // ── Quality / LOD ────────────────────────────────────────
-  oceanSize       : 800,
-  oceanSegments   : 512,
-  pixelRatioCap   : 2,
-  quality         : 'ultra',   // 'low' | 'med' | 'high' | 'ultra'
-  autoQuality     : false,     // FPS-based auto-adjust active?
-  sprayBudget     : 200,
-  wakeBudget      : 80,
-  streamerBudget  : 120,
+  oceanSize       : 600,
+  oceanSegments   : 256,
+  pixelRatioCap   : 1.5,
+  quality         : 'med',     // 'low' | 'med' | 'high' | 'ultra' | 'max'
+  autoQuality     : true,      // FPS-based auto-adjust active?
+  sprayBudget     : 100,
+  wakeBudget      : 50,
+  streamerBudget  : 80,
+  fbmOctaves      : 4,         // FBM noise octave count (3–6), set by quality preset
+  detailLevel     : 1,         // vertex FBM detail (0=off, 1=partial, 2=full)
 
   // ── Units ─────────────────────────────────────────
   units: 'mph',       // 'mph' | 'kph' | 'kts'

@@ -267,7 +267,11 @@ initTerrain();
   window.addEventListener(evt, initAudio, { once: true });
 });
 
-// Start with Auto quality — self-tunes FPS from the first frame
+// Mobile detection — enable touch pads, gear button
+const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+// Start with Auto quality — begin from low on mobile, med on desktop, then scale up
+setQuality(isMobile ? 'low' : 'med');
 setQuality('auto');
 
 // Populate version displays from the hidden version label
@@ -278,9 +282,6 @@ setQuality('auto');
   if (mv) mv.textContent = ver;
   if (sv) sv.textContent = ver;
 }
-
-// Mobile detection — enable touch pads, gear button
-const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 state.isMobile = isMobile;
 if (isMobile) {
   document.body.classList.add('mobile-device');
@@ -509,8 +510,8 @@ let autoQFrames = [];
 const AUTO_Q_WINDOW    = 6;   // 500ms samples → 3 seconds
 const AUTO_Q_DOWN_FPS  = 45;  // step down if avg below this
 const AUTO_Q_UP_FPS    = 55;  // step up if avg above this
-const AUTO_Q_UP_HOLD   = 10;  // consecutive above-thresh samples before stepping up (5s)
-const AUTO_Q_INTERVAL  = 30000; // minimum ms between quality changes
+const AUTO_Q_UP_HOLD   = 6;   // consecutive above-thresh samples before stepping up (3s)
+const AUTO_Q_INTERVAL  = 8000; // minimum ms between quality changes
 let autoQUpCount = 0;
 let autoQLastChange = performance.now() - AUTO_Q_INTERVAL; // allow first check immediately
 

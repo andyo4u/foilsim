@@ -399,6 +399,20 @@ export const terrainConfigs = {
     preset: 'gorge',
     startPos: null     // auto-detect from heightmap
   },
+  rufus: {
+    label: 'Rufus Glass Factory',
+    heightmap: 'terrain-data/rufus_heightmap_1024.png',
+    satellite: 'terrain-data/rufus_satellite_2048.jpg',
+    elevMin: 49.2,
+    elevMax: 955.0,
+    worldW: 14346,   // meters east-west
+    worldD: 10989,   // meters north-south
+    waterY: 3.0,     // river level in scene coords
+    waterThresh: 12,  // heightmap pixel <= this = water
+    useRiverMask: true,
+    preset: 'rufus',
+    startPos: null     // auto-detect from heightmap
+  },
   maliko: {
     label: 'Maliko Run, Maui',
     heightmap: 'terrain-data/maliko_heightmap_1024.png',
@@ -560,6 +574,13 @@ export const bgPresets = {
     label: 'Gorge HD',
     maxHeight: 120,
     useRealTerrain: 'gorge',
+    waterStyle: 'normal',
+    cliffs: []
+  },
+  'rufus-real': {
+    label: 'Rufus HD',
+    maxHeight: 120,
+    useRealTerrain: 'rufus',
     waterStyle: 'normal',
     cliffs: []
   },

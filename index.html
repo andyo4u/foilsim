@@ -350,7 +350,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.66</div>
+<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.67</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 
@@ -431,6 +431,7 @@
       <button class="preset-btn bg-preset-btn" data-bg="kauai" onclick="rebuildTerrain('kauai')">Kauai</button>
       <button class="preset-btn bg-preset-btn" data-bg="open-ocean" onclick="rebuildTerrain('open-ocean')">Open</button>
       <button class="preset-btn bg-preset-btn active-preset" data-bg="gorge-real" onclick="rebuildTerrain('gorge-real')" style="border-color:rgba(80,220,130,0.35);color:#70d8a0;">Gorge HD</button>
+      <button class="preset-btn bg-preset-btn" data-bg="rufus-real" onclick="rebuildTerrain('rufus-real')" style="border-color:rgba(255,140,60,0.35);color:#ff9040;">Rufus HD</button>
       <button class="preset-btn bg-preset-btn" data-bg="maliko-real" onclick="rebuildTerrain('maliko-real')" style="border-color:rgba(255,180,60,0.35);color:#ffb840;">Maliko HD</button>
     </div>
   </div>
@@ -508,12 +509,12 @@
       <div class="loc-name">Swell City, USA</div>
       <div class="loc-tag" style="color:rgba(80,220,130,0.7);">HD Terrain</div>
     </div>
-    <div class="location-card locked">
-      <div class="loc-name">Maliko</div>
-      <div class="loc-tag">Coming Soon</div>
+    <div class="location-card" onclick="startRide('rufus-real')">
+      <div class="loc-name">Rufus Glass Factory</div>
+      <div class="loc-tag" style="color:rgba(255,140,60,0.7);">HD Terrain</div>
     </div>
     <div class="location-card locked">
-      <div class="loc-name">Baja</div>
+      <div class="loc-name">Maliko</div>
       <div class="loc-tag">Coming Soon</div>
     </div>
   </div>

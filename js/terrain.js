@@ -928,8 +928,11 @@ function loadTerrainAssets(cfgName, callback) {
 function buildRealTerrain(onReady) {
   if (onReady) _terrainReadyCallback = onReady;
   removeRealTerrain();
-  const cfgName = state.activeTerrainCfg === terrainConfigs.gorge ? 'gorge' :
-                  state.activeTerrainCfg === terrainConfigs.maliko ? 'maliko' : null;
+  // Find the config name by matching the active config object
+  let cfgName = null;
+  for (const [key, cfg] of Object.entries(terrainConfigs)) {
+    if (state.activeTerrainCfg === cfg) { cfgName = key; break; }
+  }
   if (!cfgName) return;
 
   const assets = terrainAssetCache[cfgName];

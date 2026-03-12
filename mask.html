@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>River Mask Editor — Gorge HD</title>
+<title>River Mask Editor</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #111; color: #ccc; font-family: system-ui, -apple-system, sans-serif; }
@@ -44,6 +44,15 @@
 
 <div id="controls">
   <div class="ctrl-group">
+    <label>Location:</label>
+    <select id="location" onchange="loadLocation()">
+      <option value="gorge" selected>Gorge (Swell City)</option>
+      <option value="rufus">Rufus Glass Factory</option>
+      <option value="maliko">Maliko Run, Maui</option>
+    </select>
+  </div>
+
+  <div class="ctrl-group">
     <label>View:</label>
     <select id="viewMode" onchange="draw()">
       <option value="satellite">Satellite</option>
@@ -82,7 +91,7 @@
 
 <div id="info">
   <div id="pixel-info">Hover over the image to inspect</div>
-  <div>Elev range: 24m (river) — 1090m (peaks) | Threshold 12 ≈ 50m elevation</div>
+  <div id="elev-info">Loading...</div>
   <div>White = water, Black = land</div>
 </div>
 
@@ -90,36 +99,85 @@
 const canvas = document.getElementById('main');
 const ctx = canvas.getContext('2d');
 
+// ── Location configs ──
+const locations = {
+  gorge: {
+    label: 'Columbia River Gorge',
+    heightmap: 'terrain-data/gorge_heightmap_1024.png',
+    satellite: 'terrain-data/gorge_satellite_2048.jpg',
+    elevMin: 24.0, elevMax: 1090.1,
+    waterThresh: 12, feather: 4
+  },
+  rufus: {
+    label: 'Rufus Glass Factory',
+    heightmap: 'terrain-data/rufus_heightmap_1024.png',
+    satellite: 'terrain-data/rufus_satellite_2048.jpg',
+    elevMin: 49.2, elevMax: 955.0,
+    waterThresh: 12, feather: 4
+  },
+  maliko: {
+    label: 'Maliko Run, Maui',
+    heightmap: 'terrain-data/maliko_heightmap_1024.png',
+    satellite: 'terrain-data/maliko_satellite_2048.jpg',
+    elevMin: 0.0, elevMax: 3055.5,
+    waterThresh: 2, feather: 4
+  }
+};
+
+let currentLocation = null;
 let heightmapImg = null;
 let satelliteImg = null;
-let heightmapData = null; // raw pixel data from heightmap
-let maskCanvas = null;    // current generated mask
+let heightmapData = null;
+let maskCanvas = null;
 
-// ── Load images ──
-let loaded = 0;
-function checkLoaded() {
-  loaded++;
-  if (loaded >= 2) {
-    console.log('Both images loaded');
-    // Extract heightmap pixel data
-    const tmpC = document.createElement('canvas');
-    tmpC.width = heightmapImg.width;
-    tmpC.height = heightmapImg.height;
-    const tmpCtx = tmpC.getContext('2d');
-    tmpCtx.drawImage(heightmapImg, 0, 0);
-    heightmapData = tmpCtx.getImageData(0, 0, tmpC.width, tmpC.height);
-    regenerateMask();
-    draw();
+function loadLocation() {
+  const key = document.getElementById('location').value;
+  const loc = locations[key];
+  if (!loc) return;
+
+  currentLocation = loc;
+
+  // Set default threshold/feather for this location
+  document.getElementById('threshold').value = loc.waterThresh;
+  document.getElementById('thresh-val').textContent = loc.waterThresh;
+  document.getElementById('feather').value = loc.feather;
+  document.getElementById('feather-val').textContent = loc.feather;
+
+  // Update info
+  document.getElementById('elev-info').textContent =
+    `${loc.label} | Elev range: ${loc.elevMin}m — ${loc.elevMax}m | Threshold ${loc.waterThresh}`;
+
+  // Load images
+  heightmapImg = null;
+  satelliteImg = null;
+  heightmapData = null;
+  maskCanvas = null;
+
+  let loaded = 0;
+  function checkLoaded() {
+    loaded++;
+    if (loaded >= 2) {
+      const tmpC = document.createElement('canvas');
+      tmpC.width = heightmapImg.width;
+      tmpC.height = heightmapImg.height;
+      const tmpCtx = tmpC.getContext('2d');
+      tmpCtx.drawImage(heightmapImg, 0, 0);
+      heightmapData = tmpCtx.getImageData(0, 0, tmpC.width, tmpC.height);
+      regenerateMask();
+      draw();
+    }
   }
+
+  const hImg = new Image();
+  hImg.onload = function() { heightmapImg = hImg; checkLoaded(); };
+  hImg.onerror = function() { alert('Failed to load heightmap: ' + loc.heightmap); };
+  hImg.src = loc.heightmap;
+
+  const sImg = new Image();
+  sImg.onload = function() { satelliteImg = sImg; checkLoaded(); };
+  sImg.onerror = function() { alert('Failed to load satellite: ' + loc.satellite); };
+  sImg.src = loc.satellite;
 }
-
-heightmapImg = new Image();
-heightmapImg.onload = checkLoaded;
-heightmapImg.src = 'terrain-data/gorge_heightmap_1024.png';
-
-satelliteImg = new Image();
-satelliteImg.onload = checkLoaded;
-satelliteImg.src = 'terrain-data/gorge_satellite_2048.jpg';
 
 // ── Generate mask from heightmap at current threshold ──
 function regenerateMask() {
@@ -133,7 +191,6 @@ function regenerateMask() {
   const w = heightmapData.width, h = heightmapData.height;
   const src = heightmapData.data;
 
-  // Create mask canvas
   maskCanvas = document.createElement('canvas');
   maskCanvas.width = w;
   maskCanvas.height = h;
@@ -143,7 +200,7 @@ function regenerateMask() {
 
   let waterCount = 0;
   for (let i = 0; i < w * h; i++) {
-    const elev = src[i * 4]; // R channel
+    const elev = src[i * 4];
     const isWater = elev <= thresh ? 255 : 0;
     if (isWater) waterCount++;
     mData[i * 4] = isWater;
@@ -153,7 +210,6 @@ function regenerateMask() {
   }
   mCtx.putImageData(mImg, 0, 0);
 
-  // Feather
   if (feather > 0) {
     mCtx.filter = `blur(${feather}px)`;
     mCtx.drawImage(maskCanvas, 0, 0);
@@ -175,13 +231,11 @@ function draw() {
   const h = heightmapData.height;
 
   if (mode === 'compare') {
-    // Side by side: satellite | heightmap | mask
     canvas.width = w * 3;
     canvas.height = h;
     ctx.drawImage(satelliteImg, 0, 0, w, h);
     ctx.drawImage(heightmapImg, w, 0, w, h);
     ctx.drawImage(maskCanvas, w * 2, 0, w, h);
-    // Labels
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(0, 0, 90, 22);
     ctx.fillRect(w, 0, 100, 22);
@@ -206,12 +260,9 @@ function draw() {
   } else if (mode === 'overlay') {
     canvas.width = w;
     canvas.height = h;
-    // Draw satellite base
     ctx.drawImage(satelliteImg, 0, 0, w, h);
-    // Overlay mask as blue tint for water
     ctx.save();
     ctx.globalAlpha = opacity;
-    // Draw mask to a temp canvas, colorize it
     const tmpC = document.createElement('canvas');
     tmpC.width = w; tmpC.height = h;
     const tmpCtx = tmpC.getContext('2d');
@@ -219,12 +270,11 @@ function draw() {
     const imgData = tmpCtx.getImageData(0, 0, w, h);
     const d = imgData.data;
     for (let i = 0; i < w * h; i++) {
-      const v = d[i * 4]; // mask value 0-255
-      // Water = blue tint, land = red tint
-      d[i * 4] = v < 128 ? 255 : 0;        // R: red for land
-      d[i * 4 + 1] = 0;                      // G
-      d[i * 4 + 2] = v >= 128 ? 255 : 0;    // B: blue for water
-      d[i * 4 + 3] = v < 128 ? (255 - v) * 0.5 : v * 0.6; // alpha based on certainty
+      const v = d[i * 4];
+      d[i * 4] = v < 128 ? 255 : 0;
+      d[i * 4 + 1] = 0;
+      d[i * 4 + 2] = v >= 128 ? 255 : 0;
+      d[i * 4 + 3] = v < 128 ? (255 - v) * 0.5 : v * 0.6;
     }
     tmpCtx.putImageData(imgData, 0, 0);
     ctx.drawImage(tmpC, 0, 0);
@@ -234,7 +284,7 @@ function draw() {
 
 // ── Mouse inspect ──
 canvas.addEventListener('mousemove', (e) => {
-  if (!heightmapData) return;
+  if (!heightmapData || !currentLocation) return;
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
@@ -244,7 +294,6 @@ canvas.addEventListener('mousemove', (e) => {
   const mode = document.getElementById('viewMode').value;
   const w = heightmapData.width;
 
-  // In compare mode, determine which panel
   if (mode === 'compare') {
     if (cx >= w * 2) cx -= w * 2;
     else if (cx >= w) cx -= w;
@@ -254,11 +303,11 @@ canvas.addEventListener('mousemove', (e) => {
 
   const idx = (cy * w + cx) * 4;
   const elevPixel = heightmapData.data[idx];
-  const elevMeters = 24 + (elevPixel / 255) * 1066.1;
+  const elevRange = currentLocation.elevMax - currentLocation.elevMin;
+  const elevMeters = currentLocation.elevMin + (elevPixel / 255) * elevRange;
   const thresh = parseInt(document.getElementById('threshold').value);
   const isWater = elevPixel <= thresh;
 
-  // Get mask value
   const mCtx = maskCanvas.getContext('2d');
   const mPixel = mCtx.getImageData(cx, cy, 1, 1).data[0];
 
@@ -268,21 +317,28 @@ canvas.addEventListener('mousemove', (e) => {
 
 // ── Export mask ──
 function exportMask() {
+  const key = document.getElementById('location').value;
+  const thresh = document.getElementById('threshold').value;
+  const feather = document.getElementById('feather').value;
   const link = document.createElement('a');
-  link.download = `gorge_river_mask_t${document.getElementById('threshold').value}_f${document.getElementById('feather').value}.png`;
+  link.download = `${key}_river_mask_t${thresh}_f${feather}.png`;
   link.href = maskCanvas.toDataURL('image/png');
   link.click();
 }
 
-// ── Copy threshold for pasting into index.html ──
+// ── Copy threshold for pasting into terrain.js ──
 function copyThreshold() {
+  const key = document.getElementById('location').value;
   const thresh = document.getElementById('threshold').value;
   const feather = document.getElementById('feather').value;
-  const text = `WATER_THRESH = ${thresh}; // heightmap pixel threshold\nFEATHER = ${feather};       // pixels of edge softening`;
+  const text = `waterThresh: ${thresh},  // heightmap pixel <= this = water\n// feather: ${feather} pixels`;
   navigator.clipboard.writeText(text).then(() => {
-    alert(`Copied!\n\nWATER_THRESH = ${thresh}\nFEATHER = ${feather}`);
+    alert(`Copied for ${key}!\n\nwaterThresh: ${thresh}\nfeather: ${feather}`);
   });
 }
+
+// ── Init: load default location ──
+loadLocation();
 
 </script>
 </body>

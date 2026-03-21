@@ -128,7 +128,7 @@ function initOcean() {
     precision highp float;
     uniform float uTime;uniform float uChopHeight;uniform vec2 uChopDir;
     uniform vec4 uSwell1,uSwell2,uSwell3;uniform vec3 uSwellSpeed;
-    uniform float uFbmOctaves;uniform float uDetailLevel;
+    uniform float uFbmOctaves;uniform float uDetailLevel;uniform float uOceanHalf;
     varying vec3 vWorldPos;varying vec3 vNormal;varying float vFoam;varying float vHeight;
     vec2 hash2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
     float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);return mix(mix(dot(hash2(i),f),dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)),dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
@@ -142,20 +142,23 @@ function initOcean() {
     }
     void main(){
       vec3 pos=(modelMatrix*vec4(position,1.0)).xyz;
+      // Edge fade: smoothly kill waves near mesh boundary
+      float radialDist=length(position.xz);
+      float edgeFade=1.0-smoothstep(uOceanHalf*0.6,uOceanHalf*0.95,radialDist);
       vec3 d=vec3(0),T=vec3(1,0,0),B_=vec3(0,0,1),t1,b1;
-      if(uSwell1.w>.01){d+=gw(pos.xz,uSwell1.xy,uSwell1.z,uSwell1.w,uTime,uSwellSpeed.x,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
-        d+=gw(pos.xz,uSwell1.xy*1.07,uSwell1.z*.7,uSwell1.w*.22,uTime*1.05+7.3,uSwellSpeed.x,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
-      if(uSwell2.w>.01){d+=gw(pos.xz,uSwell2.xy,uSwell2.z,uSwell2.w,uTime,uSwellSpeed.y,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
-        d+=gw(pos.xz,uSwell2.xy*.95,uSwell2.z*.65,uSwell2.w*.2,uTime*.98+13.7,uSwellSpeed.y,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
-      if(uSwell3.w>.01){d+=gw(pos.xz,uSwell3.xy,uSwell3.z,uSwell3.w,uTime,uSwellSpeed.z,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
-      if(uChopHeight>.01){float ch=uChopHeight;vec2 cd=uChopDir;
+      if(uSwell1.w>.01){d+=gw(pos.xz,uSwell1.xy,uSwell1.z,uSwell1.w*edgeFade,uTime,uSwellSpeed.x,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,uSwell1.xy*1.07,uSwell1.z*.7,uSwell1.w*.22*edgeFade,uTime*1.05+7.3,uSwellSpeed.x,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+      if(uSwell2.w>.01){d+=gw(pos.xz,uSwell2.xy,uSwell2.z,uSwell2.w*edgeFade,uTime,uSwellSpeed.y,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,uSwell2.xy*.95,uSwell2.z*.65,uSwell2.w*.2*edgeFade,uTime*.98+13.7,uSwellSpeed.y,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+      if(uSwell3.w>.01){d+=gw(pos.xz,uSwell3.xy,uSwell3.z,uSwell3.w*edgeFade,uTime,uSwellSpeed.z,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+      if(uChopHeight>.01){float ch=uChopHeight*edgeFade;vec2 cd=uChopDir;
         d+=gw(pos.xz,cd,3.,ch*.5,uTime,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
         d+=gw(pos.xz,vec2(cd.y,-cd.x)*.8+cd*.6,2.2,ch*.35,uTime*1.1+4.7,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
         d+=gw(pos.xz,cd*.7+vec2(-cd.y,cd.x)*.7,1.8,ch*.25,uTime*1.3+11.1,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
         d+=gw(pos.xz,cd*.9+vec2(cd.y,-cd.x)*.4,1.3,ch*.18,uTime*.9+8.3,0.0,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
       if(uDetailLevel>0.5){
         float det=fbm(pos.xz*mix(.08,.02,smoothstep(50.,400.,length(pos.xz)))+uTime*.15)*.3+fbm(pos.xz*.03-uTime*.08)*.15;
-        d.y+=det*(uChopHeight+.2);
+        d.y+=det*(uChopHeight+.2)*edgeFade;
       }
       pos+=d;
       vNormal=normalize(cross(B_,T));if(vNormal.y<0.)vNormal=-vNormal;
@@ -173,11 +176,71 @@ function initOcean() {
     uniform sampler2D uRiverMask;uniform float uUseRiverMask;uniform vec4 uRiverBounds;
     uniform vec3 uPowerUpPos,uPowerUpColor;uniform float uPowerUpActive;
     uniform vec3 uEnergyBoostPos,uEnergyBoostColor;uniform float uEnergyBoostActive;
-    uniform float uFbmOctaves;
+    uniform float uFbmOctaves;uniform float uDetailLevel;
     varying vec3 vWorldPos,vNormal;varying float vFoam,vHeight;
     vec2 hash2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
     float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);return mix(mix(dot(hash2(i),f),dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)),dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
     float fbm(vec2 p){float v=0.,a=.5;mat2 r=mat2(.8,.6,-.6,.8);for(int i=0;i<6;i++){if(float(i)>=uFbmOctaves)break;v+=a*noise(p);p=r*p*2.03;a*=.48;}return v;}
+    // 3D gradient noise for detail normals and sun glitter
+    vec3 hash33(vec3 p) {
+      p = vec3(dot(p,vec3(127.1,311.7,74.7)),
+               dot(p,vec3(269.5,183.3,246.1)),
+               dot(p,vec3(113.5,271.9,124.6)));
+      return -1.0 + 2.0 * fract(sin(p) * 43758.5453);
+    }
+    float noise3D(vec3 p) {
+      vec3 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
+      return mix(mix(mix(dot(hash33(i+vec3(0,0,0)),f-vec3(0,0,0)),
+                         dot(hash33(i+vec3(1,0,0)),f-vec3(1,0,0)),u.x),
+                     mix(dot(hash33(i+vec3(0,1,0)),f-vec3(0,1,0)),
+                         dot(hash33(i+vec3(1,1,0)),f-vec3(1,1,0)),u.x),u.y),
+                 mix(mix(dot(hash33(i+vec3(0,0,1)),f-vec3(0,0,1)),
+                         dot(hash33(i+vec3(1,0,1)),f-vec3(1,0,1)),u.x),
+                     mix(dot(hash33(i+vec3(0,1,1)),f-vec3(0,1,1)),
+                         dot(hash33(i+vec3(1,1,1)),f-vec3(1,1,1)),u.x),u.y),u.z);
+    }
+    // Detail normal perturbation — 2-octave 3D gradient noise, fades with distance
+    vec3 detailNormal(vec3 worldPos, vec3 N, float dist) {
+      float fade = 1.0 - smoothstep(20.0, 200.0, dist);
+      if (fade < 0.01) return N;
+      float e = 0.15;
+      vec3 p = worldPos * 0.8 + vec3(uTime * 0.3, 0.0, uTime * 0.15);
+      float n0 = noise3D(p);
+      float nx = noise3D(p + vec3(e, 0, 0));
+      float nz = noise3D(p + vec3(0, 0, e));
+      // Second octave (gated by detail level)
+      if (uDetailLevel > 1.5) {
+        vec3 p2 = worldPos * 2.5 + vec3(uTime * 0.5, 0.0, uTime * 0.25);
+        float n0b = noise3D(p2) * 0.3;
+        float nxb = noise3D(p2 + vec3(e, 0, 0)) * 0.3;
+        float nzb = noise3D(p2 + vec3(0, 0, e)) * 0.3;
+        n0 += n0b; nx += nxb; nz += nzb;
+      }
+      vec3 perturbation = normalize(vec3(-(nx - n0) / e, 1.0, -(nz - n0) / e));
+      return normalize(mix(N, perturbation, fade * 0.35));
+    }
+    // Analytical atmospheric scattering (Rayleigh + Mie) for sky reflection & fog
+    vec3 atmosphericScattering(vec3 dir, vec3 sunDir) {
+      float sunDot = max(dot(dir, sunDir), 0.0);
+      float y = max(dir.y, 0.001);
+      // Rayleigh scattering
+      vec3 rayleigh = vec3(0.22, 0.45, 0.75) * (1.0 + pow(sunDot, 2.0)) * 0.85;
+      // Mie scattering (sun glow)
+      float mie = pow(sunDot, 64.0) * 0.7 + pow(sunDot, 256.0) * 1.8;
+      vec3 mieColor = vec3(1.0, 0.92, 0.75) * mie;
+      // Horizon absorption — blue-teal tinted, warm near sun
+      float horizon = exp(-y * 3.0);
+      vec3 horizonColor = mix(vec3(0.55, 0.7, 0.85), vec3(1.0, 0.75, 0.45), pow(sunDot, 4.0));
+      vec3 sky = rayleigh / (y * 1.2 + 0.12) * 0.18;
+      sky += mieColor;
+      sky = mix(sky, horizonColor, horizon * 0.75);
+      // Sun disc
+      float sunDisc = smoothstep(0.9997, 0.9999, sunDot);
+      sky += vec3(3.0, 2.5, 1.8) * sunDisc;
+      // Upper sky brightness
+      sky *= mix(0.45, 1.0, smoothstep(0.0, 0.45, y));
+      return sky;
+    }
     void main(){
       // River mask: discard fragments outside the river
       if (uUseRiverMask > 0.5) {
@@ -1103,26 +1166,87 @@ function initOcean() {
         gl_FragColor = vec4(col, alpha);
 
       } else {
-        // ═══ NORMAL / REALISTIC PBR PATH ═══
+        // ═══ NORMAL / REALISTIC PBR PATH (Phase 1+2+3) ═══
         vec3 N=normalize(vNormal),V=normalize(uCamPos-vWorldPos),L=normalize(uSunDir);
-        float e=.5;vec2 p=vWorldPos.xz;
         float cd=length(uCamPos-vWorldPos);
-        float nFade=1.0-smoothstep(uOceanHalf*0.05,uOceanHalf*0.30,cd);
-        N=normalize(N+vec3(noise(p*.8+uTime*.3+vec2(e,0))-noise(p*.8+uTime*.3-vec2(e,0)),0,noise(p*.8+uTime*.3+vec2(0,e))-noise(p*.8+uTime*.3-vec2(0,e)))*.12*nFade);
-        if(cd<uOceanHalf*0.25){float d2=1.-smoothstep(0.,uOceanHalf*0.25,cd);
-          N=normalize(N+vec3(noise(p*3.+uTime*.5+vec2(e,0))-noise(p*3.+uTime*.5-vec2(e,0)),0,noise(p*3.+uTime*.5+vec2(0,e))-noise(p*3.+uTime*.5-vec2(0,e)))*.06*d2);}
+
+        // Detail normal perturbation (3D gradient noise, distance-faded)
+        if (uDetailLevel > 0.5) {
+          N = detailNormal(vWorldPos, N, cd);
+        }
+        // Flatten normals at distance to avoid shimmer
         N=normalize(mix(N,vec3(0.0,1.0,0.0),smoothstep(uOceanHalf*0.15,uOceanHalf*0.85,cd)*0.80));
-        float fr=pow(1.-max(dot(N,V),0.),4.);fr=mix(.04,1.,fr);
-        vec3 wc=mix(uDeepColor,uShallowColor,smoothstep(-1.,2.,vHeight)*.5+fr*.3);
-        // TODO: re-enable crest SSS + sun glitter for locations that benefit (see v0.1.59)
-        vec3 sssC=vec3(0,.35,.3)*pow(max(dot(V,-L+N*.6),0.),3.)*.1;
-        vec3 H=normalize(L+V);float NdH=max(dot(N,H),0.);
-        vec3 sunS=vec3(1,.95,.8)*(pow(NdH,256.)*2.5+pow(NdH,64.)*.5);
-        vec3 R=reflect(-V,N);vec3 skyR=mix(uFogColor,uFogColor*.3+vec3(.02,.05,.15),pow(max(R.y,0.),.5));
-        float srDot=max(dot(R,L),0.);skyR+=uFogSunColor*pow(srDot,8.)*.3;skyR+=vec3(1,.9,.7)*pow(srDot,64.)*.5;
-        vec3 col=mix(wc+sssC,skyR+sunS,fr);col+=uFogColor*(0.06+smoothstep(0.,0.25,uSunDir.y)*0.04);
-        float fp=noise(vWorldPos.xz*1.5+uTime*.2)*.5+.5;fp*=noise(vWorldPos.xz*4.-uTime*.15)*.5+.5;
+
+        vec3 H=normalize(L+V);
+        vec3 R=reflect(-V,N);
+        float NdotL=dot(N,L);
+        float NdH=max(dot(N,H),0.);
+        float cosTheta=max(dot(N,V),0.);
+
+        // ── Schlick Fresnel (water IOR 1.33, F0 = 0.02) ──
+        float F0=0.02;
+        float fresnel=F0+(1.0-F0)*pow(1.0-cosTheta,5.0);
+
+        // ── 3-color height-based water body ──
+        float heightFactor=(vHeight+5.0)/10.0;
+        vec3 deepColor=uDeepColor;
+        vec3 midColor=mix(uDeepColor,uShallowColor,0.5);
+        vec3 shallowColor=uShallowColor;
+        vec3 wc=mix(deepColor,midColor,clamp(heightFactor,0.0,1.0));
+        wc=mix(wc,shallowColor,clamp(heightFactor*1.5,0.0,1.0));
+        // Wrapped diffuse modulation
+        float diffuse=max(NdotL*0.5+0.5,0.0);
+        wc*=diffuse*0.5+0.5;
+
+        // ── Enhanced subsurface scattering ──
+        float sssForward=pow(clamp(dot(V,-L),0.0,1.0),3.0)*max(N.y+0.3,0.0);
+        float sssBack=pow(clamp(-NdotL,0.0,1.0),2.0)*(1.0-cosTheta);
+        vec3 sssC=vec3(0.02,0.3,0.35)*(sssForward*0.5+sssBack*0.2);
+
+        // ── GGX specular ──
+        float roughness=0.05;
+        float a2=roughness*roughness;
+        float denom=NdH*NdH*(a2-1.0)+1.0;
+        float D=a2/(3.14159*denom*denom+0.0001);
+        float spec=D*fresnel*max(NdotL,0.0);
+        vec3 sunColor=vec3(1.4,1.2,0.9);
+        vec3 sunS=sunColor*spec*2.0;
+
+        // ── Sun glitter (micro-facet sparkles, distance-faded) ──
+        if (uDetailLevel > 0.5) {
+          float glitterFade = 1.0 - smoothstep(30.0, 250.0, cd);
+          if (glitterFade > 0.01) {
+            vec2 gp1 = vWorldPos.xz * 4.0 + vec2(uTime * 0.7, uTime * 0.3);
+            vec2 gp2 = vWorldPos.xz * 8.5 + vec2(-uTime * 0.5, uTime * 0.8);
+            vec2 gp3 = vWorldPos.xz * 17.0 + vec2(uTime * 0.4, -uTime * 0.6);
+            float gn1 = noise3D(vec3(gp1, uTime * 0.9));
+            float gn2 = noise3D(vec3(gp2, uTime * 1.2));
+            float gn3 = noise3D(vec3(gp3, uTime * 1.5));
+            // Perturb normal with high-freq noise for micro-facets
+            vec3 glitterN = normalize(N + vec3(gn1 * 0.3 + gn3 * 0.15, 0.0, gn2 * 0.3 + gn3 * 0.15));
+            vec3 glitterH = normalize(L + V);
+            float gNdotH = max(dot(glitterN, glitterH), 0.0);
+            // Sharp threshold — only the brightest facets sparkle
+            float glitterSpec = pow(gNdotH, 800.0) * 4.0;
+            glitterSpec += pow(gNdotH, 200.0) * 1.2;
+            // Fine pinpoint stars
+            float gNdotH2 = max(dot(normalize(N + vec3(gn3 * 0.4, 0.0, gn1 * 0.4)), glitterH), 0.0);
+            glitterSpec += pow(gNdotH2, 1500.0) * 6.0;
+            sunS += sunColor * glitterSpec * glitterFade * max(dot(N, L), 0.0);
+          }
+        }
+
+        // ── Sky reflection (analytical atmospheric scattering) ──
+        vec3 skyR=atmosphericScattering(R,L);
+
+        // ── Combine water + reflection via Fresnel ──
+        vec3 col=mix(wc+sssC,skyR+sunS,fresnel);
+
+        // ── Foam ──
+        float fp=noise(vWorldPos.xz*1.5+uTime*.2)*.5+.5;
+        fp*=noise(vWorldPos.xz*4.-uTime*.15)*.5+.5;
         col=mix(col,uFoamColor*(.8+.2*fp),smoothstep(.15,.6,vFoam*fp)*.85);
+
         // ── Pocket highlight (tutorial) ──
         if(uShowPocket>0.01){
           float pocketLo=smoothstep(uSwell1.w*0.30,uSwell1.w*0.65,vHeight);
@@ -1133,9 +1257,18 @@ function initOcean() {
           vec3 pocketCol=vec3(0.1,1.0,0.7);
           col=mix(col,pocketCol,pocket*pulse*0.75*uShowPocket);
         }
-        float fog=1.-exp(-cd*.002);
-        fog=mix(fog,1.0,smoothstep(uOceanHalf*0.40,uOceanHalf*0.95,cd));
-        col=mix(col,max(mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),vec3(0.25,0.22,0.38)),fog);
+
+        // ── Atmospheric distance fog ──
+        float fogDist=cd;
+        float fogHalf=uOceanHalf*0.42;
+        float fogFactor=smoothstep(0.0,fogHalf,fogDist);
+        fogFactor=fogFactor*fogFactor;
+        vec3 viewDir=normalize(vWorldPos-uCamPos);
+        vec3 skyFog=atmosphericScattering(viewDir,L);
+        // Blend sky fog with ocean-tinted horizon color
+        vec3 oceanHorizon=vec3(0.15,0.35,0.45);
+        vec3 fogColor=mix(skyFog,oceanHorizon,0.4)*1.2;
+        col=mix(col,fogColor,clamp(fogFactor,0.0,1.0));
         gl_FragColor=vec4(col, alpha);
       }
 

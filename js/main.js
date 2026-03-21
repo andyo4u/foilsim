@@ -339,6 +339,26 @@ function setQuality(level) {
   // Update the dropdown to reflect current level
   const sel = document.getElementById('sbQuality');
   if (sel && sel.value !== level && sel.value !== 'auto') sel.value = level;
+
+  // Sync mesh resolution slider with quality preset
+  const meshSlider = document.getElementById('sbMeshRes');
+  const meshLabel  = document.getElementById('meshResLabel');
+  if (meshSlider) meshSlider.value = preset.oceanSegments;
+  if (meshLabel)  meshLabel.textContent = preset.oceanSegments;
+}
+
+// Manual mesh resolution override — independent of quality presets
+function setMeshResolution(segments) {
+  segments = Math.max(64, Math.min(1024, segments));
+  const label = document.getElementById('meshResLabel');
+  if (label) label.textContent = segments;
+  if (state.oceanSegments === segments) return;
+  state.oceanSegments = segments;
+  rebuildOceanGeometry();
+  // Disable auto-quality so it doesn't override the manual setting
+  state.autoQuality = false;
+  const sel = document.getElementById('sbQuality');
+  if (sel) sel.value = 'low'; // reflect that we're in manual mode
 }
 
 // Start with Auto quality — begin from low on mobile, med on desktop, then scale up
@@ -385,6 +405,7 @@ window.copySettingsJSON  = copySettingsJSON;
 window.toggleFreeCam     = toggleFreeCam;
 window.setRenderMode     = setRenderMode;
 window.setQuality        = setQuality;
+window.setMeshResolution = setMeshResolution;
 window.openSettings    = openSettings;
 window.closeSettings   = closeSettings;
 window.setUnits        = setUnits;
@@ -858,7 +879,8 @@ function animate() {
 
   // Move ocean mesh to follow foil
   {
-    const SNAP = state.oceanSize * 0.25;
+    // Snap to cell size to prevent vertex swimming at mesh edges
+    const SNAP = state.oceanSize / state.oceanSegments;
     state.oceanMesh.position.x = Math.round(foil.x / SNAP) * SNAP;
     state.oceanMesh.position.z = Math.round(foil.z / SNAP) * SNAP;
     state.oceanMesh.position.y = state.realTerrainMesh ? RT_WATER_Y() : 0;

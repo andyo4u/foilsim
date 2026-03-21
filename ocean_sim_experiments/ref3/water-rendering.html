@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Water Rendering — Browser Port</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; background: #0a0c10; font-family: 'JetBrains Mono', monospace; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+
+  #controls {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    width: 330px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    background: rgba(8, 10, 18, 0.88);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(100, 160, 255, 0.12);
+    border-radius: 12px;
+    padding: 20px;
+    color: #c0d0e8;
+    font-size: 11px;
+    z-index: 10;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100,160,255,0.2) transparent;
+  }
+  #controls::-webkit-scrollbar { width: 4px; }
+  #controls::-webkit-scrollbar-thumb { background: rgba(100,160,255,0.2); border-radius: 2px; }
+
+  #controls h1 { font-size: 14px; font-weight: 500; color: #e0ecff; margin-bottom: 4px; letter-spacing: 0.5px; }
+  #controls .subtitle { font-size: 10px; color: #5a7a9a; margin-bottom: 16px; letter-spacing: 0.3px; }
+
+  .section-title {
+    font-size: 10px; font-weight: 500; color: #6aa0e0; text-transform: uppercase; letter-spacing: 1.5px;
+    margin: 16px 0 10px; padding-bottom: 4px; border-bottom: 1px solid rgba(100, 160, 255, 0.08);
+    cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between;
+  }
+  .section-title::after { content: '\25BE'; font-size: 9px; transition: transform 0.2s; }
+  .section-title.collapsed::after { transform: rotate(-90deg); }
+  .section-body { overflow: hidden; transition: max-height 0.3s ease; }
+  .section-body.collapsed { max-height: 0 !important; }
+
+  .control-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .control-row label { flex-shrink: 0; color: #8aa0b8; font-size: 10px; }
+  .control-row .right { display: flex; align-items: center; gap: 8px; }
+  .control-row input[type="range"] {
+    width: 120px; height: 3px; -webkit-appearance: none; appearance: none;
+    background: rgba(100, 160, 255, 0.15); border-radius: 2px; outline: none;
+  }
+  .control-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+    background: #4a90d9; cursor: pointer; border: 2px solid #0a0c10;
+  }
+  .control-row .val { width: 40px; text-align: right; font-size: 10px; color: #4a90d9; font-variant-numeric: tabular-nums; }
+  .control-row input[type="color"] {
+    width: 24px; height: 18px; border: 1px solid rgba(100,160,255,0.2);
+    border-radius: 3px; background: transparent; cursor: pointer; padding: 0;
+  }
+  .control-row input[type="color"]::-webkit-color-swatch-wrapper { padding: 1px; }
+  .control-row input[type="color"]::-webkit-color-swatch { border: none; border-radius: 2px; }
+
+  .preset-row { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+  .preset-btn {
+    padding: 4px 10px; font-size: 10px; font-family: inherit;
+    background: rgba(100, 160, 255, 0.08); color: #8ab0d8;
+    border: 1px solid rgba(100, 160, 255, 0.15); border-radius: 6px; cursor: pointer; transition: all 0.2s;
+  }
+  .preset-btn:hover { background: rgba(100, 160, 255, 0.18); color: #c0e0ff; border-color: rgba(100, 160, 255, 0.3); }
+  .preset-btn.active { background: rgba(74, 144, 217, 0.25); color: #e0f0ff; border-color: #4a90d9; }
+
+  .wave-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: 6px 0 4px; padding: 5px 8px; background: rgba(100, 160, 255, 0.04);
+    border-radius: 6px; border: 1px solid rgba(100, 160, 255, 0.06); cursor: pointer; user-select: none;
+  }
+  .wave-header .wave-label { font-size: 10px; font-weight: 500; color: #8ab0d8; letter-spacing: 0.5px; }
+  .wave-header .wave-toggle { display: flex; align-items: center; gap: 8px; }
+  .wave-header .wave-arrow { font-size: 8px; color: #5a7a9a; transition: transform 0.2s; }
+  .wave-header.collapsed .wave-arrow { transform: rotate(-90deg); }
+  .wave-body { overflow: hidden; transition: max-height 0.25s ease; }
+  .wave-body.collapsed { max-height: 0 !important; }
+
+  .toggle-switch { position: relative; width: 28px; height: 14px; cursor: pointer; display: inline-block; }
+  .toggle-switch input { display: none; }
+  .toggle-switch .slider {
+    position: absolute; inset: 0; background: rgba(100, 160, 255, 0.12); border-radius: 7px; transition: background 0.2s;
+  }
+  .toggle-switch .slider::after {
+    content: ''; position: absolute; width: 10px; height: 10px; left: 2px; top: 2px;
+    background: #5a7a9a; border-radius: 50%; transition: all 0.2s;
+  }
+  .toggle-switch input:checked + .slider { background: rgba(74, 144, 217, 0.4); }
+  .toggle-switch input:checked + .slider::after { left: 16px; background: #4a90d9; }
+
+  #toggle-btn {
+    position: fixed; top: 16px; right: 16px; width: 36px; height: 36px;
+    background: rgba(8, 10, 18, 0.88); backdrop-filter: blur(20px);
+    border: 1px solid rgba(100, 160, 255, 0.12); border-radius: 8px;
+    color: #8ab0d8; font-size: 16px; cursor: pointer; z-index: 11;
+    display: none; align-items: center; justify-content: center; font-family: inherit; transition: all 0.2s;
+  }
+  #toggle-btn:hover { background: rgba(100,160,255,0.12); color: #e0f0ff; }
+
+  #info { position: fixed; bottom: 16px; left: 16px; color: rgba(100,160,200,0.4); font-size: 10px; font-family: 'JetBrains Mono', monospace; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div id="controls">
+  <h1>Water Rendering</h1>
+  <div class="subtitle">Browser port of GarrettGunnell/Water</div>
+
+  <div class="section-title" onclick="toggleSection(this)"><span>Presets</span></div>
+  <div class="section-body" style="max-height:60px;">
+    <div class="preset-row">
+      <button class="preset-btn active" onclick="applyPreset('ocean', this)">Ocean</button>
+      <button class="preset-btn" onclick="applyPreset('calm', this)">Calm Lake</button>
+      <button class="preset-btn" onclick="applyPreset('stormy', this)">Stormy</button>
+      <button class="preset-btn" onclick="applyPreset('pond', this)">Pond</button>
+    </div>
+  </div>
+
+  <div class="section-title" onclick="toggleSection(this)"><span>Gerstner Waves (5)</span></div>
+  <div class="section-body" style="max-height:2000px;"><div id="wave-controls"></div></div>
+
+  <div class="section-title collapsed" onclick="toggleSection(this)"><span>Wave FBM — Vertex</span></div>
+  <div class="section-body collapsed" style="max-height:500px;">
+    <div class="control-row"><label>Waves</label><div class="right"><input type="range" id="vWaveCount" min="1" max="24" step="1" value="12"><span class="val" id="vWaveCount_v">12</span></div></div>
+    <div class="control-row"><label>Frequency</label><div class="right"><input type="range" id="vFreq" min="0.1" max="4" step="0.01" value="1.0"><span class="val" id="vFreq_v">1.00</span></div></div>
+    <div class="control-row"><label>Freq Mult</label><div class="right"><input type="range" id="vFreqMult" min="1.0" max="1.6" step="0.01" value="1.18"><span class="val" id="vFreqMult_v">1.18</span></div></div>
+    <div class="control-row"><label>Amplitude</label><div class="right"><input type="range" id="vAmp" min="0.01" max="3" step="0.01" value="1.0"><span class="val" id="vAmp_v">1.00</span></div></div>
+    <div class="control-row"><label>Amp Mult</label><div class="right"><input type="range" id="vAmpMult" min="0.5" max="1.0" step="0.01" value="0.82"><span class="val" id="vAmpMult_v">0.82</span></div></div>
+    <div class="control-row"><label>Speed</label><div class="right"><input type="range" id="vSpeed" min="0.1" max="6" step="0.01" value="2.0"><span class="val" id="vSpeed_v">2.00</span></div></div>
+    <div class="control-row"><label>Speed Ramp</label><div class="right"><input type="range" id="vSpeedRamp" min="1.0" max="1.3" step="0.01" value="1.07"><span class="val" id="vSpeedRamp_v">1.07</span></div></div>
+    <div class="control-row"><label>Drag</label><div class="right"><input type="range" id="vDrag" min="0" max="2" step="0.01" value="1.0"><span class="val" id="vDrag_v">1.00</span></div></div>
+    <div class="control-row"><label>Height</label><div class="right"><input type="range" id="vHeight" min="0.01" max="3" step="0.01" value="0.6"><span class="val" id="vHeight_v">0.60</span></div></div>
+    <div class="control-row"><label>Max Peak</label><div class="right"><input type="range" id="vMaxPeak" min="0.1" max="3" step="0.01" value="1.0"><span class="val" id="vMaxPeak_v">1.00</span></div></div>
+    <div class="control-row"><label>Peak Offset</label><div class="right"><input type="range" id="vPeakOffset" min="0" max="3" step="0.01" value="1.0"><span class="val" id="vPeakOffset_v">1.00</span></div></div>
+  </div>
+
+  <div class="section-title collapsed" onclick="toggleSection(this)"><span>Wave FBM — Fragment</span></div>
+  <div class="section-body collapsed" style="max-height:400px;">
+    <div class="control-row"><label>Waves</label><div class="right"><input type="range" id="fWaveCount" min="1" max="40" step="1" value="32"><span class="val" id="fWaveCount_v">32</span></div></div>
+    <div class="control-row"><label>Frequency</label><div class="right"><input type="range" id="fFreq" min="0.1" max="6" step="0.01" value="1.0"><span class="val" id="fFreq_v">1.00</span></div></div>
+    <div class="control-row"><label>Freq Mult</label><div class="right"><input type="range" id="fFreqMult" min="1.0" max="1.6" step="0.01" value="1.18"><span class="val" id="fFreqMult_v">1.18</span></div></div>
+    <div class="control-row"><label>Amplitude</label><div class="right"><input type="range" id="fAmp" min="0.01" max="2" step="0.01" value="1.0"><span class="val" id="fAmp_v">1.00</span></div></div>
+    <div class="control-row"><label>Amp Mult</label><div class="right"><input type="range" id="fAmpMult" min="0.5" max="1.0" step="0.01" value="0.82"><span class="val" id="fAmpMult_v">0.82</span></div></div>
+    <div class="control-row"><label>Height</label><div class="right"><input type="range" id="fHeight" min="0.01" max="2" step="0.01" value="0.6"><span class="val" id="fHeight_v">0.60</span></div></div>
+    <div class="control-row"><label>Normal Str</label><div class="right"><input type="range" id="normalStr" min="0.1" max="4" step="0.01" value="1.0"><span class="val" id="normalStr_v">1.00</span></div></div>
+  </div>
+
+  <div class="section-title collapsed" onclick="toggleSection(this)"><span>Shading</span></div>
+  <div class="section-body collapsed" style="max-height:500px;">
+    <div class="control-row"><label>Ambient</label><div class="right"><input type="color" id="ambientCol" value="#0a2a4a"></div></div>
+    <div class="control-row"><label>Diffuse</label><div class="right"><input type="color" id="diffuseCol" value="#0e4a7a"></div></div>
+    <div class="control-row"><label>Specular</label><div class="right"><input type="color" id="specularCol" value="#ffffff"></div></div>
+    <div class="control-row"><label>Shininess</label><div class="right"><input type="range" id="shininess" min="1" max="200" step="1" value="80"><span class="val" id="shininess_v">80</span></div></div>
+    <div class="control-row"><label>Fresnel Color</label><div class="right"><input type="color" id="fresnelCol" value="#1a6aaa"></div></div>
+    <div class="control-row"><label>Fresnel Bias</label><div class="right"><input type="range" id="fresnelBias" min="0" max="1" step="0.01" value="0.02"><span class="val" id="fresnelBias_v">0.02</span></div></div>
+    <div class="control-row"><label>Fresnel Str</label><div class="right"><input type="range" id="fresnelStr" min="0" max="3" step="0.01" value="1.0"><span class="val" id="fresnelStr_v">1.00</span></div></div>
+    <div class="control-row"><label>Fresnel Exp</label><div class="right"><input type="range" id="fresnelExp" min="0.5" max="10" step="0.1" value="5.0"><span class="val" id="fresnelExp_v">5.0</span></div></div>
+    <div class="control-row"><label>Tip Color</label><div class="right"><input type="color" id="tipCol" value="#e0f0ff"></div></div>
+    <div class="control-row"><label>Tip Atten</label><div class="right"><input type="range" id="tipAtten" min="0.1" max="10" step="0.1" value="2.0"><span class="val" id="tipAtten_v">2.0</span></div></div>
+  </div>
+
+  <div class="section-title collapsed" onclick="toggleSection(this)"><span>Atmosphere</span></div>
+  <div class="section-body collapsed" style="max-height:300px;">
+    <div class="control-row"><label>Sun Altitude</label><div class="right"><input type="range" id="sunAlt" min="-10" max="90" step="0.5" value="25"><span class="val" id="sunAlt_v">25</span></div></div>
+    <div class="control-row"><label>Sun Azimuth</label><div class="right"><input type="range" id="sunAzi" min="0" max="360" step="1" value="220"><span class="val" id="sunAzi_v">220</span></div></div>
+    <div class="control-row"><label>Sun Color</label><div class="right"><input type="color" id="sunCol" value="#ffe8c0"></div></div>
+    <div class="control-row"><label>Fog Density</label><div class="right"><input type="range" id="fogDensity" min="0" max="0.02" step="0.0001" value="0.003"><span class="val" id="fogDensity_v">0.003</span></div></div>
+    <div class="control-row"><label>Fog Color</label><div class="right"><input type="color" id="fogCol" value="#2a4060"></div></div>
+  </div>
+</div>
+
+<button id="toggle-btn" onclick="toggleControls()">&#9881;</button>
+<div id="info">drag to orbit · scroll to zoom · middle-click to pan · H to hide panel</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const waterVS = `
+precision highp float;
+uniform float uTime;
+uniform int uVertexWaveCount;
+uniform float uVertexSeed, uVertexSeedIter, uVertexFrequency, uVertexFrequencyMult;
+uniform float uVertexAmplitude, uVertexAmplitudeMult, uVertexInitialSpeed, uVertexSpeedRamp;
+uniform float uVertexDrag, uVertexHeight, uVertexMaxPeak, uVertexPeakOffset;
+uniform float uGE[5], uGD[5], uGW[5], uGA[5], uGS[5], uGSt[5];
+varying vec3 vWP; varying float vH;
+#define PI 3.14159265358979
+vec3 vFBM(vec3 v){float f=uVertexFrequency,a=uVertexAmplitude,sp=uVertexInitialSpeed,sd=uVertexSeed;vec3 p=v;float as=0.0,h=0.0;
+for(int i=0;i<24;i++){if(i>=uVertexWaveCount)break;vec2 d=normalize(vec2(cos(sd),sin(sd)));float x=dot(d,p.xz)*f+uTime*sp;
+float w=a*exp(uVertexMaxPeak*sin(x)-uVertexPeakOffset);h+=w;p.xz+=d*(-uVertexMaxPeak*w*cos(x))*a*uVertexDrag;
+as+=a;f*=uVertexFrequencyMult;a*=uVertexAmplitudeMult;sp*=uVertexSpeedRamp;sd+=uVertexSeedIter;}
+return vec3(h/max(as,0.001)*uVertexHeight,0.0,0.0);}
+vec3 gD(vec3 wp,float dd,float wl,float am,float sp,float st){
+float fr=2.0/max(wl,0.01),ph=sp*sqrt(9.8*2.0*PI/max(wl,0.01));
+vec2 d=normalize(vec2(cos(dd*PI/180.0),sin(dd*PI/180.0)));float xz=dot(d,wp.xz),t=uTime*ph,Q=st/(fr*am*5.0);
+return vec3(Q*am*d.x*cos(fr*xz+t),am*sin(fr*xz+t),Q*am*d.y*cos(fr*xz+t));}
+void main(){vec3 wp=(modelMatrix*vec4(position,1.0)).xyz;vec3 o=vec3(0.0,vFBM(wp).x,0.0);
+for(int i=0;i<5;i++){if(uGE[i]>0.5){vec3 g=gD(wp,uGD[i],uGW[i],uGA[i],uGS[i],uGSt[i]);o.x+=g.x;o.y+=g.y;o.z+=g.z;}}
+vec3 np=position+o;vWP=(modelMatrix*vec4(np,1.0)).xyz;vH=o.y;gl_Position=projectionMatrix*viewMatrix*vec4(vWP,1.0);}`;
+
+const waterFS = `
+precision highp float;
+uniform float uTime;
+uniform int uFragmentWaveCount;
+uniform float uFragmentSeed, uFragmentSeedIter, uFragmentFrequency, uFragmentFrequencyMult;
+uniform float uFragmentAmplitude, uFragmentAmplitudeMult, uFragmentInitialSpeed, uFragmentSpeedRamp;
+uniform float uFragmentDrag, uFragmentHeight, uFragmentMaxPeak, uFragmentPeakOffset, uNormalStrength;
+uniform float uGE[5], uGD[5], uGW[5], uGA[5], uGS[5], uGSt[5];
+uniform vec3 uAmbient, uDiffuseReflectance, uSpecularReflectance, uFresnelColor, uTipColor;
+uniform float uShininess, uFresnelBias, uFresnelStrength, uFresnelShininess, uTipAttenuation;
+uniform vec3 uSunDirection, uSunColor, uFogColor; uniform float uFogDensity;
+varying vec3 vWP; varying float vH;
+#define PI 3.14159265358979
+vec3 fFBM(vec3 v){float f=uFragmentFrequency,a=uFragmentAmplitude,sp=uFragmentInitialSpeed,sd=uFragmentSeed;
+vec3 p=v;float h=0.0,as=0.0;vec2 n=vec2(0.0);
+for(int i=0;i<40;i++){if(i>=uFragmentWaveCount)break;vec2 d=normalize(vec2(cos(sd),sin(sd)));
+float x=dot(d,p.xz)*f+uTime*sp;float w=a*exp(uFragmentMaxPeak*sin(x)-uFragmentPeakOffset);
+vec2 dw=f*d*(uFragmentMaxPeak*w*cos(x));h+=w;p.xz+=-dw*a*uFragmentDrag;n+=dw;as+=a;
+f*=uFragmentFrequencyMult;a*=uFragmentAmplitudeMult;sp*=uFragmentSpeedRamp;sd+=uFragmentSeedIter;}
+vec3 o=vec3(h,n.x,n.y)/max(as,0.001);o.x*=uFragmentHeight;return o;}
+vec3 gN(vec3 wp,float dd,float wl,float am,float sp,float st){
+float fr=2.0/max(wl,0.01),ph=sp*sqrt(9.8*2.0*PI/max(wl,0.01));
+vec2 d=normalize(vec2(cos(dd*PI/180.0),sin(dd*PI/180.0)));float xz=dot(d,wp.xz),t=uTime*ph;
+float Q=st/(fr*am*5.0),wa=fr*am;return vec3(d.x*wa*cos(fr*xz+t),Q*wa*sin(fr*xz+t),d.y*wa*cos(fr*xz+t));}
+vec3 sky(vec3 dr){float sd=max(0.0,dot(dr,normalize(-uSunDirection)));float y=dr.y*0.5+0.5;
+vec3 s=mix(uFogColor*1.2,vec3(0.15,0.3,0.55),pow(max(0.0,y),0.6));
+return s+uSunColor*pow(sd,3500.0)+uSunColor*0.3*pow(sd,64.0);}
+void main(){
+vec3 ld=normalize(-uSunDirection),vd=normalize(cameraPosition-vWP),hd=normalize(ld+vd);
+vec3 fbm=fFBM(vWP);float ht=fbm.x;vec3 nm=vec3(-fbm.y,1.0,-fbm.z);
+for(int i=0;i<5;i++){if(uGE[i]>0.5){vec3 g=gN(vWP,uGD[i],uGW[i],uGA[i],uGS[i],uGSt[i]);nm.x-=g.x;nm.y-=g.y;nm.z-=g.z;}}
+nm.xz*=uNormalStrength;nm=normalize(nm);float nl=max(0.0,dot(ld,nm));
+vec3 diff=uSunColor*nl*(uDiffuseReflectance/PI);
+float sp=pow(max(0.0,dot(nm,hd)),uShininess)*nl;vec3 spec=uSunColor*uSpecularReflectance*sp;
+float b=1.0-max(0.0,dot(vd,hd));spec*=pow(b,5.0)+uFresnelBias*(1.0-pow(b,5.0));
+float fb=1.0-max(0.0,dot(vd,nm)),fR=pow(fb,uFresnelShininess)*uFresnelStrength;
+vec3 fres=sky(reflect(-vd,nm))*fR;
+float ch=max(0.0,ht)+max(0.0,vH);vec3 tip=uTipColor*pow(max(0.001,ch),uTipAttenuation);
+vec3 col=uAmbient+diff+spec+fres+tip;
+float dist=length(cameraPosition-vWP);col=mix(uFogColor,col,clamp(exp(-dist*dist*uFogDensity*uFogDensity),0.0,1.0));
+col=col/(col+1.0);col=pow(col,vec3(1.0/2.2));gl_FragColor=vec4(col,1.0);}`;
+
+const skyVS=`varying vec3 vD;void main(){vec4 w=modelMatrix*vec4(position,1.0);vD=normalize(w.xyz);gl_Position=projectionMatrix*viewMatrix*w;gl_Position.z=gl_Position.w;}`;
+const skyFS=`precision highp float;uniform vec3 uSunDirection,uSunColor,uFogColor;varying vec3 vD;
+void main(){vec3 d=normalize(vD);float sd=max(0.0,dot(d,normalize(-uSunDirection)));float y=d.y*0.5+0.5;
+vec3 s=mix(uFogColor*1.3,vec3(0.12,0.25,0.5),pow(max(0.0,y),0.5));
+s=mix(s,uFogColor*1.5,(1.0-pow(max(0.0,d.y),0.3))*0.5);
+vec3 c=s+uSunColor*pow(sd,3500.0)+uSunColor*0.4*pow(sd,80.0)+uSunColor*0.08*pow(sd,8.0);
+c=c/(c+1.0);c=pow(c,vec3(1.0/2.2));gl_FragColor=vec4(c,1.0);}`;
+
+// === THREE SETUP ===
+const canvas=document.getElementById('canvas');
+const R=new THREE.WebGLRenderer({canvas,antialias:true});
+R.setSize(window.innerWidth,window.innerHeight);R.setPixelRatio(Math.min(window.devicePixelRatio,2));
+const scene=new THREE.Scene(),cam=new THREE.PerspectiveCamera(60,window.innerWidth/window.innerHeight,0.1,2000);
+
+// === ORBIT ===
+const O={th:Math.PI*0.75,ph:Math.PI*0.2,r:22,tgt:new THREE.Vector3(0,0,0),d:false,p:false,lx:0,ly:0};
+function cU(){cam.position.set(O.tgt.x+O.r*Math.sin(O.ph)*Math.cos(O.th),O.tgt.y+O.r*Math.cos(O.ph),O.tgt.z+O.r*Math.sin(O.ph)*Math.sin(O.th));cam.lookAt(O.tgt);}cU();
+canvas.addEventListener('mousedown',e=>{if(e.button===0)O.d=true;if(e.button===1){O.p=true;e.preventDefault();}O.lx=e.clientX;O.ly=e.clientY;});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+window.addEventListener('mouseup',()=>{O.d=false;O.p=false;});
+window.addEventListener('mousemove',e=>{const dx=e.clientX-O.lx,dy=e.clientY-O.ly;O.lx=e.clientX;O.ly=e.clientY;
+if(O.d){O.th-=dx*0.005;O.ph=Math.max(0.05,Math.min(Math.PI*0.48,O.ph-dy*0.005));cU();}
+if(O.p){const r=new THREE.Vector3(),u=new THREE.Vector3();cam.getWorldDirection(u);r.crossVectors(u,cam.up).normalize();u.crossVectors(r,u).normalize();const s=O.r*0.002;O.tgt.add(r.multiplyScalar(-dx*s));O.tgt.add(u.multiplyScalar(dy*s));cU();}});
+canvas.addEventListener('wheel',e=>{O.r=Math.max(3,Math.min(200,O.r*(1+e.deltaY*0.001)));cU();e.preventDefault();},{passive:false});
+let tD=0;
+canvas.addEventListener('touchstart',e=>{if(e.touches.length===1){O.d=true;O.lx=e.touches[0].clientX;O.ly=e.touches[0].clientY;}else if(e.touches.length===2){O.d=false;tD=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}});
+canvas.addEventListener('touchmove',e=>{e.preventDefault();if(e.touches.length===1&&O.d){const dx=e.touches[0].clientX-O.lx,dy=e.touches[0].clientY-O.ly;O.lx=e.touches[0].clientX;O.ly=e.touches[0].clientY;O.th-=dx*0.005;O.ph=Math.max(0.05,Math.min(Math.PI*0.48,O.ph-dy*0.005));cU();}else if(e.touches.length===2){const nd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);O.r=Math.max(3,Math.min(200,O.r*(tD/nd)));tD=nd;cU();}},{passive:false});
+canvas.addEventListener('touchend',()=>{O.d=false;});
+
+// === WAVE DEFAULTS ===
+const WD=[
+  {en:1,dir:0,wl:12,amp:0.5,spd:1.0,stp:1.5},
+  {en:1,dir:30,wl:8,amp:0.3,spd:1.2,stp:1.2},
+  {en:1,dir:-20,wl:5,amp:0.15,spd:0.8,stp:0.8},
+  {en:0,dir:60,wl:20,amp:0.8,spd:0.5,stp:2.0},
+  {en:0,dir:-45,wl:3,amp:0.1,spd:1.5,stp:0.5},
+];
+
+// === UNIFORMS ===
+const U={
+  uTime:{value:0},
+  uVertexWaveCount:{value:12},uVertexSeed:{value:0},uVertexSeedIter:{value:1253.2131},
+  uVertexFrequency:{value:1},uVertexFrequencyMult:{value:1.18},
+  uVertexAmplitude:{value:1},uVertexAmplitudeMult:{value:0.82},
+  uVertexInitialSpeed:{value:2},uVertexSpeedRamp:{value:1.07},
+  uVertexDrag:{value:1},uVertexHeight:{value:0.6},uVertexMaxPeak:{value:1},uVertexPeakOffset:{value:1},
+  uFragmentWaveCount:{value:32},uFragmentSeed:{value:0},uFragmentSeedIter:{value:1253.2131},
+  uFragmentFrequency:{value:1},uFragmentFrequencyMult:{value:1.18},
+  uFragmentAmplitude:{value:1},uFragmentAmplitudeMult:{value:0.82},
+  uFragmentInitialSpeed:{value:2},uFragmentSpeedRamp:{value:1.07},
+  uFragmentDrag:{value:1},uFragmentHeight:{value:0.6},uFragmentMaxPeak:{value:1},uFragmentPeakOffset:{value:1},
+  uNormalStrength:{value:1},
+  uGE:{value:WD.map(w=>w.en)},uGD:{value:WD.map(w=>w.dir)},uGW:{value:WD.map(w=>w.wl)},
+  uGA:{value:WD.map(w=>w.amp)},uGS:{value:WD.map(w=>w.spd)},uGSt:{value:WD.map(w=>w.stp)},
+  uAmbient:{value:new THREE.Color(0x0a2a4a)},uDiffuseReflectance:{value:new THREE.Color(0x0e4a7a)},
+  uSpecularReflectance:{value:new THREE.Color(0xffffff)},uShininess:{value:80},
+  uFresnelColor:{value:new THREE.Color(0x1a6aaa)},uFresnelBias:{value:0.02},
+  uFresnelStrength:{value:1},uFresnelShininess:{value:5},
+  uTipColor:{value:new THREE.Color(0xe0f0ff)},uTipAttenuation:{value:2},
+  uSunDirection:{value:new THREE.Vector3(-0.5,-0.4,-0.7)},
+  uSunColor:{value:new THREE.Color(0xffe8c0)},uFogColor:{value:new THREE.Color(0x2a4060)},uFogDensity:{value:0.003},
+};
+
+// === MESHES ===
+const geo=new THREE.PlaneGeometry(80,80,256,256);geo.rotateX(-Math.PI/2);
+scene.add(new THREE.Mesh(geo,new THREE.ShaderMaterial({vertexShader:waterVS,fragmentShader:waterFS,uniforms:U,side:THREE.DoubleSide})));
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(900,32,32),new THREE.ShaderMaterial({vertexShader:skyVS,fragmentShader:skyFS,uniforms:{uSunDirection:U.uSunDirection,uSunColor:U.uSunColor,uFogColor:U.uFogColor},side:THREE.BackSide,depthWrite:false})));
+
+// === WAVE UI ===
+const WP=[
+  {key:'dir',label:'Direction',min:-180,max:180,step:1,dec:0,ukey:'uGD'},
+  {key:'wl',label:'Wavelength',min:0.5,max:40,step:0.1,dec:1,ukey:'uGW'},
+  {key:'amp',label:'Amplitude',min:0.01,max:3,step:0.01,dec:2,ukey:'uGA'},
+  {key:'spd',label:'Speed',min:0.01,max:4,step:0.01,dec:2,ukey:'uGS'},
+  {key:'stp',label:'Steepness',min:0,max:4,step:0.01,dec:2,ukey:'uGSt'},
+];
+
+(function(){
+  const c=document.getElementById('wave-controls');
+  for(let i=0;i<5;i++){
+    const w=WD[i],id='w'+i;
+    const hdr=document.createElement('div');
+    hdr.className='wave-header'+(i>=3?' collapsed':'');
+    hdr.innerHTML=`<span class="wave-label">Wave ${i+1}</span><div class="wave-toggle"><label class="toggle-switch" onclick="event.stopPropagation()"><input type="checkbox" id="${id}_en" ${w.en?'checked':''}><span class="slider"></span></label><span class="wave-arrow">&#9662;</span></div>`;
+    c.appendChild(hdr);
+    const body=document.createElement('div');
+    body.className='wave-body'+(i>=3?' collapsed':'');
+    body.style.maxHeight=i>=3?'0':'300px';
+    for(const p of WP){
+      const sid=`${id}_${p.key}`,v=w[p.key];
+      const row=document.createElement('div');row.className='control-row';
+      row.innerHTML=`<label>${p.label}</label><div class="right"><input type="range" id="${sid}" min="${p.min}" max="${p.max}" step="${p.step}" value="${v}"><span class="val" id="${sid}_v">${v.toFixed(p.dec)}</span></div>`;
+      body.appendChild(row);
+    }
+    c.appendChild(body);
+    hdr.addEventListener('click',()=>{hdr.classList.toggle('collapsed');body.classList.toggle('collapsed');body.style.maxHeight=body.classList.contains('collapsed')?'0':'300px';});
+    document.getElementById(`${id}_en`).addEventListener('change',function(){U.uGE.value[i]=this.checked?1:0;});
+    for(const p of WP){
+      const sid=`${id}_${p.key}`;
+      document.getElementById(sid).addEventListener('input',function(){
+        const v=parseFloat(this.value);U[p.ukey].value[i]=v;
+        document.getElementById(sid+'_v').textContent=v.toFixed(p.dec);
+      });
+    }
+  }
+})();
+
+// === SECTION TOGGLE ===
+function toggleSection(el){el.classList.toggle('collapsed');el.nextElementSibling.classList.toggle('collapsed');}
+
+// === SCALAR BINDINGS ===
+const SB={
+  vWaveCount:{u:'uVertexWaveCount',i:1},vFreq:{u:'uVertexFrequency'},vFreqMult:{u:'uVertexFrequencyMult'},
+  vAmp:{u:'uVertexAmplitude'},vAmpMult:{u:'uVertexAmplitudeMult'},vSpeed:{u:'uVertexInitialSpeed'},
+  vSpeedRamp:{u:'uVertexSpeedRamp'},vDrag:{u:'uVertexDrag'},vHeight:{u:'uVertexHeight'},
+  vMaxPeak:{u:'uVertexMaxPeak'},vPeakOffset:{u:'uVertexPeakOffset'},
+  fWaveCount:{u:'uFragmentWaveCount',i:1},fFreq:{u:'uFragmentFrequency'},fFreqMult:{u:'uFragmentFrequencyMult'},
+  fAmp:{u:'uFragmentAmplitude'},fAmpMult:{u:'uFragmentAmplitudeMult'},fHeight:{u:'uFragmentHeight'},
+  normalStr:{u:'uNormalStrength'},shininess:{u:'uShininess',i:1},
+  fresnelBias:{u:'uFresnelBias'},fresnelStr:{u:'uFresnelStrength'},fresnelExp:{u:'uFresnelShininess'},
+  tipAtten:{u:'uTipAttenuation'},fogDensity:{u:'uFogDensity'},
+};
+const CB={ambientCol:'uAmbient',diffuseCol:'uDiffuseReflectance',specularCol:'uSpecularReflectance',fresnelCol:'uFresnelColor',tipCol:'uTipColor',sunCol:'uSunColor',fogCol:'uFogColor'};
+
+for(const[id,b]of Object.entries(SB)){
+  const el=document.getElementById(id),vl=document.getElementById(id+'_v');if(!el)continue;
+  el.addEventListener('input',()=>{const v=b.i?parseInt(el.value):parseFloat(el.value);U[b.u].value=v;
+  const s=String(el.step),d=s.includes('.')?(s.split('.')[1]||'').length:0;vl.textContent=b.i?v:v.toFixed(Math.max(d,1));});
+}
+for(const[id,u]of Object.entries(CB)){const el=document.getElementById(id);if(el)el.addEventListener('input',()=>{U[u].value=new THREE.Color(el.value);});}
+
+function updateSun(){
+  const a=parseFloat(document.getElementById('sunAlt').value)*Math.PI/180,z=parseFloat(document.getElementById('sunAzi').value)*Math.PI/180;
+  U.uSunDirection.value.set(-Math.cos(a)*Math.sin(z),-Math.sin(a),-Math.cos(a)*Math.cos(z));
+}
+document.getElementById('sunAlt').addEventListener('input',function(){document.getElementById('sunAlt_v').textContent=this.value;updateSun();});
+document.getElementById('sunAzi').addEventListener('input',function(){document.getElementById('sunAzi_v').textContent=this.value;updateSun();});
+updateSun();
+
+// === PRESETS ===
+const presets={
+  ocean:{vWaveCount:12,vFreq:1.0,vFreqMult:1.18,vAmp:1.0,vAmpMult:0.82,vSpeed:2.0,vSpeedRamp:1.07,vDrag:1.0,vHeight:0.6,vMaxPeak:1.0,vPeakOffset:1.0,fWaveCount:32,fFreq:1.0,fFreqMult:1.18,fAmp:1.0,fAmpMult:0.82,fHeight:0.6,normalStr:1.0,shininess:80,fresnelBias:0.02,fresnelStr:1.0,fresnelExp:5.0,tipAtten:2.0,fogDensity:0.003,sunAlt:25,sunAzi:220,ambientCol:'#0a2a4a',diffuseCol:'#0e4a7a',specularCol:'#ffffff',fresnelCol:'#1a6aaa',tipCol:'#e0f0ff',sunCol:'#ffe8c0',fogCol:'#2a4060',
+    waves:[{en:1,dir:0,wl:12,amp:0.5,spd:1.0,stp:1.5},{en:1,dir:30,wl:8,amp:0.3,spd:1.2,stp:1.2},{en:1,dir:-20,wl:5,amp:0.15,spd:0.8,stp:0.8},{en:0,dir:60,wl:20,amp:0.8,spd:0.5,stp:2.0},{en:0,dir:-45,wl:3,amp:0.1,spd:1.5,stp:0.5}]},
+  calm:{vWaveCount:8,vFreq:0.6,vFreqMult:1.12,vAmp:0.5,vAmpMult:0.88,vSpeed:1.0,vSpeedRamp:1.03,vDrag:0.5,vHeight:0.2,vMaxPeak:0.5,vPeakOffset:0.8,fWaveCount:24,fFreq:0.8,fFreqMult:1.14,fAmp:0.6,fAmpMult:0.85,fHeight:0.3,normalStr:0.6,shininess:120,fresnelBias:0.03,fresnelStr:1.2,fresnelExp:5.0,tipAtten:4.0,fogDensity:0.002,sunAlt:40,sunAzi:180,ambientCol:'#0c3050',diffuseCol:'#104060',specularCol:'#ffe0c0',fresnelCol:'#2080b0',tipCol:'#c0e8ff',sunCol:'#fff0d0',fogCol:'#304860',
+    waves:[{en:1,dir:10,wl:18,amp:0.15,spd:0.4,stp:0.5},{en:1,dir:-5,wl:12,amp:0.08,spd:0.3,stp:0.3},{en:0,dir:0,wl:6,amp:0.05,spd:0.5,stp:0.2},{en:0,dir:0,wl:10,amp:0.1,spd:0.3,stp:0.4},{en:0,dir:0,wl:5,amp:0.05,spd:0.5,stp:0.2}]},
+  stormy:{vWaveCount:18,vFreq:1.5,vFreqMult:1.22,vAmp:1.5,vAmpMult:0.78,vSpeed:3.5,vSpeedRamp:1.1,vDrag:1.5,vHeight:1.2,vMaxPeak:1.5,vPeakOffset:0.8,fWaveCount:36,fFreq:1.8,fFreqMult:1.2,fAmp:1.2,fAmpMult:0.78,fHeight:0.8,normalStr:2.0,shininess:40,fresnelBias:0.05,fresnelStr:0.8,fresnelExp:3.0,tipAtten:1.2,fogDensity:0.006,sunAlt:8,sunAzi:260,ambientCol:'#0a1820',diffuseCol:'#0a2030',specularCol:'#888888',fresnelCol:'#1a3a50',tipCol:'#a0c0d0',sunCol:'#c0a080',fogCol:'#1a2a38',
+    waves:[{en:1,dir:-10,wl:15,amp:1.2,spd:2.0,stp:2.5},{en:1,dir:25,wl:10,amp:0.8,spd:2.5,stp:2.0},{en:1,dir:-40,wl:6,amp:0.5,spd:1.8,stp:1.5},{en:1,dir:50,wl:20,amp:1.5,spd:1.2,stp:3.0},{en:1,dir:-60,wl:4,amp:0.3,spd:3.0,stp:1.0}]},
+  pond:{vWaveCount:6,vFreq:0.4,vFreqMult:1.1,vAmp:0.3,vAmpMult:0.9,vSpeed:0.6,vSpeedRamp:1.02,vDrag:0.3,vHeight:0.1,vMaxPeak:0.3,vPeakOffset:0.5,fWaveCount:16,fFreq:0.5,fFreqMult:1.12,fAmp:0.4,fAmpMult:0.88,fHeight:0.15,normalStr:0.4,shininess:160,fresnelBias:0.04,fresnelStr:1.5,fresnelExp:6.0,tipAtten:6.0,fogDensity:0.001,sunAlt:50,sunAzi:150,ambientCol:'#102a20',diffuseCol:'#1a4a3a',specularCol:'#ffffff',fresnelCol:'#306050',tipCol:'#d0ffe0',sunCol:'#fffae0',fogCol:'#2a4040',
+    waves:[{en:0,dir:0,wl:10,amp:0.05,spd:0.2,stp:0.2},{en:0,dir:30,wl:6,amp:0.03,spd:0.3,stp:0.1},{en:0,dir:0,wl:5,amp:0.02,spd:0.2,stp:0.1},{en:0,dir:0,wl:8,amp:0.04,spd:0.2,stp:0.2},{en:0,dir:0,wl:4,amp:0.02,spd:0.3,stp:0.1}]},
+};
+
+function applyWaves(waves){
+  for(let i=0;i<5;i++){const w=waves[i],id='w'+i;
+    const en=document.getElementById(id+'_en');en.checked=w.en>0;U.uGE.value[i]=w.en?1:0;
+    for(const p of WP){const sid=`${id}_${p.key}`,el=document.getElementById(sid),vl=document.getElementById(sid+'_v');
+    if(!el)continue;el.value=w[p.key];U[p.ukey].value[i]=w[p.key];vl.textContent=w[p.key].toFixed(p.dec);}
+  }
+}
+
+function applyPreset(name,btn){
+  const p=presets[name];if(!p)return;
+  document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  for(const[k,v]of Object.entries(p)){if(k==='waves')continue;const el=document.getElementById(k);if(!el)continue;el.value=v;el.dispatchEvent(new Event('input'));}
+  if(p.waves)applyWaves(p.waves);
+}
+
+// === TOGGLE ===
+let pVis=true;
+function toggleControls(){pVis=!pVis;document.getElementById('controls').style.display=pVis?'block':'none';document.getElementById('toggle-btn').style.display=pVis?'none':'flex';}
+document.addEventListener('keydown',e=>{if((e.key==='h'||e.key==='H')&&(!document.activeElement||document.activeElement.tagName!=='INPUT'))toggleControls();});
+
+// === LOOP ===
+const clock=new THREE.Clock();
+(function anim(){requestAnimationFrame(anim);U.uTime.value=clock.getElapsedTime();R.render(scene,cam);})();
+window.addEventListener('resize',()=>{cam.aspect=window.innerWidth/window.innerHeight;cam.updateProjectionMatrix();R.setSize(window.innerWidth,window.innerHeight);});
+</script>
+</body>
+</html>

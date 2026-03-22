@@ -184,6 +184,18 @@
     <div class="control-row"><label>Intensity</label><div class="right"><input type="range" id="fresnelIntensity" min="0" max="2" step="0.1" value="1.0"><span class="val" id="fresnelIntensity_v">1.0</span></div></div>
   </div>
 
+  <div class="section-title collapsed" onclick="toggleSection(this)"><span>Surface Detail</span></div>
+  <div class="section-body collapsed" style="max-height:150px;">
+    <div class="control-row">
+      <label>Fragment FBM</label>
+      <div class="right">
+        <label class="toggle-switch"><input type="checkbox" id="useFragmentFBM" checked><span class="slider"></span></label>
+      </div>
+    </div>
+    <div class="control-row"><label>Scale</label><div class="right"><input type="range" id="fragmentFBMScale" min="0.5" max="2" step="0.1" value="1.0"><span class="val" id="fragmentFBMScale_v">1.0</span></div></div>
+    <div class="control-row"><label>Strength</label><div class="right"><input type="range" id="fragmentFBMStrength" min="0" max="2" step="0.1" value="1.0"><span class="val" id="fragmentFBMStrength_v">1.0</span></div></div>
+  </div>
+
   <div class="section-title collapsed" onclick="toggleSection(this)"><span>Performance Info</span></div>
   <div class="section-body collapsed" style="max-height:200px;">
     <div class="control-row"><label>Vertices</label><div class="right"><span class="val" id="info-verts">--</span></div></div>
@@ -199,11 +211,11 @@
 <script>
 // === QUALITY PROFILES ===
 const QUALITY_PROFILES = [
-  { name: 'ULTRA',  meshRes: 256, pixelRatio: 1.0, waves: 3, useFresnel: true,  useReflections: true,  precision: 'highp'  }, // Desktop high-end
-  { name: 'HIGH',   meshRes: 128, pixelRatio: 1.0, waves: 2, useFresnel: true,  useReflections: false, precision: 'highp'  }, // Desktop mid-range
-  { name: 'MEDIUM', meshRes: 64,  pixelRatio: 0.9, waves: 2, useFresnel: false, useReflections: false, precision: 'mediump' }, // Mobile flagship
-  { name: 'LOW',    meshRes: 32,  pixelRatio: 0.75, waves: 2, useFresnel: false, useReflections: false, precision: 'mediump' }, // Mobile mid-range
-  { name: 'POTATO', meshRes: 16,  pixelRatio: 0.5, waves: 1, useFresnel: false, useReflections: false, precision: 'mediump' }, // Old devices
+  { name: 'ULTRA',  meshRes: 256, pixelRatio: 1.0, waves: 3, useFresnel: true,  useFragmentFBM: true,  useReflections: true,  precision: 'highp'  }, // Desktop high-end
+  { name: 'HIGH',   meshRes: 128, pixelRatio: 1.0, waves: 3, useFresnel: true,  useFragmentFBM: true,  useReflections: false, precision: 'highp'  }, // Desktop mid-range
+  { name: 'MEDIUM', meshRes: 64,  pixelRatio: 0.9, waves: 2, useFresnel: false, useFragmentFBM: true,  useReflections: false, precision: 'mediump' }, // Mobile flagship
+  { name: 'LOW',    meshRes: 32,  pixelRatio: 0.75, waves: 2, useFresnel: false, useFragmentFBM: false, useReflections: false, precision: 'mediump' }, // Mobile mid-range
+  { name: 'POTATO', meshRes: 16,  pixelRatio: 0.5, waves: 1, useFresnel: false, useFragmentFBM: false, useReflections: false, precision: 'mediump' }, // Old devices
 ];
 
 // === DEVICE DETECTION ===
@@ -275,15 +287,48 @@ uniform float uTime;
 uniform float uWaveAmp, uWaveFreq;
 uniform vec3 uSunDirection, uSunColor, uFogColor;
 uniform float uFogDensity;
-uniform bool uUseFresnel, uUseReflections;
+uniform bool uUseFresnel, uUseReflections, uUseFragmentFBM;
 uniform float uFresnelBias, uFresnelPower, uFresnelIntensity;
+uniform float uFragmentFBMScale, uFragmentFBMStrength;
 varying vec3 vWP; varying float vH;
 #define PI 3.14159265358979
+
+// Fragment-level FBM for fine surface detail
+vec3 fragmentFBM(vec3 wp, int waves) {
+  float freq = 3.0 * uFragmentFBMScale;
+  float amp = 0.15 * uFragmentFBMStrength;
+  float speed = 2.5;
+  vec2 normal = vec2(0.0);
+  
+  for (int i = 0; i < 2; i++) {
+    if (i >= waves) break;
+    float angle = float(i) * 2.4 + uTime * 0.1;
+    vec2 dir = normalize(vec2(cos(angle), sin(angle)));
+    float phase = dot(dir, wp.xz) * freq - uTime * speed;
+    float w = amp * sin(phase);
+    normal += dir * (freq * amp * cos(phase));
+    freq *= 1.3;
+    amp *= 0.7;
+    speed *= 1.1;
+  }
+  
+  return vec3(normal.x, 0.0, normal.y);
+}
 
 vec3 getNormal() {
   vec3 dx = dFdx(vWP);
   vec3 dy = dFdy(vWP);
-  return normalize(cross(dx, dy));
+  vec3 normal = normalize(cross(dx, dy));
+  
+  // Add fragment FBM detail
+  if (uUseFragmentFBM) {
+    vec3 fbmDetail = fragmentFBM(vWP, 2);
+    normal.x -= fbmDetail.x;
+    normal.z -= fbmDetail.z;
+    normal = normalize(normal);
+  }
+  
+  return normal;
 }
 
 vec3 sky(vec3 dir) {
@@ -318,9 +363,16 @@ void main() {
   float spec = pow(max(0.0, dot(normal, halfDir)), 40.0) * nl;
   vec3 specular = uSunColor * spec * 0.5;
   
-  // Wave tip foam
-  float foam = smoothstep(0.0, uWaveAmp * 0.3, max(0.0, vH));
-  vec3 foamColor = vec3(0.9, 0.95, 1.0) * foam * 0.3;
+  // Enhanced wave tip foam with gradient
+  float foamThreshold = uWaveAmp * 0.25;
+  float foamRange = uWaveAmp * 0.15;
+  float foam = smoothstep(foamThreshold - foamRange, foamThreshold + foamRange, max(0.0, vH));
+  
+  // Add steepness-based foam intensity
+  float steepness = length(vec2(normal.x, normal.z));
+  foam = mix(foam, 1.0, smoothstep(0.3, 0.8, steepness) * 0.3);
+  
+  vec3 foamColor = vec3(0.9, 0.95, 1.0) * foam * 0.4;
   
   // Combine
   vec3 ambient = vec3(0.05, 0.1, 0.2);
@@ -445,6 +497,9 @@ const U = {
   uFresnelBias: { value: 0.02 },
   uFresnelPower: { value: 5.0 },
   uFresnelIntensity: { value: 1.0 },
+  uUseFragmentFBM: { value: true },
+  uFragmentFBMScale: { value: 1.0 },
+  uFragmentFBMStrength: { value: 1.0 },
 };
 
 // === MESHES ===
@@ -478,7 +533,12 @@ function rebuildOcean(qualityIndex) {
   // Update uniforms
   U.uWaveCount.value = Math.min(profile.waves, parseInt(document.getElementById('waveCount').value));
   U.uUseFresnel.value = profile.useFresnel;
+  U.uUseFragmentFBM.value = profile.useFragmentFBM;
   U.uUseReflections.value = profile.useReflections;
+  
+  // Update UI toggles
+  document.getElementById('useFresnel').checked = profile.useFresnel;
+  document.getElementById('useFragmentFBM').checked = profile.useFragmentFBM;
   
   // Update renderer
   R.setPixelRatio(Math.min(window.devicePixelRatio, profile.pixelRatio));
@@ -522,6 +582,8 @@ const bindings = {
   fresnelBias: { u: 'uFresnelBias', parse: parseFloat },
   fresnelPower: { u: 'uFresnelPower', parse: parseFloat },
   fresnelIntensity: { u: 'uFresnelIntensity', parse: parseFloat },
+  fragmentFBMScale: { u: 'uFragmentFBMScale', parse: parseFloat },
+  fragmentFBMStrength: { u: 'uFragmentFBMStrength', parse: parseFloat },
 };
 
 for (const [id, b] of Object.entries(bindings)) {
@@ -535,11 +597,18 @@ for (const [id, b] of Object.entries(bindings)) {
   });
 }
 
-// Fresnel toggle
+// Feature toggles
 const fresnelToggle = document.getElementById('useFresnel');
 if (fresnelToggle) {
   fresnelToggle.addEventListener('change', function() {
     U.uUseFresnel.value = this.checked;
+  });
+}
+
+const fragmentFBMToggle = document.getElementById('useFragmentFBM');
+if (fragmentFBMToggle) {
+  fragmentFBMToggle.addEventListener('change', function() {
+    U.uUseFragmentFBM.value = this.checked;
   });
 }
 

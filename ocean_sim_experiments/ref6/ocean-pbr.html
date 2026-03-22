@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Ocean PBR — Ultra-Realistic Mobile</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; background: #0a0c10; font-family: 'JetBrains Mono', monospace; touch-action: none; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+
+  #fps-monitor {
+    position: fixed; top: 12px; left: 12px; z-index: 20;
+    background: rgba(8, 10, 18, 0.85); backdrop-filter: blur(12px);
+    border: 1px solid rgba(100, 160, 255, 0.15); border-radius: 8px;
+    padding: 8px 12px; color: #c0d0e8; font-size: 10px;
+    font-family: 'JetBrains Mono', monospace; pointer-events: none;
+  }
+  #fps-monitor .fps-label { color: #6aa0e0; font-weight: 500; letter-spacing: 0.5px; }
+  #fps-monitor .fps-value { color: #4a90d9; font-weight: 500; font-size: 14px; }
+  #fps-monitor .quality-badge {
+    display: inline-block; padding: 2px 6px; margin-left: 8px;
+    background: rgba(74, 144, 217, 0.2); border: 1px solid rgba(74, 144, 217, 0.3);
+    border-radius: 4px; font-size: 9px; color: #8ab0d8; letter-spacing: 0.5px;
+  }
+  #fps-monitor .device-info { margin-top: 4px; font-size: 8px; color: #5a7a9a; }
+
+  #controls {
+    position: fixed; top: 12px; right: 12px;
+    width: 280px; max-height: calc(100vh - 24px); overflow-y: auto;
+    background: rgba(8, 10, 18, 0.88); backdrop-filter: blur(20px);
+    border: 1px solid rgba(100, 160, 255, 0.12); border-radius: 12px;
+    padding: 16px; color: #c0d0e8; font-size: 10px; z-index: 10;
+    scrollbar-width: thin; scrollbar-color: rgba(100,160,255,0.2) transparent;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
+  #controls.collapsed {
+    transform: translateX(calc(100% + 12px));
+    opacity: 0;
+    pointer-events: none;
+  }
+  #controls::-webkit-scrollbar { width: 4px; }
+  #controls::-webkit-scrollbar-thumb { background: rgba(100,160,255,0.2); border-radius: 2px; }
+
+  #panel-toggle {
+    position: fixed; top: 12px; right: 12px; z-index: 11;
+    width: 36px; height: 36px;
+    background: rgba(8, 10, 18, 0.88); backdrop-filter: blur(20px);
+    border: 1px solid rgba(100, 160, 255, 0.12); border-radius: 8px;
+    color: #8ab0d8; font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; font-family: inherit;
+  }
+  #panel-toggle:hover { background: rgba(100, 160, 255, 0.12); color: #e0f0ff; }
+  #panel-toggle.collapsed { right: 12px; }
+
+  #controls h1 { font-size: 13px; font-weight: 500; color: #e0ecff; margin-bottom: 3px; letter-spacing: 0.5px; }
+  #controls .subtitle { font-size: 9px; color: #5a7a9a; margin-bottom: 12px; letter-spacing: 0.3px; }
+
+  .quality-selector {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 16px;
+  }
+  .quality-btn {
+    padding: 6px 8px; font-size: 9px; font-family: inherit; text-align: center;
+    background: rgba(100, 160, 255, 0.08); color: #8ab0d8;
+    border: 1px solid rgba(100, 160, 255, 0.15); border-radius: 6px;
+    cursor: pointer; transition: all 0.2s; user-select: none;
+  }
+  .quality-btn:hover { background: rgba(100, 160, 255, 0.18); color: #c0e0ff; }
+  .quality-btn.active { background: rgba(74, 144, 217, 0.3); color: #e0f0ff; border-color: #4a90d9; font-weight: 500; }
+
+  .section-title {
+    font-size: 9px; font-weight: 500; color: #6aa0e0; text-transform: uppercase;
+    letter-spacing: 1.2px; margin: 12px 0 8px; padding-bottom: 4px;
+    border-bottom: 1px solid rgba(100, 160, 255, 0.08);
+    cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between;
+  }
+  .section-title::after { content: '\25BE'; font-size: 8px; transition: transform 0.2s; }
+  .section-title.collapsed::after { transform: rotate(-90deg); }
+  .section-body { overflow: hidden; transition: max-height 0.3s ease; }
+  .section-body.collapsed { max-height: 0 !important; }
+
+  .control-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+  .control-row label { flex-shrink: 0; color: #8aa0b8; font-size: 9px; }
+  .control-row .right { display: flex; align-items: center; gap: 6px; }
+  .control-row input[type="range"] {
+    width: 100px; height: 3px; -webkit-appearance: none; appearance: none;
+    background: rgba(100, 160, 255, 0.15); border-radius: 2px; outline: none;
+  }
+  .control-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 10px; height: 10px; border-radius: 50%;
+    background: #4a90d9; cursor: pointer; border: 2px solid #0a0c10;
+  }
+  .control-row .val {
+    width: 32px; text-align: right; font-size: 9px; color: #4a90d9;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .toggle-switch { position: relative; width: 24px; height: 12px; cursor: pointer; display: inline-block; }
+  .toggle-switch input { display: none; }
+  .toggle-switch .slider {
+    position: absolute; inset: 0; background: rgba(100, 160, 255, 0.12);
+    border-radius: 6px; transition: background 0.2s;
+  }
+  .toggle-switch .slider::after {
+    content: ''; position: absolute; width: 8px; height: 8px; left: 2px; top: 2px;
+    background: #5a7a9a; border-radius: 50%; transition: all 0.2s;
+  }
+  .toggle-switch input:checked + .slider { background: rgba(74, 144, 217, 0.4); }
+  .toggle-switch input:checked + .slider::after { left: 14px; background: #4a90d9; }
+
+  #info {
+    position: fixed; bottom: 12px; left: 12px;
+    color: rgba(100,160,200,0.4); font-size: 9px;
+    font-family: 'JetBrains Mono', monospace; pointer-events: none;
+  }
+
+  @media (max-width: 768px) {
+    #controls { 
+      width: calc(100vw - 24px); max-height: 40vh; 
+      top: auto; bottom: 12px; left: 12px; right: 12px;
+    }
+    #controls.collapsed {
+      transform: translateY(calc(100% + 12px));
+    }
+    #panel-toggle { top: auto; bottom: 12px; }
+    #fps-monitor { font-size: 9px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<button id="panel-toggle" onclick="togglePanel()" title="Toggle Controls">⚙</button>
+
+<div id="fps-monitor">
+  <div><span class="fps-label">FPS:</span> <span class="fps-value" id="fps-value">--</span><span class="quality-badge" id="quality-badge">AUTO</span></div>
+  <div class="device-info" id="device-info">Detecting device...</div>
+</div>
+
+<div id="controls">
+  <h1>Ocean PBR</h1>
+  <div class="subtitle">Ultra-realistic physically-based rendering</div>
+
+  <div class="section-title" onclick="toggleSection(this)"><span>Quality Level</span></div>
+  <div class="section-body" style="max-height:120px;">
+    <div class="quality-selector">
+      <div class="quality-btn" onclick="setQuality(0)" id="q-ultra">ULTRA</div>
+      <div class="quality-btn" onclick="setQuality(1)" id="q-high">HIGH</div>
+      <div class="quality-btn" onclick="setQuality(2)" id="q-medium">MEDIUM</div>
+      <div class="quality-btn" onclick="setQuality(3)" id="q-low">LOW</div>
+      <div class="quality-btn" onclick="setQuality(4)" id="q-potato">POTATO</div>
+      <div class="quality-btn active" onclick="setQuality(-1)" id="q-auto">AUTO</div>
+    </div>
+    <div class="control-row">
+      <label>Auto-Scale</label>
+      <div class="right">
+        <label class="toggle-switch"><input type="checkbox" id="autoscale" checked><span class="slider"></span></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title collapsed" onclick="toggleSection(this)"><span>Wave Settings</span></div>
+  <div class="section-body collapsed" style="max-height:300px;">
+    <div class="control-row"><label>Wave Count</label><div class="right"><input type="range" id="waveCount" min="1" max="3" step="1" value="2"><span class="val" id="waveCount_v">2</span></div></div>
+    <div class="control-row"><label>Amplitude</label><div class="right"><input type="range" id="waveAmp" min="0.1" max="2" step="0.1" value="0.5"><span class="val" id="waveAmp_v">0.5</span></div></div>
+    <div class="control-row"><label>Frequency</label><div class="right"><input type="range" id="waveFreq" min="0.5" max="3" step="0.1" value="1.0"><span class="val" id="waveFreq_v">1.0</span></div></div>
+    <div class="control-row"><label>Speed</label><div class="right"><input type="range" id="waveSpeed" min="0.5" max="3" step="0.1" value="1.0"><span class="val" id="waveSpeed_v">1.0</span></div></div>
+    <div class="control-row"><label>Steepness</label><div class="right"><input type="range" id="waveSteep" min="0" max="2" step="0.1" value="0.5"><span class="val" id="waveSteep_v">0.5</span></div></div>
+  </div>
+
+  <div class="section-title collapsed" onclick="toggleSection(this)"><span>Fresnel Settings</span></div>
+  <div class="section-body collapsed" style="max-height:200px;">
+    <div class="control-row">
+      <label>Enable</label>
+      <div class="right">
+        <label class="toggle-switch"><input type="checkbox" id="useFresnel" checked><span class="slider"></span></label>
+      </div>
+    </div>
+    <div class="control-row"><label>Bias</label><div class="right"><input type="range" id="fresnelBias" min="0" max="0.2" step="0.01" value="0.02"><span class="val" id="fresnelBias_v">0.02</span></div></div>
+    <div class="control-row"><label>Power</label><div class="right"><input type="range" id="fresnelPower" min="1" max="10" step="0.5" value="5.0"><span class="val" id="fresnelPower_v">5.0</span></div></div>
+    <div class="control-row"><label>Intensity</label><div class="right"><input type="range" id="fresnelIntensity" min="0" max="2" step="0.1" value="1.0"><span class="val" id="fresnelIntensity_v">1.0</span></div></div>
+  </div>
+
+  <div class="section-title collapsed" onclick="toggleSection(this)"><span>Surface Detail</span></div>
+  <div class="section-body collapsed" style="max-height:150px;">
+    <div class="control-row">
+      <label>Fragment FBM</label>
+      <div class="right">
+        <label class="toggle-switch"><input type="checkbox" id="useFragmentFBM" checked><span class="slider"></span></label>
+      </div>
+    </div>
+    <div class="control-row"><label>Scale</label><div class="right"><input type="range" id="fragmentFBMScale" min="0.5" max="2" step="0.1" value="1.0"><span class="val" id="fragmentFBMScale_v">1.0</span></div></div>
+    <div class="control-row"><label>Strength</label><div class="right"><input type="range" id="fragmentFBMStrength" min="0" max="2" step="0.1" value="1.0"><span class="val" id="fragmentFBMStrength_v">1.0</span></div></div>
+  </div>
+
+  <div class="section-title" onclick="toggleSection(this)"><span>PBR Material</span></div>
+  <div class="section-body" style="max-height:250px;">
+    <div class="control-row">
+      <label>Enable PBR</label>
+      <div class="right">
+        <label class="toggle-switch"><input type="checkbox" id="usePBR" checked><span class="slider"></span></label>
+      </div>
+    </div>
+    <div class="control-row"><label>Roughness</label><div class="right"><input type="range" id="roughness" min="0" max="1" step="0.05" value="0.2"><span class="val" id="roughness_v">0.20</span></div></div>
+    <div class="control-row"><label>IOR</label><div class="right"><input type="range" id="ior" min="1.0" max="1.5" step="0.01" value="1.33"><span class="val" id="ior_v">1.33</span></div></div>
+    <div class="control-row"><label>Base Color</label><div class="right"><input type="color" id="baseColor" value="#0a3050"></div></div>
+  </div>
+
+  <div class="section-title collapsed" onclick="toggleSection(this)"><span>Performance Info</span></div>
+  <div class="section-body collapsed" style="max-height:200px;">
+    <div class="control-row"><label>Vertices</label><div class="right"><span class="val" id="info-verts">--</span></div></div>
+    <div class="control-row"><label>Draw Calls</label><div class="right"><span class="val" id="info-draws">2</span></div></div>
+    <div class="control-row"><label>Resolution</label><div class="right"><span class="val" id="info-res">--</span></div></div>
+    <div class="control-row"><label>Pixel Ratio</label><div class="right"><span class="val" id="info-pr">--</span></div></div>
+  </div>
+</div>
+
+<div id="info">drag to orbit · pinch to zoom · ⚙ to toggle panel</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// === QUALITY PROFILES ===
+const QUALITY_PROFILES = [
+  { name: 'ULTRA',  meshRes: 256, pixelRatio: 1.0, waves: 4, useFresnel: true,  useFragmentFBM: true,  usePBR: true,  useReflections: true,  precision: 'highp'  }, // Desktop high-end
+  { name: 'HIGH',   meshRes: 128, pixelRatio: 1.0, waves: 3, useFresnel: true,  useFragmentFBM: true,  usePBR: true,  useReflections: false, precision: 'highp'  }, // Desktop mid-range / Mobile flagship
+  { name: 'MEDIUM', meshRes: 64,  pixelRatio: 0.9, waves: 2, useFresnel: true,  useFragmentFBM: true,  usePBR: false, useReflections: false, precision: 'mediump' }, // Mobile mid-range
+  { name: 'LOW',    meshRes: 32,  pixelRatio: 0.75, waves: 2, useFresnel: false, useFragmentFBM: false, usePBR: false, useReflections: false, precision: 'mediump' }, // Budget mobile
+  { name: 'POTATO', meshRes: 16,  pixelRatio: 0.5, waves: 1, useFresnel: false, useFragmentFBM: false, usePBR: false, useReflections: false, precision: 'mediump' }, // Old devices
+];
+
+// === DEVICE DETECTION ===
+function detectDevice() {
+  const ua = navigator.userAgent.toLowerCase();
+  const isMobile = /android|iphone|ipad|ipod/.test(ua);
+  const gpu = (function() {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if (!gl) return 'unknown';
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'unknown';
+  })();
+  
+  // Guess quality based on device
+  let initialQuality = 2; // MEDIUM default
+  if (!isMobile) initialQuality = 1; // HIGH for desktop
+  if (gpu.includes('Apple') && (gpu.includes('A14') || gpu.includes('A15') || gpu.includes('A16'))) initialQuality = 1; // iPhone 12+
+  if (gpu.includes('Adreno 6') || gpu.includes('Mali-G')) initialQuality = 2; // Mid Android
+  if (gpu.includes('Adreno 3') || gpu.includes('Adreno 4')) initialQuality = 3; // Budget Android
+  
+  return { isMobile, gpu, initialQuality };
+}
+
+const device = detectDevice();
+document.getElementById('device-info').textContent = `${device.isMobile ? 'Mobile' : 'Desktop'} · ${device.gpu.substring(0, 30)}`;
+
+// === SHADERS ===
+const waterVS = `
+precision PRECISION float;
+uniform float uTime;
+uniform float uWaveAmp, uWaveFreq, uWaveSpeed, uWaveSteep;
+uniform int uWaveCount;
+varying vec3 vWP; varying float vH;
+#define PI 3.14159265358979
+
+vec3 gerstnerWave(vec3 p, float dir, float wavelength, float amp, float speed, float steep) {
+  float k = 2.0 * PI / wavelength;
+  float c = sqrt(9.8 / k);
+  vec2 d = normalize(vec2(cos(dir), sin(dir)));
+  float f = k * dot(d, p.xz) - speed * uTime;
+  float Q = steep / (k * amp * float(uWaveCount));
+  return vec3(
+    Q * amp * d.x * cos(f),
+    amp * sin(f),
+    Q * amp * d.y * cos(f)
+  );
+}
+
+void main() {
+  vec3 wp = (modelMatrix * vec4(position, 1.0)).xyz;
+  vec3 offset = vec3(0.0);
+  
+  // 2-wave simplified Gerstner (mobile-optimized)
+  if (uWaveCount >= 1) offset += gerstnerWave(wp, 0.0, 12.0 / uWaveFreq, uWaveAmp, uWaveSpeed, uWaveSteep);
+  if (uWaveCount >= 2) offset += gerstnerWave(wp, 0.5, 8.0 / uWaveFreq, uWaveAmp * 0.6, uWaveSpeed * 1.2, uWaveSteep * 0.8);
+  if (uWaveCount >= 3) offset += gerstnerWave(wp, -0.3, 5.0 / uWaveFreq, uWaveAmp * 0.3, uWaveSpeed * 0.8, uWaveSteep * 0.6);
+  
+  vec3 finalPos = position + offset;
+  vWP = (modelMatrix * vec4(finalPos, 1.0)).xyz;
+  vH = offset.y;
+  gl_Position = projectionMatrix * viewMatrix * vec4(vWP, 1.0);
+}
+`;
+
+const waterFS = `
+precision PRECISION float;
+uniform float uTime;
+uniform float uWaveAmp, uWaveFreq;
+uniform vec3 uSunDirection, uSunColor, uFogColor;
+uniform float uFogDensity;
+uniform bool uUseFresnel, uUseReflections, uUseFragmentFBM, uUsePBR;
+uniform float uFresnelBias, uFresnelPower, uFresnelIntensity;
+uniform float uFragmentFBMScale, uFragmentFBMStrength;
+uniform float uRoughness, uMetallic, uIOR;
+uniform vec3 uBaseColor;
+varying vec3 vWP; varying float vH;
+#define PI 3.14159265358979
+#define INV_PI 0.31830988618
+
+// Fragment-level FBM for fine surface detail
+vec3 fragmentFBM(vec3 wp, int waves) {
+  float freq = 3.0 * uFragmentFBMScale;
+  float amp = 0.15 * uFragmentFBMStrength;
+  float speed = 2.5;
+  vec2 normal = vec2(0.0);
+  
+  for (int i = 0; i < 2; i++) {
+    if (i >= waves) break;
+    float angle = float(i) * 2.4 + uTime * 0.1;
+    vec2 dir = normalize(vec2(cos(angle), sin(angle)));
+    float phase = dot(dir, wp.xz) * freq - uTime * speed;
+    float w = amp * sin(phase);
+    normal += dir * (freq * amp * cos(phase));
+    freq *= 1.3;
+    amp *= 0.7;
+    speed *= 1.1;
+  }
+  
+  return vec3(normal.x, 0.0, normal.y);
+}
+
+vec3 getNormal() {
+  vec3 dx = dFdx(vWP);
+  vec3 dy = dFdy(vWP);
+  vec3 normal = normalize(cross(dx, dy));
+  
+  // Add fragment FBM detail
+  if (uUseFragmentFBM) {
+    vec3 fbmDetail = fragmentFBM(vWP, 2);
+    normal.x -= fbmDetail.x;
+    normal.z -= fbmDetail.z;
+    normal = normalize(normal);
+  }
+  
+  return normal;
+}
+
+vec3 sky(vec3 dir) {
+  float sunDot = max(0.0, dot(dir, normalize(-uSunDirection)));
+  float y = dir.y * 0.5 + 0.5;
+  vec3 skyCol = mix(uFogColor * 1.2, vec3(0.15, 0.3, 0.55), pow(max(0.0, y), 0.6));
+  
+  // Add sun disk for reflections
+  float sunDisk = smoothstep(0.9998, 0.9999, sunDot);
+  
+  return skyCol + uSunColor * pow(sunDot, 3500.0) + uSunColor * 0.3 * pow(sunDot, 64.0) + uSunColor * sunDisk * 50.0;
+}
+
+// === PBR Functions ===
+
+// GGX/Trowbridge-Reitz Normal Distribution Function
+float DistributionGGX(float NdotH, float roughness) {
+  float a = roughness * roughness;
+  float a2 = a * a;
+  float NdotH2 = NdotH * NdotH;
+  float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+  denom = PI * denom * denom;
+  return a2 / max(denom, 0.0001);
+}
+
+// Smith Geometry Function (Schlick-GGX)
+float GeometrySchlickGGX(float NdotV, float roughness) {
+  float r = (roughness + 1.0);
+  float k = (r * r) / 8.0;
+  return NdotV / (NdotV * (1.0 - k) + k);
+}
+
+float GeometrySmith(float NdotV, float NdotL, float roughness) {
+  float ggx1 = GeometrySchlickGGX(NdotV, roughness);
+  float ggx2 = GeometrySchlickGGX(NdotL, roughness);
+  return ggx1 * ggx2;
+}
+
+// Fresnel-Schlick
+vec3 FresnelSchlick(float cosTheta, vec3 F0) {
+  return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
+void main() {
+  vec3 lightDir = normalize(-uSunDirection);
+  vec3 viewDir = normalize(cameraPosition - vWP);
+  vec3 normal = getNormal();
+  vec3 halfDir = normalize(lightDir + viewDir);
+  
+  float NdotL = max(0.0, dot(normal, lightDir));
+  float NdotV = max(0.0, dot(normal, viewDir));
+  float NdotH = max(0.0, dot(normal, halfDir));
+  float HdotV = max(0.0, dot(halfDir, viewDir));
+  
+  vec3 color;
+  
+  if (uUsePBR) {
+    // === Cook-Torrance PBR ===
+    
+    // F0 for water (based on IOR)
+    vec3 F0 = vec3(pow((1.0 - uIOR) / (1.0 + uIOR), 2.0));
+    F0 = mix(F0, uBaseColor, uMetallic);
+    
+    // Distribution (GGX)
+    float D = DistributionGGX(NdotH, uRoughness);
+    
+    // Geometry (Smith)
+    float G = GeometrySmith(NdotV, NdotL, uRoughness);
+    
+    // Fresnel
+    vec3 F = FresnelSchlick(HdotV, F0);
+    
+    // Cook-Torrance BRDF
+    vec3 specular = (D * G * F) / max(4.0 * NdotV * NdotL, 0.001);
+    
+    // Diffuse (Lambert) - energy conserving
+    vec3 kD = (vec3(1.0) - F) * (1.0 - uMetallic);
+    vec3 diffuse = kD * uBaseColor * INV_PI;
+    
+    // Radiance
+    vec3 Lo = (diffuse + specular) * uSunColor * NdotL;
+    
+    // Ambient (simplified)
+    vec3 ambient = vec3(0.03) * uBaseColor;
+    
+    // Reflected environment
+    vec3 reflectedDir = reflect(-viewDir, normal);
+    vec3 reflection = sky(reflectedDir) * F * uFresnelIntensity;
+    
+    color = ambient + Lo + reflection;
+    
+  } else {
+    // === Simple Lighting (fallback) ===
+    vec3 baseColor = uBaseColor;
+    vec3 diffuse = uSunColor * NdotL * baseColor;
+    
+    // Enhanced Fresnel (Schlick approximation)
+    vec3 fresnel = vec3(0.0);
+    if (uUseFresnel) {
+      float fresnelBase = 1.0 - NdotV;
+      float fresnelTerm = uFresnelBias + (1.0 - uFresnelBias) * pow(fresnelBase, uFresnelPower);
+      vec3 reflectedDir = reflect(-viewDir, normal);
+      fresnel = sky(reflectedDir) * fresnelTerm * uFresnelIntensity;
+    }
+    
+    // Simple specular highlight
+    float spec = pow(NdotH, 40.0) * NdotL;
+    vec3 specular = uSunColor * spec * 0.5;
+    
+    vec3 ambient = vec3(0.05, 0.1, 0.2);
+    color = ambient + diffuse + specular + fresnel;
+  }
+  
+  // Enhanced wave tip foam with gradient
+  float foamThreshold = uWaveAmp * 0.25;
+  float foamRange = uWaveAmp * 0.15;
+  float foam = smoothstep(foamThreshold - foamRange, foamThreshold + foamRange, max(0.0, vH));
+  
+  // Add steepness-based foam intensity
+  float steepness = length(vec2(normal.x, normal.z));
+  foam = mix(foam, 1.0, smoothstep(0.3, 0.8, steepness) * 0.3);
+  
+  vec3 foamColor = vec3(0.9, 0.95, 1.0) * foam * 0.4;
+  
+  // Combine
+  vec3 ambient = vec3(0.05, 0.1, 0.2);
+  vec3 color = ambient + diffuse + specular + fresnel + foamColor;
+  
+  // Fog
+  float dist = length(cameraPosition - vWP);
+  color = mix(uFogColor, color, clamp(exp(-dist * dist * uFogDensity * uFogDensity), 0.0, 1.0));
+  
+  // Tone map + gamma
+  color = color / (color + 1.0);
+  color = pow(color, vec3(1.0 / 2.2));
+  
+  gl_FragColor = vec4(color, 1.0);
+}
+`;
+
+const skyVS = `varying vec3 vD; void main() { vec4 w = modelMatrix * vec4(position, 1.0); vD = normalize(w.xyz); gl_Position = projectionMatrix * viewMatrix * w; gl_Position.z = gl_Position.w; }`;
+const skyFS = `
+precision mediump float;
+uniform vec3 uSunDirection, uSunColor, uFogColor;
+varying vec3 vD;
+void main() {
+  vec3 d = normalize(vD);
+  float sunDot = max(0.0, dot(d, normalize(-uSunDirection)));
+  float y = d.y * 0.5 + 0.5;
+  vec3 skyCol = mix(uFogColor * 1.3, vec3(0.12, 0.25, 0.5), pow(max(0.0, y), 0.5));
+  vec3 color = skyCol + uSunColor * pow(sunDot, 3500.0) + uSunColor * 0.4 * pow(sunDot, 80.0);
+  color = color / (color + 1.0);
+  color = pow(color, vec3(1.0 / 2.2));
+  gl_FragColor = vec4(color, 1.0);
+}
+`;
+
+// === THREE SETUP ===
+const canvas = document.getElementById('canvas');
+const R = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+R.setSize(window.innerWidth, window.innerHeight);
+
+const scene = new THREE.Scene();
+const cam = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
+
+// === ORBIT CONTROLS ===
+const O = { th: Math.PI * 0.75, ph: Math.PI * 0.25, r: 18, tgt: new THREE.Vector3(0, 0, 0), d: false, p: false, lx: 0, ly: 0 };
+function updateCam() {
+  cam.position.set(
+    O.tgt.x + O.r * Math.sin(O.ph) * Math.cos(O.th),
+    O.tgt.y + O.r * Math.cos(O.ph),
+    O.tgt.z + O.r * Math.sin(O.ph) * Math.sin(O.th)
+  );
+  cam.lookAt(O.tgt);
+}
+updateCam();
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 0) O.d = true;
+  if (e.button === 1) { O.p = true; e.preventDefault(); }
+  O.lx = e.clientX; O.ly = e.clientY;
+});
+window.addEventListener('mouseup', () => { O.d = false; O.p = false; });
+window.addEventListener('mousemove', e => {
+  const dx = e.clientX - O.lx, dy = e.clientY - O.ly;
+  O.lx = e.clientX; O.ly = e.clientY;
+  if (O.d) {
+    O.th -= dx * 0.005;
+    O.ph = Math.max(0.05, Math.min(Math.PI * 0.48, O.ph - dy * 0.005));
+    updateCam();
+  }
+  if (O.p) {
+    const r = new THREE.Vector3(), u = new THREE.Vector3();
+    cam.getWorldDirection(u);
+    r.crossVectors(u, cam.up).normalize();
+    u.crossVectors(r, u).normalize();
+    const s = O.r * 0.002;
+    O.tgt.add(r.multiplyScalar(-dx * s));
+    O.tgt.add(u.multiplyScalar(dy * s));
+    updateCam();
+  }
+});
+canvas.addEventListener('wheel', e => { O.r = Math.max(3, Math.min(100, O.r * (1 + e.deltaY * 0.001))); updateCam(); e.preventDefault(); }, { passive: false });
+
+let touchDist = 0;
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    O.d = true; O.lx = e.touches[0].clientX; O.ly = e.touches[0].clientY;
+  } else if (e.touches.length === 2) {
+    O.d = false;
+    touchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+  }
+});
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 1 && O.d) {
+    const dx = e.touches[0].clientX - O.lx, dy = e.touches[0].clientY - O.ly;
+    O.lx = e.touches[0].clientX; O.ly = e.touches[0].clientY;
+    O.th -= dx * 0.005;
+    O.ph = Math.max(0.05, Math.min(Math.PI * 0.48, O.ph - dy * 0.005));
+    updateCam();
+  } else if (e.touches.length === 2) {
+    const newDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    O.r = Math.max(3, Math.min(100, O.r * (touchDist / newDist)));
+    touchDist = newDist;
+    updateCam();
+  }
+}, { passive: false });
+canvas.addEventListener('touchend', () => { O.d = false; });
+
+// === UNIFORMS ===
+const U = {
+  uTime: { value: 0 },
+  uWaveCount: { value: 2 },
+  uWaveAmp: { value: 0.5 },
+  uWaveFreq: { value: 1.0 },
+  uWaveSpeed: { value: 1.0 },
+  uWaveSteep: { value: 0.5 },
+  uSunDirection: { value: new THREE.Vector3(-0.5, -0.4, -0.7) },
+  uSunColor: { value: new THREE.Color(0xffe8c0) },
+  uFogColor: { value: new THREE.Color(0x2a4060) },
+  uFogDensity: { value: 0.003 },
+  uUseFresnel: { value: true },
+  uUseReflections: { value: false },
+  uFresnelBias: { value: 0.02 },
+  uFresnelPower: { value: 5.0 },
+  uFresnelIntensity: { value: 1.0 },
+  uUseFragmentFBM: { value: true },
+  uFragmentFBMScale: { value: 1.0 },
+  uFragmentFBMStrength: { value: 1.0 },
+  uUsePBR: { value: true },
+  uRoughness: { value: 0.2 },
+  uMetallic: { value: 0.0 },
+  uIOR: { value: 1.333 },
+  uBaseColor: { value: new THREE.Color(0x0a3050) },
+};
+
+// === MESHES ===
+let oceanMesh, currentQuality = -1;
+
+function rebuildOcean(qualityIndex) {
+  if (qualityIndex === -1) qualityIndex = device.initialQuality; // Auto
+  const profile = QUALITY_PROFILES[qualityIndex];
+  
+  // Remove old mesh
+  if (oceanMesh) scene.remove(oceanMesh);
+  
+  // Create new geometry with adaptive resolution
+  const geo = new THREE.PlaneGeometry(80, 80, profile.meshRes, profile.meshRes);
+  geo.rotateX(-Math.PI / 2);
+  
+  // Update shader precision
+  const vs = waterVS.replace(/PRECISION/g, profile.precision);
+  const fs = waterFS.replace(/PRECISION/g, profile.precision);
+  
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: vs,
+    fragmentShader: fs,
+    uniforms: U,
+    side: THREE.DoubleSide
+  });
+  
+  oceanMesh = new THREE.Mesh(geo, mat);
+  scene.add(oceanMesh);
+  
+  // Update uniforms
+  U.uWaveCount.value = Math.min(profile.waves, parseInt(document.getElementById('waveCount').value));
+  U.uUseFresnel.value = profile.useFresnel;
+  U.uUseFragmentFBM.value = profile.useFragmentFBM;
+  U.uUsePBR.value = profile.usePBR;
+  U.uUseReflections.value = profile.useReflections;
+  
+  // Update UI toggles
+  document.getElementById('useFresnel').checked = profile.useFresnel;
+  document.getElementById('useFragmentFBM').checked = profile.useFragmentFBM;
+  document.getElementById('usePBR').checked = profile.usePBR;
+  
+  // Update renderer
+  R.setPixelRatio(Math.min(window.devicePixelRatio, profile.pixelRatio));
+  
+  // Update UI
+  currentQuality = qualityIndex;
+  document.querySelectorAll('.quality-btn').forEach(btn => btn.classList.remove('active'));
+  document.getElementById(`q-${profile.name.toLowerCase()}`).classList.add('active');
+  document.getElementById('quality-badge').textContent = profile.name;
+  
+  // Update performance info
+  const vertCount = (profile.meshRes + 1) * (profile.meshRes + 1);
+  document.getElementById('info-verts').textContent = vertCount.toLocaleString();
+  document.getElementById('info-res').textContent = `${window.innerWidth}x${window.innerHeight}`;
+  document.getElementById('info-pr').textContent = R.getPixelRatio().toFixed(2);
+}
+
+// Sky sphere
+scene.add(new THREE.Mesh(
+  new THREE.SphereGeometry(400, 32, 32),
+  new THREE.ShaderMaterial({
+    vertexShader: skyVS,
+    fragmentShader: skyFS,
+    uniforms: {
+      uSunDirection: U.uSunDirection,
+      uSunColor: U.uSunColor,
+      uFogColor: U.uFogColor
+    },
+    side: THREE.BackSide,
+    depthWrite: false
+  })
+));
+
+// === UI BINDINGS ===
+const bindings = {
+  waveCount: { u: 'uWaveCount', parse: parseInt },
+  waveAmp: { u: 'uWaveAmp', parse: parseFloat },
+  waveFreq: { u: 'uWaveFreq', parse: parseFloat },
+  waveSpeed: { u: 'uWaveSpeed', parse: parseFloat },
+  waveSteep: { u: 'uWaveSteep', parse: parseFloat },
+  fresnelBias: { u: 'uFresnelBias', parse: parseFloat },
+  fresnelPower: { u: 'uFresnelPower', parse: parseFloat },
+  fresnelIntensity: { u: 'uFresnelIntensity', parse: parseFloat },
+  fragmentFBMScale: { u: 'uFragmentFBMScale', parse: parseFloat },
+  fragmentFBMStrength: { u: 'uFragmentFBMStrength', parse: parseFloat },
+  roughness: { u: 'uRoughness', parse: parseFloat },
+  ior: { u: 'uIOR', parse: parseFloat },
+};
+
+for (const [id, b] of Object.entries(bindings)) {
+  const el = document.getElementById(id), vl = document.getElementById(id + '_v');
+  if (!el) continue;
+  el.addEventListener('input', () => {
+    const v = b.parse(el.value);
+    U[b.u].value = v;
+    const d = String(el.step).includes('.') ? (el.step.split('.')[1] || '').length : 0;
+    vl.textContent = v.toFixed(Math.max(d, 1));
+  });
+}
+
+// Feature toggles
+const fresnelToggle = document.getElementById('useFresnel');
+if (fresnelToggle) {
+  fresnelToggle.addEventListener('change', function() {
+    U.uUseFresnel.value = this.checked;
+  });
+}
+
+const fragmentFBMToggle = document.getElementById('useFragmentFBM');
+if (fragmentFBMToggle) {
+  fragmentFBMToggle.addEventListener('change', function() {
+    U.uUseFragmentFBM.value = this.checked;
+  });
+}
+
+const pbrToggle = document.getElementById('usePBR');
+if (pbrToggle) {
+  pbrToggle.addEventListener('change', function() {
+    U.uUsePBR.value = this.checked;
+  });
+}
+
+// Base color picker
+const baseColorPicker = document.getElementById('baseColor');
+if (baseColorPicker) {
+  baseColorPicker.addEventListener('input', function() {
+    U.uBaseColor.value = new THREE.Color(this.value);
+  });
+}
+
+function toggleSection(el) {
+  el.classList.toggle('collapsed');
+  el.nextElementSibling.classList.toggle('collapsed');
+}
+
+function setQuality(level) {
+  if (level === -1) {
+    // Auto mode
+    document.getElementById('autoscale').checked = true;
+    rebuildOcean(device.initialQuality);
+    document.querySelectorAll('.quality-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('q-auto').classList.add('active');
+  } else {
+    document.getElementById('autoscale').checked = false;
+    rebuildOcean(level);
+  }
+}
+
+// === FPS MONITOR ===
+let frameCount = 0, lastTime = performance.now(), fps = 0;
+let fpsHistory = [];
+const FPS_SAMPLE_SIZE = 60;
+
+function updateFPS() {
+  frameCount++;
+  const now = performance.now();
+  if (now >= lastTime + 1000) {
+    fps = Math.round((frameCount * 1000) / (now - lastTime));
+    document.getElementById('fps-value').textContent = fps;
+    frameCount = 0;
+    lastTime = now;
+    
+    // Auto-quality scaling
+    if (document.getElementById('autoscale').checked) {
+      fpsHistory.push(fps);
+      if (fpsHistory.length > FPS_SAMPLE_SIZE) fpsHistory.shift();
+      
+      const avgFPS = fpsHistory.reduce((a, b) => a + b, 0) / fpsHistory.length;
+      
+      // Drop quality if consistently below 50 FPS
+      if (avgFPS < 50 && currentQuality < QUALITY_PROFILES.length - 1) {
+        console.log(`FPS too low (${avgFPS.toFixed(1)}), dropping quality`);
+        rebuildOcean(currentQuality + 1);
+        fpsHistory = [];
+      }
+      
+      // Raise quality if consistently above 58 FPS
+      if (avgFPS > 58 && currentQuality > 0 && fpsHistory.length === FPS_SAMPLE_SIZE) {
+        console.log(`FPS stable (${avgFPS.toFixed(1)}), raising quality`);
+        rebuildOcean(currentQuality - 1);
+        fpsHistory = [];
+      }
+    }
+  }
+}
+
+// === RENDER LOOP ===
+const clock = new THREE.Clock();
+rebuildOcean(device.initialQuality); // Initial build
+
+(function animate() {
+  requestAnimationFrame(animate);
+  U.uTime.value = clock.getElapsedTime();
+  R.render(scene, cam);
+  updateFPS();
+})();
+
+// === WINDOW RESIZE ===
+window.addEventListener('resize', () => {
+  cam.aspect = window.innerWidth / window.innerHeight;
+  cam.updateProjectionMatrix();
+  R.setSize(window.innerWidth, window.innerHeight);
+  document.getElementById('info-res').textContent = `${window.innerWidth}x${window.innerHeight}`;
+});
+
+// === TOGGLE PANEL ===
+let panelVisible = true;
+function togglePanel() {
+  panelVisible = !panelVisible;
+  const panel = document.getElementById('controls');
+  const btn = document.getElementById('panel-toggle');
+  
+  if (panelVisible) {
+    panel.classList.remove('collapsed');
+    btn.textContent = '⚙';
+  } else {
+    panel.classList.add('collapsed');
+    btn.textContent = '☰';
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if ((e.key === 'h' || e.key === 'H') && (!document.activeElement || document.activeElement.tagName !== 'INPUT')) {
+    togglePanel();
+  }
+});
+</script>
+</body>
+</html>

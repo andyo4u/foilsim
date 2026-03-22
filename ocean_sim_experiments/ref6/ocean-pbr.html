@@ -204,9 +204,9 @@
         <label class="toggle-switch"><input type="checkbox" id="usePBR" checked><span class="slider"></span></label>
       </div>
     </div>
-    <div class="control-row"><label>Roughness</label><div class="right"><input type="range" id="roughness" min="0" max="1" step="0.05" value="0.2"><span class="val" id="roughness_v">0.20</span></div></div>
+    <div class="control-row"><label>Roughness</label><div class="right"><input type="range" id="roughness" min="0" max="1" step="0.05" value="0.15"><span class="val" id="roughness_v">0.15</span></div></div>
     <div class="control-row"><label>IOR</label><div class="right"><input type="range" id="ior" min="1.0" max="1.5" step="0.01" value="1.33"><span class="val" id="ior_v">1.33</span></div></div>
-    <div class="control-row"><label>Base Color</label><div class="right"><input type="color" id="baseColor" value="#0a3050"></div></div>
+    <div class="control-row"><label>Base Color</label><div class="right"><input type="color" id="baseColor" value="#0d4a6f"></div></div>
   </div>
 
   <div class="section-title collapsed" onclick="toggleSection(this)"><span>Performance Info</span></div>
@@ -404,8 +404,9 @@ void main() {
   if (uUsePBR) {
     // === Cook-Torrance PBR ===
     
-    // F0 for water (based on IOR)
-    vec3 F0 = vec3(pow((1.0 - uIOR) / (1.0 + uIOR), 2.0));
+    // F0 for water (based on IOR) - typically ~0.02 for water
+    float f0_scalar = pow((1.0 - uIOR) / (1.0 + uIOR), 2.0);
+    vec3 F0 = vec3(f0_scalar);
     F0 = mix(F0, uBaseColor, uMetallic);
     
     // Distribution (GGX)
@@ -417,44 +418,50 @@ void main() {
     // Fresnel
     vec3 F = FresnelSchlick(HdotV, F0);
     
-    // Cook-Torrance BRDF
-    vec3 specular = (D * G * F) / max(4.0 * NdotV * NdotL, 0.001);
+    // Cook-Torrance specular BRDF
+    vec3 numerator = D * G * F;
+    float denominator = 4.0 * max(NdotV * NdotL, 0.001);
+    vec3 specular = numerator / denominator;
     
-    // Diffuse (Lambert) - energy conserving
-    vec3 kD = (vec3(1.0) - F) * (1.0 - uMetallic);
+    // Energy-conserving diffuse
+    vec3 kS = F; // Specular contribution
+    vec3 kD = vec3(1.0) - kS; // Diffuse contribution (what's left)
+    kD *= 1.0 - uMetallic; // Metals have no diffuse
+    
+    // Lambert diffuse BRDF
     vec3 diffuse = kD * uBaseColor * INV_PI;
     
-    // Radiance
-    vec3 Lo = (diffuse + specular) * uSunColor * NdotL;
+    // Combine diffuse and specular with light radiance
+    vec3 Lo = (diffuse + specular * 2.0) * uSunColor * NdotL * 3.0; // Boosted for visibility
     
-    // Ambient (simplified)
-    vec3 ambient = vec3(0.03) * uBaseColor;
+    // Ambient occlusion (simplified)
+    vec3 ambient = vec3(0.03, 0.04, 0.05) * uBaseColor;
     
-    // Reflected environment
+    // Environment reflection (using Fresnel for intensity)
     vec3 reflectedDir = reflect(-viewDir, normal);
-    vec3 reflection = sky(reflectedDir) * F * uFresnelIntensity;
+    vec3 reflection = sky(reflectedDir) * F * 1.5; // Boosted for visibility
     
     color = ambient + Lo + reflection;
     
   } else {
     // === Simple Lighting (fallback) ===
-    vec3 baseColor = uBaseColor;
-    vec3 diffuse = uSunColor * NdotL * baseColor;
+    vec3 baseColor = uBaseColor * 0.7; // Darker when not using PBR
+    vec3 diffuse = uSunColor * NdotL * baseColor * 0.8;
     
-    // Enhanced Fresnel (Schlick approximation)
+    // Basic Fresnel (simpler)
     vec3 fresnel = vec3(0.0);
     if (uUseFresnel) {
       float fresnelBase = 1.0 - NdotV;
       float fresnelTerm = uFresnelBias + (1.0 - uFresnelBias) * pow(fresnelBase, uFresnelPower);
       vec3 reflectedDir = reflect(-viewDir, normal);
-      fresnel = sky(reflectedDir) * fresnelTerm * uFresnelIntensity;
+      fresnel = sky(reflectedDir) * fresnelTerm * uFresnelIntensity * 0.6; // Less reflective
     }
     
-    // Simple specular highlight
+    // Simple Blinn-Phong specular
     float spec = pow(NdotH, 40.0) * NdotL;
-    vec3 specular = uSunColor * spec * 0.5;
+    vec3 specular = uSunColor * spec * 0.3; // Less shiny
     
-    vec3 ambient = vec3(0.05, 0.1, 0.2);
+    vec3 ambient = vec3(0.03, 0.06, 0.12);
     color = ambient + diffuse + specular + fresnel;
   }
   
@@ -596,10 +603,10 @@ const U = {
   uFragmentFBMScale: { value: 1.0 },
   uFragmentFBMStrength: { value: 1.0 },
   uUsePBR: { value: true },
-  uRoughness: { value: 0.2 },
+  uRoughness: { value: 0.15 },
   uMetallic: { value: 0.0 },
   uIOR: { value: 1.333 },
-  uBaseColor: { value: new THREE.Color(0x0a3050) },
+  uBaseColor: { value: new THREE.Color(0x0d4a6f) },
 };
 
 // === MESHES ===

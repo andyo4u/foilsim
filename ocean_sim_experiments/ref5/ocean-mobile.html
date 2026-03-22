@@ -171,6 +171,19 @@
     <div class="control-row"><label>Steepness</label><div class="right"><input type="range" id="waveSteep" min="0" max="2" step="0.1" value="0.5"><span class="val" id="waveSteep_v">0.5</span></div></div>
   </div>
 
+  <div class="section-title collapsed" onclick="toggleSection(this)"><span>Fresnel Settings</span></div>
+  <div class="section-body collapsed" style="max-height:200px;">
+    <div class="control-row">
+      <label>Enable</label>
+      <div class="right">
+        <label class="toggle-switch"><input type="checkbox" id="useFresnel" checked><span class="slider"></span></label>
+      </div>
+    </div>
+    <div class="control-row"><label>Bias</label><div class="right"><input type="range" id="fresnelBias" min="0" max="0.2" step="0.01" value="0.02"><span class="val" id="fresnelBias_v">0.02</span></div></div>
+    <div class="control-row"><label>Power</label><div class="right"><input type="range" id="fresnelPower" min="1" max="10" step="0.5" value="5.0"><span class="val" id="fresnelPower_v">5.0</span></div></div>
+    <div class="control-row"><label>Intensity</label><div class="right"><input type="range" id="fresnelIntensity" min="0" max="2" step="0.1" value="1.0"><span class="val" id="fresnelIntensity_v">1.0</span></div></div>
+  </div>
+
   <div class="section-title collapsed" onclick="toggleSection(this)"><span>Performance Info</span></div>
   <div class="section-body collapsed" style="max-height:200px;">
     <div class="control-row"><label>Vertices</label><div class="right"><span class="val" id="info-verts">--</span></div></div>
@@ -263,6 +276,7 @@ uniform float uWaveAmp, uWaveFreq;
 uniform vec3 uSunDirection, uSunColor, uFogColor;
 uniform float uFogDensity;
 uniform bool uUseFresnel, uUseReflections;
+uniform float uFresnelBias, uFresnelPower, uFresnelIntensity;
 varying vec3 vWP; varying float vH;
 #define PI 3.14159265358979
 
@@ -289,11 +303,14 @@ void main() {
   vec3 baseColor = vec3(0.05, 0.2, 0.4);
   vec3 diffuse = uSunColor * nl * baseColor;
   
-  // Optional Fresnel (disabled on low-end)
+  // Enhanced Fresnel (Schlick approximation)
   vec3 fresnel = vec3(0.0);
   if (uUseFresnel) {
-    float fresnelTerm = pow(1.0 - max(0.0, dot(viewDir, normal)), 5.0);
-    fresnel = sky(reflect(-viewDir, normal)) * fresnelTerm * 0.8;
+    float NdotV = max(0.0, dot(viewDir, normal));
+    float fresnelBase = 1.0 - NdotV;
+    float fresnelTerm = uFresnelBias + (1.0 - uFresnelBias) * pow(fresnelBase, uFresnelPower);
+    vec3 reflectedDir = reflect(-viewDir, normal);
+    fresnel = sky(reflectedDir) * fresnelTerm * uFresnelIntensity;
   }
   
   // Simple specular highlight
@@ -425,6 +442,9 @@ const U = {
   uFogDensity: { value: 0.003 },
   uUseFresnel: { value: true },
   uUseReflections: { value: false },
+  uFresnelBias: { value: 0.02 },
+  uFresnelPower: { value: 5.0 },
+  uFresnelIntensity: { value: 1.0 },
 };
 
 // === MESHES ===
@@ -499,6 +519,9 @@ const bindings = {
   waveFreq: { u: 'uWaveFreq', parse: parseFloat },
   waveSpeed: { u: 'uWaveSpeed', parse: parseFloat },
   waveSteep: { u: 'uWaveSteep', parse: parseFloat },
+  fresnelBias: { u: 'uFresnelBias', parse: parseFloat },
+  fresnelPower: { u: 'uFresnelPower', parse: parseFloat },
+  fresnelIntensity: { u: 'uFresnelIntensity', parse: parseFloat },
 };
 
 for (const [id, b] of Object.entries(bindings)) {
@@ -509,6 +532,14 @@ for (const [id, b] of Object.entries(bindings)) {
     U[b.u].value = v;
     const d = String(el.step).includes('.') ? (el.step.split('.')[1] || '').length : 0;
     vl.textContent = v.toFixed(Math.max(d, 1));
+  });
+}
+
+// Fresnel toggle
+const fresnelToggle = document.getElementById('useFresnel');
+if (fresnelToggle) {
+  fresnelToggle.addEventListener('change', function() {
+    U.uUseFresnel.value = this.checked;
   });
 }
 

@@ -203,9 +203,9 @@ camera.lookAt(0, 0, 0);
 const oceanGeo = new THREE.PlaneGeometry(100, 100, MESH_SIZE - 1, MESH_SIZE - 1);
 oceanGeo.rotateX(-Math.PI / 2);
 
-// Create texture from CPU data
-const texData = new Float32Array(size * size * 4);
-const heightTexture = new THREE.DataTexture(texData, size, size, THREE.RGBAFormat, THREE.FloatType);
+// Create texture from CPU data (using UnsignedByteType for compatibility)
+const texData = new Uint8Array(size * size * 4);
+const heightTexture = new THREE.DataTexture(texData, size, size, THREE.RGBAFormat, THREE.UnsignedByteType);
 heightTexture.minFilter = THREE.LinearFilter;
 heightTexture.magFilter = THREE.LinearFilter;
 
@@ -226,7 +226,10 @@ const oceanShader = {
     
     void main() {
       vUv = (position.xz + 50.0) / 100.0;
-      float height = texture2D(uHeightfield, vUv).r * uWaveScale;
+      // Decode byte texture back to float
+      float byteVal = texture2D(uHeightfield, vUv).r; // 0-1 range
+      float decoded = byteVal * 20.0 - 10.0; // Map back to [-10,10]
+      float height = decoded * uWaveScale;
       
       vec3 pos = position;
       pos.y = height;
@@ -252,10 +255,11 @@ const oceanShader = {
     vec3 calculateNormal() {
       float texelSize = 1.0 / 256.0;
       
-      float h_right = texture2D(uHeightfield, vUv + vec2(texelSize, 0.0)).r * uWaveScale;
-      float h_left  = texture2D(uHeightfield, vUv - vec2(texelSize, 0.0)).r * uWaveScale;
-      float h_up    = texture2D(uHeightfield, vUv + vec2(0.0, texelSize)).r * uWaveScale;
-      float h_down  = texture2D(uHeightfield, vUv - vec2(0.0, texelSize)).r * uWaveScale;
+      // Decode byte texture back to float
+      float h_right = (texture2D(uHeightfield, vUv + vec2(texelSize, 0.0)).r * 20.0 - 10.0) * uWaveScale;
+      float h_left  = (texture2D(uHeightfield, vUv - vec2(texelSize, 0.0)).r * 20.0 - 10.0) * uWaveScale;
+      float h_up    = (texture2D(uHeightfield, vUv + vec2(0.0, texelSize)).r * 20.0 - 10.0) * uWaveScale;
+      float h_down  = (texture2D(uHeightfield, vUv - vec2(0.0, texelSize)).r * 20.0 - 10.0) * uWaveScale;
       
       vec3 dx = vec3(2.0 * texelSize * 100.0, h_right - h_left, 0.0);
       vec3 dz = vec3(0.0, h_up - h_down, 2.0 * texelSize * 100.0);
@@ -453,10 +457,16 @@ window.addEventListener('resize', () => {
 // === UPDATE TEXTURE FROM CPU DATA ===
 function updateTexture() {
   for (let i = 0; i < size * size; i++) {
-    texData[i * 4] = h1[i];      // R = height
+    // Encode float height (-10 to +10) into byte range (0-255)
+    const h = h1[i];
+    const normalized = (h + 10.0) / 20.0; // Map [-10,10] to [0,1]
+    const clamped = Math.max(0, Math.min(1, normalized));
+    const byte = Math.floor(clamped * 255);
+    
+    texData[i * 4] = byte;       // R = height
     texData[i * 4 + 1] = 0;      // G
     texData[i * 4 + 2] = 0;      // B
-    texData[i * 4 + 3] = 1;      // A
+    texData[i * 4 + 3] = 255;    // A
   }
   heightTexture.needsUpdate = true;
 }
@@ -465,8 +475,19 @@ function updateTexture() {
 let lastTime = performance.now();
 let frameCount = 0;
 let fpsUpdateTime = lastTime;
+let debugFrameCount = 0;
 
 addInitialWaves(); // Add 3 waves on start
+
+console.log('[INIT] Initial waves added. Checking h1 buffer...');
+let maxH = 0, nonZero = 0;
+for (let i = 0; i < h1.length; i++) {
+  if (Math.abs(h1[i]) > 0.001) {
+    nonZero++;
+    maxH = Math.max(maxH, Math.abs(h1[i]));
+  }
+}
+console.log(`[INIT] Non-zero cells: ${nonZero}, max height: ${maxH.toFixed(3)}`);
 
 function animate() {
   requestAnimationFrame(animate);
@@ -478,6 +499,20 @@ function animate() {
   // Run simulation
   stepSimulation(dt);
   updateTexture();
+  
+  // Debug logging every 60 frames
+  debugFrameCount++;
+  if (debugFrameCount === 60) {
+    let maxH = 0, nonZero = 0;
+    for (let i = 0; i < h1.length; i++) {
+      if (Math.abs(h1[i]) > 0.001) {
+        nonZero++;
+        maxH = Math.max(maxH, Math.abs(h1[i]));
+      }
+    }
+    console.log(`[FRAME 60] Non-zero: ${nonZero}, max: ${maxH.toFixed(3)}`);
+    debugFrameCount = 0;
+  }
   
   // Render
   renderer.render(scene, camera);

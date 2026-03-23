@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Experiment 2: CPU-Based Wave Propagation</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #000; color: #fff; touch-action: none; }
+canvas { display: block; width: 100vw; height: 100vh; }
+#ui { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px; max-width: 300px; font-size: 13px; }
+#info { position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; font-size: 12px; }
+.control-row { display: flex; justify-content: space-between; align-items: center; margin: 8px 0; }
+.control-row label { flex: 1; }
+.control-row .right { flex: 1; text-align: right; }
+input[type="range"] { width: 120px; }
+.val { display: inline-block; min-width: 40px; text-align: right; margin-left: 8px; }
+button { background: #2a5; color: #fff; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin: 4px 0; width: 100%; }
+button:active { background: #1a4; }
+.toggle-switch { position: relative; display: inline-block; width: 48px; height: 24px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #555; transition: .3s; border-radius: 24px; }
+.slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; transition: .3s; border-radius: 50%; }
+input:checked + .slider { background: #2a5; }
+input:checked + .slider:before { transform: translateX(24px); }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="ui">
+  <h3 style="margin-bottom:10px">Experiment 2: CPU Simulation</h3>
+  
+  <div class="control-row">
+    <label>Wind Angle</label>
+    <div class="right">
+      <input type="range" id="windAngle" min="0" max="360" step="5" value="90">
+      <span class="val" id="windAngle_v">90°</span>
+    </div>
+  </div>
+  
+  <div class="control-row">
+    <label>Wind Strength</label>
+    <div class="right">
+      <input type="range" id="windStrength" min="0" max="5" step="0.5" value="2">
+      <span class="val" id="windStrength_v">2.0</span>
+    </div>
+  </div>
+  
+  <div class="control-row">
+    <label>Wave Scale</label>
+    <div class="right">
+      <input type="range" id="waveScale" min="1" max="10" step="0.5" value="5">
+      <span class="val" id="waveScale_v">5.0</span>
+    </div>
+  </div>
+  
+  <div class="control-row">
+    <label>Debug Colormap</label>
+    <div class="right">
+      <label class="toggle-switch">
+        <input type="checkbox" id="debugMode">
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+  
+  <button id="randomDrop">Random Drop</button>
+  <button id="clearWaves">Clear Waves</button>
+  
+  <div style="margin-top:10px; font-size:11px; opacity:0.7;">
+    Tap water to add waves
+  </div>
+</div>
+
+<div id="info">CPU-Based Simulation · <span id="fps">0</span> FPS</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// === SETTINGS ===
+const SIM_SIZE = 256; // CPU simulation grid
+const MESH_SIZE = 128; // Visual mesh (lower for performance)
+
+let waveSpeed = 1.5;
+let damping = 0.995;
+let waveScale = 5.0;
+let windAngle = 90 * Math.PI / 180;
+let windStrength = 2.0;
+let debugMode = false;
+
+// === CPU SIMULATION BUFFERS ===
+const size = SIM_SIZE;
+let h0 = new Float32Array(size * size); // Previous height
+let h1 = new Float32Array(size * size); // Current height
+let h2 = new Float32Array(size * size); // Next height
+
+// Initialize all to zero
+h0.fill(0);
+h1.fill(0);
+h2.fill(0);
+
+// Add 3 initial waves
+function addInitialWaves() {
+  addWaveAt(0.3, 0.3, 0.5);
+  setTimeout(() => addWaveAt(0.6, 0.5, 0.5), 300);
+  setTimeout(() => addWaveAt(0.5, 0.7, 0.5), 600);
+}
+
+function addWaveAt(x, y, strength) {
+  const cx = Math.floor(x * size);
+  const cy = Math.floor(y * size);
+  const radius = Math.floor(size * 0.03);
+  
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const px = cx + dx;
+      const py = cy + dy;
+      if (px >= 0 && px < size && py >= 0 && py < size) {
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist <= radius) {
+          const influence = Math.exp(-dist * dist / (radius * radius));
+          const idx = py * size + px;
+          h1[idx] += strength * influence;
+        }
+      }
+    }
+  }
+}
+
+// === WAVE EQUATION SIMULATION (CPU) ===
+function stepSimulation(dt) {
+  const c2 = waveSpeed * waveSpeed;
+  const dt2 = dt * dt;
+  const dx = 1.0;
+  
+  // Wind direction
+  const windDx = Math.cos(windAngle);
+  const windDy = Math.sin(windAngle);
+  
+  for (let y = 1; y < size - 1; y++) {
+    for (let x = 1; x < size - 1; x++) {
+      const idx = y * size + x;
+      
+      // Current and previous
+      const h_curr = h1[idx];
+      const h_prev = h0[idx];
+      
+      // Neighbors (Laplacian)
+      const h_right = h1[idx + 1];
+      const h_left = h1[idx - 1];
+      const h_up = h1[idx + size];
+      const h_down = h1[idx - size];
+      
+      const laplacian = (h_right + h_left + h_up + h_down - 4 * h_curr) / (dx * dx);
+      
+      // Wave equation
+      let h_next = 2 * h_curr - h_prev + c2 * dt2 * laplacian;
+      
+      // Wind forcing
+      const gradX = (h_right - h_left) / (2 * dx);
+      const gradY = (h_up - h_down) / (2 * dx);
+      const windForce = windStrength * (windDx * gradX + windDy * gradY) * 0.15;
+      h_next += windForce * dt;
+      
+      // Seed forcing (ambient noise from wind)
+      const noise = Math.sin(x * 0.3 + y * 0.3 + Date.now() * 0.002);
+      h_next += windStrength * 0.001 * noise;
+      
+      // Damping
+      h_next *= damping;
+      
+      // Absorbing boundaries
+      const edgeX = Math.min(x, size - 1 - x) / size;
+      const edgeY = Math.min(y, size - 1 - y) / size;
+      const edgeDist = Math.min(edgeX, edgeY);
+      const boundaryDamp = Math.min(1, edgeDist / 0.05);
+      h_next *= boundaryDamp;
+      
+      h2[idx] = h_next;
+    }
+  }
+  
+  // Swap buffers
+  const temp = h0;
+  h0 = h1;
+  h1 = h2;
+  h2 = temp;
+}
+
+// === THREE.JS SETUP ===
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0c10);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
+camera.position.set(0, 30, 40);
+camera.lookAt(0, 0, 0);
+
+// === OCEAN MESH ===
+const oceanGeo = new THREE.PlaneGeometry(100, 100, MESH_SIZE - 1, MESH_SIZE - 1);
+oceanGeo.rotateX(-Math.PI / 2);
+
+// Create texture from CPU data
+const texData = new Float32Array(size * size * 4);
+const heightTexture = new THREE.DataTexture(texData, size, size, THREE.RGBAFormat, THREE.FloatType);
+heightTexture.minFilter = THREE.LinearFilter;
+heightTexture.magFilter = THREE.LinearFilter;
+
+const oceanShader = {
+  uniforms: {
+    uHeightfield: { value: heightTexture },
+    uWaveScale: { value: waveScale },
+    uSunDirection: { value: new THREE.Vector3(-0.5, -0.6, -0.7).normalize() },
+    uSunColor: { value: new THREE.Color(0xffe8c0) },
+    uDebugMode: { value: false }
+  },
+  vertexShader: `
+    uniform sampler2D uHeightfield;
+    uniform float uWaveScale;
+    varying vec3 vWorldPos;
+    varying float vHeight;
+    varying vec2 vUv;
+    
+    void main() {
+      vUv = (position.xz + 50.0) / 100.0;
+      float height = texture2D(uHeightfield, vUv).r * uWaveScale;
+      
+      vec3 pos = position;
+      pos.y = height;
+      vHeight = height;
+      
+      vec4 worldPos = modelMatrix * vec4(pos, 1.0);
+      vWorldPos = worldPos.xyz;
+      
+      gl_Position = projectionMatrix * viewMatrix * worldPos;
+    }
+  `,
+  fragmentShader: `
+    precision highp float;
+    uniform sampler2D uHeightfield;
+    uniform float uWaveScale;
+    uniform vec3 uSunDirection;
+    uniform vec3 uSunColor;
+    uniform bool uDebugMode;
+    varying vec3 vWorldPos;
+    varying float vHeight;
+    varying vec2 vUv;
+    
+    vec3 calculateNormal() {
+      float texelSize = 1.0 / 256.0;
+      
+      float h_right = texture2D(uHeightfield, vUv + vec2(texelSize, 0.0)).r * uWaveScale;
+      float h_left  = texture2D(uHeightfield, vUv - vec2(texelSize, 0.0)).r * uWaveScale;
+      float h_up    = texture2D(uHeightfield, vUv + vec2(0.0, texelSize)).r * uWaveScale;
+      float h_down  = texture2D(uHeightfield, vUv - vec2(0.0, texelSize)).r * uWaveScale;
+      
+      vec3 dx = vec3(2.0 * texelSize * 100.0, h_right - h_left, 0.0);
+      vec3 dz = vec3(0.0, h_up - h_down, 2.0 * texelSize * 100.0);
+      
+      return normalize(cross(dz, dx));
+    }
+    
+    void main() {
+      if (uDebugMode) {
+        float h = vHeight / uWaveScale;
+        vec3 color;
+        if (h > 0.0) {
+          color = mix(vec3(0.0, 0.5, 1.0), vec3(1.0, 1.0, 1.0), clamp(h * 5.0, 0.0, 1.0));
+        } else {
+          color = mix(vec3(0.0, 0.1, 0.3), vec3(0.0, 0.5, 1.0), clamp(-h * 5.0, 0.0, 1.0));
+        }
+        gl_FragColor = vec4(color, 1.0);
+      } else {
+        // Enhanced realistic water
+        vec3 normal = calculateNormal();
+        vec3 lightDir = normalize(-uSunDirection);
+        vec3 viewDir = normalize(cameraPosition - vWorldPos);
+        vec3 halfDir = normalize(lightDir + viewDir);
+        
+        float NdotL = max(0.0, dot(normal, lightDir));
+        float NdotV = max(0.0, dot(normal, viewDir));
+        
+        vec3 deepColor = vec3(0.0, 0.15, 0.3);
+        vec3 shallowColor = vec3(0.0, 0.4, 0.6);
+        
+        float heightFactor = vHeight / uWaveScale;
+        vec3 baseColor = mix(deepColor, shallowColor, smoothstep(-0.3, 0.3, heightFactor));
+        
+        vec3 diffuse = uSunColor * NdotL * baseColor * 0.6;
+        
+        float spec = pow(max(0.0, dot(normal, halfDir)), 80.0) * NdotL;
+        vec3 specular = uSunColor * spec * 1.5;
+        
+        float fresnel = pow(1.0 - NdotV, 3.0);
+        vec3 skyColor = vec3(0.4, 0.6, 0.8);
+        vec3 reflection = skyColor * fresnel * 0.8;
+        
+        float foamFactor = smoothstep(0.2, 0.5, heightFactor);
+        vec3 foam = vec3(0.9, 0.95, 1.0) * foamFactor * 0.4;
+        
+        vec3 ambient = vec3(0.02, 0.04, 0.08);
+        
+        vec3 color = ambient + diffuse + specular + reflection + foam;
+        
+        color = color / (color + 1.0);
+        color = pow(color, vec3(1.0 / 2.2));
+        
+        gl_FragColor = vec4(color, 1.0);
+      }
+    }
+  `
+};
+
+const oceanMaterial = new THREE.ShaderMaterial(oceanShader);
+const ocean = new THREE.Mesh(oceanGeo, oceanMaterial);
+scene.add(ocean);
+
+// === CONTROLS ===
+const orbit = { th: 0, ph: Math.PI / 6, r: 50, drag: false, lx: 0, ly: 0 };
+
+function updateCamera() {
+  camera.position.set(
+    orbit.r * Math.sin(orbit.ph) * Math.cos(orbit.th),
+    orbit.r * Math.cos(orbit.ph),
+    orbit.r * Math.sin(orbit.ph) * Math.sin(orbit.th)
+  );
+  camera.lookAt(0, 0, 0);
+}
+updateCamera();
+
+canvas.addEventListener('mousedown', e => {
+  orbit.drag = true;
+  orbit.lx = e.clientX;
+  orbit.ly = e.clientY;
+});
+canvas.addEventListener('mousemove', e => {
+  if (orbit.drag) {
+    const dx = e.clientX - orbit.lx;
+    const dy = e.clientY - orbit.ly;
+    orbit.lx = e.clientX;
+    orbit.ly = e.clientY;
+    orbit.th -= dx * 0.005;
+    orbit.ph = Math.max(0.1, Math.min(Math.PI * 0.49, orbit.ph - dy * 0.005));
+    updateCamera();
+  }
+});
+canvas.addEventListener('mouseup', () => orbit.drag = false);
+canvas.addEventListener('wheel', e => {
+  orbit.r = Math.max(10, Math.min(150, orbit.r * (1 + e.deltaY * 0.001)));
+  updateCamera();
+  e.preventDefault();
+}, { passive: false });
+
+// Click to add wave
+canvas.addEventListener('click', e => {
+  if (!orbit.drag) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2(x * 2 - 1, -(y * 2 - 1));
+    raycaster.setFromCamera(mouse, camera);
+    
+    const intersects = raycaster.intersectObject(ocean);
+    if (intersects.length > 0) {
+      const point = intersects[0].point;
+      const uvX = (point.x + 50) / 100;
+      const uvZ = (point.z + 50) / 100;
+      addWaveAt(uvX, uvZ, 0.5);
+    }
+  }
+});
+
+// Touch controls
+let touchDist = 0;
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    orbit.drag = true;
+    orbit.lx = e.touches[0].clientX;
+    orbit.ly = e.touches[0].clientY;
+  } else if (e.touches.length === 2) {
+    orbit.drag = false;
+    touchDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+  }
+});
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 1 && orbit.drag) {
+    const dx = e.touches[0].clientX - orbit.lx;
+    const dy = e.touches[0].clientY - orbit.ly;
+    orbit.lx = e.touches[0].clientX;
+    orbit.ly = e.touches[0].clientY;
+    orbit.th -= dx * 0.005;
+    orbit.ph = Math.max(0.1, Math.min(Math.PI * 0.49, orbit.ph - dy * 0.005));
+    updateCamera();
+  } else if (e.touches.length === 2) {
+    const newDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    orbit.r = Math.max(10, Math.min(150, orbit.r * (touchDist / newDist)));
+    touchDist = newDist;
+    updateCamera();
+  }
+}, { passive: false });
+canvas.addEventListener('touchend', () => orbit.drag = false);
+
+// === UI CONTROLS ===
+document.getElementById('windAngle').addEventListener('input', e => {
+  windAngle = parseFloat(e.target.value) * Math.PI / 180;
+  document.getElementById('windAngle_v').textContent = e.target.value + '°';
+});
+
+document.getElementById('windStrength').addEventListener('input', e => {
+  windStrength = parseFloat(e.target.value);
+  document.getElementById('windStrength_v').textContent = e.target.value;
+});
+
+document.getElementById('waveScale').addEventListener('input', e => {
+  waveScale = parseFloat(e.target.value);
+  oceanMaterial.uniforms.uWaveScale.value = waveScale;
+  document.getElementById('waveScale_v').textContent = e.target.value;
+});
+
+document.getElementById('debugMode').addEventListener('change', e => {
+  debugMode = e.target.checked;
+  oceanMaterial.uniforms.uDebugMode.value = debugMode;
+});
+
+document.getElementById('randomDrop').addEventListener('click', () => {
+  addWaveAt(Math.random(), Math.random(), 0.5);
+});
+
+document.getElementById('clearWaves').addEventListener('click', () => {
+  h0.fill(0);
+  h1.fill(0);
+  h2.fill(0);
+});
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// === UPDATE TEXTURE FROM CPU DATA ===
+function updateTexture() {
+  for (let i = 0; i < size * size; i++) {
+    texData[i * 4] = h1[i];      // R = height
+    texData[i * 4 + 1] = 0;      // G
+    texData[i * 4 + 2] = 0;      // B
+    texData[i * 4 + 3] = 1;      // A
+  }
+  heightTexture.needsUpdate = true;
+}
+
+// === ANIMATION LOOP ===
+let lastTime = performance.now();
+let frameCount = 0;
+let fpsUpdateTime = lastTime;
+
+addInitialWaves(); // Add 3 waves on start
+
+function animate() {
+  requestAnimationFrame(animate);
+  
+  const now = performance.now();
+  const dt = Math.min((now - lastTime) / 1000, 0.033); // Cap at 30 FPS equivalent
+  lastTime = now;
+  
+  // Run simulation
+  stepSimulation(dt);
+  updateTexture();
+  
+  // Render
+  renderer.render(scene, camera);
+  
+  // FPS
+  frameCount++;
+  if (now - fpsUpdateTime > 1000) {
+    document.getElementById('fps').textContent = frameCount;
+    frameCount = 0;
+    fpsUpdateTime = now;
+  }
+}
+
+animate();
+</script>
+</body>
+</html>

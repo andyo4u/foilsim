@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minimal Test</title>
+<style>
+body { margin: 0; padding: 20px; font-family: monospace; background: #000; color: #0f0; }
+canvas { border: 1px solid #0f0; margin: 10px 0; }
+#log { white-space: pre; font-size: 12px; }
+</style>
+</head>
+<body>
+<h2>Wave Simulation Debug Test</h2>
+<canvas id="canvas" width="400" height="400"></canvas>
+<div id="log"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const log = document.getElementById('log');
+function addLog(msg) {
+  log.textContent += msg + '\n';
+  console.log(msg);
+}
+
+addLog('=== STARTING TEST ===');
+
+// Simple 64x64 simulation
+const SIZE = 64;
+let h0 = new Float32Array(SIZE * SIZE);
+let h1 = new Float32Array(SIZE * SIZE);
+
+addLog('Buffers created: ' + SIZE + 'x' + SIZE);
+
+// Add a wave in the center
+function addWave() {
+  const cx = SIZE / 2;
+  const cy = SIZE / 2;
+  const radius = 5;
+  
+  for (let y = -radius; y <= radius; y++) {
+    for (let x = -radius; x <= radius; x++) {
+      const px = cx + x;
+      const py = cy + y;
+      if (px >= 0 && px < SIZE && py >= 0 && py < SIZE) {
+        const dist = Math.sqrt(x*x + y*y);
+        if (dist <= radius) {
+          const influence = Math.exp(-dist * dist / (radius * radius));
+          const idx = Math.floor(py) * SIZE + Math.floor(px);
+          h1[idx] = influence * 2.0;
+        }
+      }
+    }
+  }
+  addLog('Wave added at center with amplitude 2.0');
+}
+
+addWave();
+
+// Check if wave was added
+let maxVal = 0;
+let nonZeroCount = 0;
+for (let i = 0; i < h1.length; i++) {
+  if (h1[i] !== 0) {
+    nonZeroCount++;
+    maxVal = Math.max(maxVal, h1[i]);
+  }
+}
+addLog('Non-zero cells: ' + nonZeroCount + ', max value: ' + maxVal.toFixed(3));
+
+// Simulate one step
+function stepSim() {
+  const c2 = 1.5 * 1.5;
+  const dt = 0.016;
+  const dt2 = dt * dt;
+  const dx = 1.0;
+  
+  for (let y = 1; y < SIZE - 1; y++) {
+    for (let x = 1; x < SIZE - 1; x++) {
+      const idx = y * SIZE + x;
+      const h_curr = h1[idx];
+      const h_prev = h0[idx];
+      
+      const h_right = h1[idx + 1];
+      const h_left = h1[idx - 1];
+      const h_up = h1[idx + SIZE];
+      const h_down = h1[idx - SIZE];
+      
+      const laplacian = (h_right + h_left + h_up + h_down - 4 * h_curr) / (dx * dx);
+      let h_next = 2 * h_curr - h_prev + c2 * dt2 * laplacian;
+      h_next *= 0.995; // damping
+      
+      h0[idx] = h_curr;
+      h1[idx] = h_next;
+    }
+  }
+}
+
+addLog('\nRunning 10 simulation steps...');
+for (let i = 0; i < 10; i++) {
+  stepSim();
+}
+
+// Check result
+maxVal = 0;
+nonZeroCount = 0;
+for (let i = 0; i < h1.length; i++) {
+  if (Math.abs(h1[i]) > 0.001) {
+    nonZeroCount++;
+    maxVal = Math.max(maxVal, Math.abs(h1[i]));
+  }
+}
+addLog('After 10 steps: ' + nonZeroCount + ' cells, max: ' + maxVal.toFixed(3));
+
+// Draw to canvas
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const imageData = ctx.createImageData(SIZE, SIZE);
+
+for (let y = 0; y < SIZE; y++) {
+  for (let x = 0; x < SIZE; x++) {
+    const idx = y * SIZE + x;
+    const h = h1[idx];
+    const brightness = Math.floor(128 + h * 50);
+    const clamp = Math.max(0, Math.min(255, brightness));
+    
+    const pixelIdx = (y * SIZE + x) * 4;
+    if (h > 0) {
+      imageData.data[pixelIdx] = 0;
+      imageData.data[pixelIdx + 1] = clamp;
+      imageData.data[pixelIdx + 2] = 255;
+    } else {
+      imageData.data[pixelIdx] = 0;
+      imageData.data[pixelIdx + 1] = 0;
+      imageData.data[pixelIdx + 2] = clamp;
+    }
+    imageData.data[pixelIdx + 3] = 255;
+  }
+}
+
+ctx.putImageData(imageData, 0, 0);
+ctx.scale(canvas.width / SIZE, canvas.height / SIZE);
+ctx.drawImage(canvas, 0, 0);
+
+addLog('\nCanvas drawn. You should see a blue/cyan circle pattern above.');
+addLog('If you see it, the simulation is working.');
+addLog('\n=== Now testing THREE.js ===');
+
+// Test THREE.js texture update
+const texData = new Float32Array(SIZE * SIZE * 4);
+for (let i = 0; i < SIZE * SIZE; i++) {
+  texData[i * 4] = h1[i];
+  texData[i * 4 + 1] = 0;
+  texData[i * 4 + 2] = 0;
+  texData[i * 4 + 3] = 1;
+}
+
+try {
+  const texture = new THREE.DataTexture(texData, SIZE, SIZE, THREE.RGBAFormat, THREE.FloatType);
+  texture.needsUpdate = true;
+  addLog('THREE.DataTexture created successfully');
+  addLog('Texture size: ' + texture.image.width + 'x' + texture.image.height);
+} catch (e) {
+  addLog('ERROR creating THREE.DataTexture: ' + e.message);
+}
+
+addLog('\n=== TEST COMPLETE ===');
+addLog('If you see the pattern above and no errors, Experiment 2 should work.');
+addLog('If you see this but Experiment 2 is still flat, the issue is in the render loop.');
+</script>
+</body>
+</html>

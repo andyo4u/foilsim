@@ -96,8 +96,8 @@
   <div class="control-row">
     <label>Source Strength</label>
     <div class="right">
-      <input type="range" id="sourceStrength" min="0.1" max="2" step="0.1" value="0.5" oninput="updateSourceStrength(this.value)">
-      <span class="val" id="sourceStrength_v">0.5</span>
+      <input type="range" id="sourceStrength" min="0.1" max="2" step="0.1" value="1.0" oninput="updateSourceStrength(this.value)">
+      <span class="val" id="sourceStrength_v">1.0</span>
     </div>
   </div>
   
@@ -118,7 +118,7 @@ const MESH_SIZE = 256; // Ocean mesh resolution
 let waveSpeed = 1.5;
 let damping = 0.995;
 let waveScale = 2.0;
-let sourceStrength = 0.5;
+let sourceStrength = 1.0; // Increased from 0.5 for visibility
 let debugMode = false;
 
 // === THREE.JS SETUP ===
@@ -462,10 +462,10 @@ const sourceShader = {
       float h = texture2D(uHeightfield, vUv).r;
       
       float dist = distance(vUv, uSourcePos);
-      float radius = 0.02;
+      float radius = 0.03; // Increased from 0.02 for larger splash
       float influence = exp(-dist * dist / (radius * radius));
       
-      h += uSourceStrength * influence;
+      h += uSourceStrength * influence * 0.5; // Boost splash strength
       
       gl_FragColor = vec4(h, 0.0, 0.0, 1.0);
     }
@@ -560,9 +560,20 @@ function updateFPS() {
 
 // === RENDER LOOP ===
 const clock = new THREE.Clock();
+let initialized = false;
 
 function animate() {
   requestAnimationFrame(animate);
+  
+  // Add initial disturbance on first frame
+  if (!initialized) {
+    initialized = true;
+    setTimeout(() => {
+      addWaveSource(0, 0);
+      addWaveSource(-10, 10);
+      addWaveSource(10, -10);
+    }, 100);
+  }
   
   const dt = Math.min(clock.getDelta(), 0.033); // Cap at 30 FPS for stability
   waveShader.uniforms.uDeltaTime.value = dt;

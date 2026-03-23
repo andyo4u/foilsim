@@ -96,8 +96,8 @@
   <div class="control-row">
     <label>Source Strength</label>
     <div class="right">
-      <input type="range" id="sourceStrength" min="0.1" max="2" step="0.1" value="0.5" oninput="updateSourceStrength(this.value)">
-      <span class="val" id="sourceStrength_v">0.5</span>
+      <input type="range" id="sourceStrength" min="0.1" max="2" step="0.1" value="1.0" oninput="updateSourceStrength(this.value)">
+      <span class="val" id="sourceStrength_v">1.0</span>
     </div>
   </div>
   
@@ -136,7 +136,7 @@ const MESH_SIZE = 256; // Ocean mesh resolution
 let waveSpeed = 1.5;
 let damping = 0.995;
 let waveScale = 2.0;
-let sourceStrength = 0.5;
+let sourceStrength = 1.0; // Increased from 0.5 for visibility
 let windAngle = 90; // degrees (0 = right, 90 = up, etc.)
 let windStrength = 0;
 let debugMode = false;
@@ -175,7 +175,8 @@ const waveShader = {
     uDamping: { value: damping },
     uDeltaTime: { value: 0.016 },
     uWindAngle: { value: windAngle * Math.PI / 180 },
-    uWindStrength: { value: windStrength }
+    uWindStrength: { value: windStrength },
+    uTime: { value: 0 }
   },
   vertexShader: `
     varying vec2 vUv;
@@ -194,6 +195,7 @@ const waveShader = {
     uniform float uDeltaTime;
     uniform float uWindAngle;
     uniform float uWindStrength;
+    uniform float uTime;
     varying vec2 vUv;
     
     void main() {
@@ -223,10 +225,11 @@ const waveShader = {
         float windForce = uWindStrength * dot(windDir, gradient) * 0.15;
         h_new += windForce * uDeltaTime;
         
-        // Also add small continuous forcing (creates waves from flat)
+        // Also add continuous seed forcing (creates waves from flat)
         float distToCenter = length(vUv - 0.5);
-        if (distToCenter < 0.3) {
-          h_new += uWindStrength * 0.0001 * sin(vUv.x * 50.0 + vUv.y * 50.0);
+        if (distToCenter < 0.4) {
+          // Much stronger seed forcing to create visible ripples
+          h_new += uWindStrength * 0.001 * sin(vUv.x * 30.0 + vUv.y * 30.0 + uTime * 2.0);
         }
       }
       
@@ -502,10 +505,10 @@ const sourceShader = {
       float h = texture2D(uHeightfield, vUv).r;
       
       float dist = distance(vUv, uSourcePos);
-      float radius = 0.02;
+      float radius = 0.03; // Increased from 0.02 for larger splash
       float influence = exp(-dist * dist / (radius * radius));
       
-      h += uSourceStrength * influence;
+      h += uSourceStrength * influence * 0.5; // Boost splash strength
       
       gl_FragColor = vec4(h, 0.0, 0.0, 1.0);
     }
@@ -612,12 +615,25 @@ function updateFPS() {
 
 // === RENDER LOOP ===
 const clock = new THREE.Clock();
+let initialized = false;
 
 function animate() {
   requestAnimationFrame(animate);
   
+  // Add initial disturbance on first frame
+  if (!initialized) {
+    initialized = true;
+    // Add 3 random disturbances to see something immediately
+    setTimeout(() => {
+      addWaveSource(0, 0);
+      addWaveSource(-10, 10);
+      addWaveSource(10, -10);
+    }, 100);
+  }
+  
   const dt = Math.min(clock.getDelta(), 0.033); // Cap at 30 FPS for stability
   waveShader.uniforms.uDeltaTime.value = dt;
+  waveShader.uniforms.uTime.value = clock.getElapsedTime();
   
   // Simulate wave propagation (ping-pong)
   waveShader.uniforms.uHeightCurrent.value = rtA.texture;

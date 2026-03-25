@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<title>Experiment 6: GPGPU Water (Three.js Official)</title>
+<style>
+* { margin: 0; padding: 0; }
+body { overflow: hidden; font-family: monospace; background-color: #000; color: #fff; }
+#info {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(0,0,0,0.5);
+  padding: 10px;
+  border-radius: 5px;
+  font-size: 14px;
+}
+#controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0,0,0,0.8);
+  padding: 15px;
+  border-radius: 8px;
+  max-width: 280px;
+}
+.control-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 8px 0;
+}
+.control-row label { flex: 1; font-size: 13px; }
+.control-row .right { flex: 1; text-align: right; }
+input[type="range"] { width: 120px; }
+.val { display: inline-block; min-width: 40px; text-align: right; margin-left: 8px; font-size: 13px; }
+.toggle-switch { position: relative; display: inline-block; width: 48px; height: 24px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #555; transition: .3s; border-radius: 24px; }
+.slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; transition: .3s; border-radius: 50%; }
+input:checked + .slider { background: #2a5; }
+input:checked + .slider:before { transform: translateX(24px); }
+</style>
+</head>
+<body>
+<div id="info">
+  <span id="waterSize">128x128</span> GPGPU Water<br/>
+  Click and Move mouse to disturb water
+</div>
+
+<div id="controls">
+  <h3 style="margin-bottom:10px">Controls</h3>
+  
+  <div class="control-row">
+    <label>Mouse Size</label>
+    <div class="right">
+      <input type="range" id="mouseSize" min="0.1" max="1.0" step="0.1" value="0.2">
+      <span class="val" id="mouseSize_v">0.2</span>
+    </div>
+  </div>
+  
+  <div class="control-row">
+    <label>Mouse Deep</label>
+    <div class="right">
+      <input type="range" id="mouseDeep" min="0.01" max="1.0" step="0.01" value="0.01">
+      <span class="val" id="mouseDeep_v">0.01</span>
+    </div>
+  </div>
+  
+  <div class="control-row">
+    <label>Viscosity</label>
+    <div class="right">
+      <input type="range" id="viscosity" min="0.9" max="0.999" step="0.001" value="0.93">
+      <span class="val" id="viscosity_v">0.930</span>
+    </div>
+  </div>
+  
+  <div class="control-row">
+    <label>Speed</label>
+    <div class="right">
+      <input type="range" id="speed" min="1" max="6" step="1" value="5">
+      <span class="val" id="speed_v">5</span>
+    </div>
+  </div>
+  
+  <div class="control-row">
+    <label>Wireframe</label>
+    <div class="right">
+      <label class="toggle-switch">
+        <input type="checkbox" id="wireframe">
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.164.1/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.164.1/examples/js/misc/GPUComputationRenderer.js"></script>
+<script>
+// Simulation parameters
+const WIDTH = 128;
+const BOUNDS = 6;
+const BOUNDS_HALF = BOUNDS * 0.5;
+
+let container;
+let camera, scene, renderer, controls;
+let mousedown = false;
+const mouseCoords = new THREE.Vector2();
+const raycaster = new THREE.Raycaster();
+
+let sun;
+let waterMesh;
+let meshRay;
+let gpuCompute;
+let heightmapVariable;
+
+const effectController = {
+  mouseSize: 0.2,
+  mouseDeep: 0.01,
+  viscosity: 0.93,
+  speed: 5,
+  wireframe: false
+};
+
+init();
+
+function init() {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 2, 4);
+  camera.lookAt(0, 0, 0);
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87CEEB);
+
+  sun = new THREE.DirectionalLight(0xFFFFFF, 1.5);
+  sun.position.set(-1, 2.6, 1.4);
+  scene.add(sun);
+
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+  scene.add(ambientLight);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  container.appendChild(renderer.domElement);
+
+  controls = new THREE.OrbitControls(camera, container);
+
+  container.style.touchAction = 'none';
+  container.addEventListener('pointermove', onPointerMove);
+  container.addEventListener('pointerdown', onPointerDown);
+  container.addEventListener('pointerup', onPointerUp);
+
+  window.addEventListener('resize', onWindowResize);
+
+  initWater();
+  initControls();
+  
+  animate();
+}
+
+function initWater() {
+  const geometry = new THREE.PlaneGeometry(BOUNDS, BOUNDS, WIDTH - 1, WIDTH - 1);
+
+  // Create custom water material
+  const material = new WaterMaterial({
+    color: 0x9bd2ec,
+    metalness: 0.9,
+    roughness: 0,
+    transparent: true,
+    opacity: 0.8,
+    side: THREE.DoubleSide
+  });
+
+  waterMesh = new THREE.Mesh(geometry, material);
+  waterMesh.rotation.x = -Math.PI * 0.5;
+  waterMesh.matrixAutoUpdate = false;
+  waterMesh.updateMatrix();
+  scene.add(waterMesh);
+
+  // Mesh for raycasting
+  const geometryRay = new THREE.PlaneGeometry(BOUNDS, BOUNDS, 1, 1);
+  meshRay = new THREE.Mesh(geometryRay, new THREE.MeshBasicMaterial({ visible: false }));
+  meshRay.rotation.x = -Math.PI / 2;
+  meshRay.matrixAutoUpdate = false;
+  meshRay.updateMatrix();
+  scene.add(meshRay);
+
+  // GPU Compute setup
+  gpuCompute = new THREE.GPUComputationRenderer(WIDTH, WIDTH, renderer);
+
+  const heightmap0 = gpuCompute.createTexture();
+  fillTexture(heightmap0);
+
+  heightmapVariable = gpuCompute.addVariable('heightmap', heightmapFragmentShader(), heightmap0);
+
+  gpuCompute.setVariableDependencies(heightmapVariable, [heightmapVariable]);
+
+  heightmapVariable.material.uniforms['mousePos'] = { value: new THREE.Vector2(10000, 10000) };
+  heightmapVariable.material.uniforms['mouseSize'] = { value: 0.2 };
+  heightmapVariable.material.uniforms['viscosity'] = { value: 0.93 };
+  heightmapVariable.material.uniforms['deep'] = { value: 0.01 };
+  heightmapVariable.material.defines.BOUNDS = BOUNDS.toFixed(1);
+
+  const error = gpuCompute.init();
+  if (error !== null) {
+    console.error('GPUComputationRenderer error:', error);
+    alert('GPU Water simulation not supported on this device. WebGL float textures required.');
+  }
+}
+
+function fillTexture(texture) {
+  const waterMaxHeight = 0.1;
+
+  function noise(x, y) {
+    // Simple perlin-like noise
+    let r = 0;
+    let mult = 0.025;
+    let multR = waterMaxHeight;
+    
+    for (let i = 0; i < 15; i++) {
+      r += multR * (Math.sin(x * mult) * Math.cos(y * mult));
+      multR *= 0.53 + 0.025 * i;
+      mult *= 1.25;
+    }
+    
+    return r;
+  }
+
+  const pixels = texture.image.data;
+  let p = 0;
+  
+  for (let j = 0; j < WIDTH; j++) {
+    for (let i = 0; i < WIDTH; i++) {
+      const x = i * 128 / WIDTH;
+      const y = j * 128 / WIDTH;
+
+      pixels[p + 0] = noise(x, y);
+      pixels[p + 1] = pixels[p + 0];
+      pixels[p + 2] = 0;
+      pixels[p + 3] = 1;
+
+      p += 4;
+    }
+  }
+}
+
+function heightmapFragmentShader() {
+  return `
+    #include <common>
+
+    uniform vec2 mousePos;
+    uniform float mouseSize;
+    uniform float viscosity;
+    uniform float deep;
+
+    void main() {
+      vec2 cellSize = 1.0 / resolution.xy;
+      vec2 uv = gl_FragCoord.xy * cellSize;
+
+      vec4 heightmapValue = texture2D(heightmap, uv);
+
+      // Get neighbours
+      vec4 north = texture2D(heightmap, uv + vec2(0.0, cellSize.y));
+      vec4 south = texture2D(heightmap, uv + vec2(0.0, -cellSize.y));
+      vec4 east = texture2D(heightmap, uv + vec2(cellSize.x, 0.0));
+      vec4 west = texture2D(heightmap, uv + vec2(-cellSize.x, 0.0));
+
+      // Wave equation
+      float newHeight = ((north.x + south.x + east.x + west.x) * 0.5 - heightmapValue.y) * viscosity;
+
+      // Mouse influence
+      float mousePhase = clamp(length((uv - vec2(0.5)) * BOUNDS - vec2(mousePos.x, -mousePos.y)) * PI / mouseSize, 0.0, PI);
+      newHeight -= (cos(mousePhase) + 1.0) * deep;
+
+      heightmapValue.y = heightmapValue.x;
+      heightmapValue.x = newHeight;
+
+      gl_FragColor = heightmapValue;
+    }
+  `;
+}
+
+// Custom Water Material
+class WaterMaterial extends THREE.MeshStandardMaterial {
+  constructor(parameters) {
+    super();
+
+    this.defines = {
+      'STANDARD': '',
+      'USE_UV': '',
+      'WIDTH': WIDTH.toFixed(1),
+      'BOUNDS': BOUNDS.toFixed(1),
+    };
+
+    this.extra = {};
+    this.addParameter('heightmap', null);
+    this.setValues(parameters);
+  }
+
+  addParameter(name, value) {
+    this.extra[name] = value;
+    Object.defineProperty(this, name, {
+      get: () => this.extra[name],
+      set: (v) => {
+        this.extra[name] = v;
+        if (this.userData.shader) this.userData.shader.uniforms[name].value = this.extra[name];
+      }
+    });
+  }
+
+  onBeforeCompile(shader) {
+    for (const name in this.extra) {
+      shader.uniforms[name] = { value: this.extra[name] };
+    }
+
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <common>',
+      `
+      #include <common>
+      uniform sampler2D heightmap;
+      `
+    );
+
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <beginnormal_vertex>',
+      `
+      vec2 cellSize = vec2(1.0 / WIDTH, 1.0 / WIDTH);
+      vec3 objectNormal = vec3(
+        (texture2D(heightmap, uv + vec2(-cellSize.x, 0)).x - texture2D(heightmap, uv + vec2(cellSize.x, 0)).x) * WIDTH / BOUNDS,
+        (texture2D(heightmap, uv + vec2(0, -cellSize.y)).x - texture2D(heightmap, uv + vec2(0, cellSize.y)).x) * WIDTH / BOUNDS,
+        1.0);
+      #ifdef USE_TANGENT
+        vec3 objectTangent = vec3(tangent.xyz);
+      #endif
+      `
+    );
+
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `
+      float heightValue = texture2D(heightmap, uv).x;
+      vec3 transformed = vec3(position.x, position.y, heightValue);
+      #ifdef USE_ALPHAHASH
+        vPosition = vec3(position);
+      #endif
+      `
+    );
+
+    this.userData.shader = shader;
+  }
+}
+
+function initControls() {
+  document.getElementById('mouseSize').addEventListener('input', (e) => {
+    effectController.mouseSize = parseFloat(e.target.value);
+    heightmapVariable.material.uniforms['mouseSize'].value = effectController.mouseSize;
+    document.getElementById('mouseSize_v').textContent = e.target.value;
+  });
+
+  document.getElementById('mouseDeep').addEventListener('input', (e) => {
+    effectController.mouseDeep = parseFloat(e.target.value);
+    heightmapVariable.material.uniforms['deep'].value = effectController.mouseDeep;
+    document.getElementById('mouseDeep_v').textContent = e.target.value;
+  });
+
+  document.getElementById('viscosity').addEventListener('input', (e) => {
+    effectController.viscosity = parseFloat(e.target.value);
+    heightmapVariable.material.uniforms['viscosity'].value = effectController.viscosity;
+    document.getElementById('viscosity_v').textContent = e.target.value;
+  });
+
+  document.getElementById('speed').addEventListener('input', (e) => {
+    effectController.speed = parseInt(e.target.value);
+    document.getElementById('speed_v').textContent = e.target.value;
+  });
+
+  document.getElementById('wireframe').addEventListener('change', (e) => {
+    effectController.wireframe = e.target.checked;
+    waterMesh.material.wireframe = effectController.wireframe;
+  });
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function onPointerDown() {
+  mousedown = true;
+}
+
+function onPointerUp() {
+  mousedown = false;
+  controls.enabled = true;
+}
+
+function onPointerMove(event) {
+  const dom = renderer.domElement;
+  mouseCoords.set(
+    (event.clientX / dom.clientWidth) * 2 - 1,
+    -(event.clientY / dom.clientHeight) * 2 + 1
+  );
+}
+
+function raycast() {
+  const uniforms = heightmapVariable.material.uniforms;
+  
+  if (mousedown) {
+    raycaster.setFromCamera(mouseCoords, camera);
+    const intersects = raycaster.intersectObject(meshRay);
+
+    if (intersects.length > 0) {
+      const point = intersects[0].point;
+      uniforms['mousePos'].value.set(point.x, point.z);
+      if (controls.enabled) controls.enabled = false;
+    } else {
+      uniforms['mousePos'].value.set(10000, 10000);
+    }
+  } else {
+    uniforms['mousePos'].value.set(10000, 10000);
+  }
+}
+
+let frame = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  render();
+}
+
+function render() {
+  raycast();
+  
+  frame++;
+  
+  if (frame >= 7 - effectController.speed) {
+    // GPU computation
+    gpuCompute.compute();
+    const tmpHeightmap = gpuCompute.getCurrentRenderTarget(heightmapVariable).texture;
+    
+    // Update water mesh
+    if (waterMesh) waterMesh.material.heightmap = tmpHeightmap;
+    
+    frame = 0;
+  }
+
+  renderer.render(scene, camera);
+}
+</script>
+</body>
+</html>

@@ -9,7 +9,7 @@
 <body>
 
 <div id="info">
-  <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - <span id="waterSize"></span> Wind-Driven Water (256×256 sim)<br/>
+  <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span> (256×256 sim)<br/>
   West wall reflects waves · Drag to rotate camera · Try wind presets!
 </div>
 
@@ -148,6 +148,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
+// Version
+const VERSION = "1.0";
+
 // Texture width for simulation
 const WIDTH = 256; // Doubled from 128
 
@@ -195,7 +198,7 @@ let lastRippleSpawn = 0;
 const effectController = {
   mouseSize: 0.2,
   mouseDeep: 0.01,
-  viscosity: 0.93,
+  viscosity: 0.96, // Increased from 0.93 for smoother, less steep waves
   speed: 5,
   ducksEnabled: ducksEnabled,
   wireframe: false,
@@ -210,6 +213,9 @@ init();
 
 
 async function init() {
+
+  // Display version
+  document.getElementById( 'version' ).textContent = VERSION;
 
   container = document.createElement( 'div' );
   document.body.appendChild( container );
@@ -358,11 +364,12 @@ function initWater() {
 
   const material = new WaterMaterial( {
     color: 0x9bd2ec,
-    metalness: 0.9,
-    roughness: 0,
+    metalness: 0.0, // Reduced from 0.9 - no metallic reflections
+    roughness: 0.3, // Increased from 0 - less mirror-like
     transparent: true,
     opacity: 0.8,
-    side: THREE.DoubleSide
+    side: THREE.DoubleSide,
+    envMapIntensity: 0.0 // Disable environment reflections
   } );
 
   waterMesh = new THREE.Mesh( geometry, material );
@@ -859,7 +866,7 @@ const shaderChange = {
     // PHASE 1: Wind directional forcing
     if ( windStrength > 0.1 ) {
       vec2 gradient = vec2( east.x - west.x, north.x - south.x );
-      float windForce = windStrength * dot( windDirection, gradient ) * 0.05; // Reduced from 0.08
+      float windForce = windStrength * dot( windDirection, gradient ) * 0.025; // Half steepness (was 0.05)
       
       // PHASE 3: Wind gusts (periodic variation)
       if ( windGust > 0.5 ) {

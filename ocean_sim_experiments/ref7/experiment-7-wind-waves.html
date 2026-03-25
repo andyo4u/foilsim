@@ -10,7 +10,7 @@
 
 <div id="info">
   <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span><br/>
-  West wall reflects · Adjustable sim size · Gentle wave buildup
+  West wall reflects · Up to 1024×1024 · Wind propagates across view
 </div>
 
 <!-- This is just a smoothing 'compute shader' for using manually: -->
@@ -149,7 +149,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Version
-const VERSION = "1.1";
+const VERSION = "1.2";
 
 // Texture width for simulation (adjustable via GUI)
 let WIDTH = 256;
@@ -337,7 +337,7 @@ async function init() {
   
   // Display controls folder
   const displayFolder = gui.addFolder( 'Display' );
-  displayFolder.add( effectController, 'simSize', { '128×128': 128, '256×256': 256, '512×512': 512 } ).name( 'Sim Resolution' ).onChange( ( value ) => {
+  displayFolder.add( effectController, 'simSize', { '128×128': 128, '256×256': 256, '512×512': 512, '1024×1024': 1024 } ).name( 'Sim Resolution' ).onChange( ( value ) => {
     WIDTH = value;
     // Show restart message
     if ( confirm( `Restart simulation at ${value}×${value} resolution?\n\nHigher = more detail but slower FPS.` ) ) {
@@ -874,10 +874,25 @@ const shaderChange = {
     // Wave equation
     float newHeight = ( ( north.x + south.x + east.x + west.x ) * 0.5 - (heightmapValue.y) ) * viscosity;
 
-    // PHASE 1: Wind directional forcing
+    // PHASE 1: Wind directional forcing with propagation
     if ( windStrength > 0.1 ) {
       vec2 gradient = vec2( east.x - west.x, north.x - south.x );
-      float windForce = windStrength * dot( windDirection, gradient ) * 0.015; // Slower buildup (was 0.025)
+      
+      // Wind propagation: starts from upwind edge, moves across at 1/2 wind speed
+      // Calculate position relative to wind direction
+      vec2 posFromCenter = uv - vec2( 0.5 );
+      float distAlongWind = dot( posFromCenter, -windDirection ); // Negative for upwind
+      
+      // Wind front position (moves from -0.5 to +0.5 across the domain)
+      float windSpeed = windStrength * 0.05; // Speed of wind propagation
+      float windFrontPos = -0.7 + windTime * windSpeed; // Start off-screen, move across
+      
+      // Smooth activation as wind front passes (smooth step over 0.3 units)
+      float windActivation = smoothstep( windFrontPos - 0.3, windFrontPos, distAlongWind );
+      
+      // Reduced wind force (less effect on waves)
+      float windForce = windStrength * dot( windDirection, gradient ) * 0.008; // Reduced from 0.015
+      windForce *= windActivation; // Apply propagation mask
       
       // PHASE 3: Wind gusts (periodic variation)
       if ( windGust > 0.5 ) {
@@ -888,14 +903,14 @@ const shaderChange = {
       newHeight += windForce;
     }
 
-    // PHASE 2: Ambient ripples (multi-octave noise)
+    // PHASE 2: Ambient ripples (multi-octave noise) - reduced effect
     if ( windStrength > 0.5 ) {
       float noise1 = sin( uv.x * 40.0 + windTime * 2.0 ) * cos( uv.y * 40.0 + windTime * 2.5 );
       float noise2 = sin( uv.x * 80.0 - windTime * 3.0 ) * cos( uv.y * 80.0 + windTime * 2.0 ) * 0.5;
       float noise3 = sin( uv.x * 120.0 + windTime * 1.5 ) * cos( uv.y * 120.0 - windTime * 1.8 ) * 0.25;
       float combinedNoise = ( noise1 + noise2 + noise3 ) / 1.75;
       
-      newHeight += windStrength * 0.0005 * combinedNoise; // Slower buildup (was 0.001)
+      newHeight += windStrength * 0.0003 * combinedNoise; // Further reduced (was 0.0005)
     }
 
     // Mouse influence
@@ -904,7 +919,7 @@ const shaderChange = {
 
     // Wave height limiter - clamp to reasonable range
     // Max wave height scales with wind strength (reduced for gentler waves)
-    float maxWaveHeight = 0.10 + windStrength * 0.015; // 0.10-0.25 range (was 0.15-0.35)
+    float maxWaveHeight = 0.08 + windStrength * 0.012; // 0.08-0.20 range (reduced for less wind effect)
     newHeight = clamp( newHeight, -maxWaveHeight, maxWaveHeight );
 
     heightmapValue.y = heightmapValue.x;

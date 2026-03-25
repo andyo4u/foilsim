@@ -9,8 +9,8 @@
 <body>
 
 <div id="info">
-  <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span> (256×256 sim)<br/>
-  West wall reflects waves · Drag to rotate camera · Try wind presets!
+  <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span><br/>
+  West wall reflects · Adjustable sim size · Gentle wave buildup
 </div>
 
 <!-- This is just a smoothing 'compute shader' for using manually: -->
@@ -149,10 +149,10 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Version
-const VERSION = "1.0";
+const VERSION = "1.1";
 
-// Texture width for simulation
-const WIDTH = 256; // Doubled from 128
+// Texture width for simulation (adjustable via GUI)
+let WIDTH = 256;
 
 // Water size in system units
 const BOUNDS = 6;
@@ -198,7 +198,7 @@ let lastRippleSpawn = 0;
 const effectController = {
   mouseSize: 0.2,
   mouseDeep: 0.01,
-  viscosity: 0.96, // Increased from 0.93 for smoother, less steep waves
+  viscosity: 0.98, // Increased from 0.96 for even smoother, less steep waves
   speed: 5,
   ducksEnabled: ducksEnabled,
   wireframe: false,
@@ -207,6 +207,8 @@ const effectController = {
   windDirection: 45, // degrees
   windStrength: 0, // 0-10 (Beaufort scale)
   windGust: false,
+  // Simulation size
+  simSize: 256,
 };
 
 init();
@@ -335,6 +337,15 @@ async function init() {
   
   // Display controls folder
   const displayFolder = gui.addFolder( 'Display' );
+  displayFolder.add( effectController, 'simSize', { '128×128': 128, '256×256': 256, '512×512': 512 } ).name( 'Sim Resolution' ).onChange( ( value ) => {
+    WIDTH = value;
+    // Show restart message
+    if ( confirm( `Restart simulation at ${value}×${value} resolution?\n\nHigher = more detail but slower FPS.` ) ) {
+      location.reload();
+    } else {
+      effectController.simSize = WIDTH; // Revert
+    }
+  } );
   displayFolder.add( effectController, 'ducksEnabled' ).onChange( valuesChanger ).name( 'Show Duck' );
   displayFolder.add( effectController, 'wireframe' ).onChange( ( v )=>{
     waterMesh.material.wireframe = v;
@@ -866,7 +877,7 @@ const shaderChange = {
     // PHASE 1: Wind directional forcing
     if ( windStrength > 0.1 ) {
       vec2 gradient = vec2( east.x - west.x, north.x - south.x );
-      float windForce = windStrength * dot( windDirection, gradient ) * 0.025; // Half steepness (was 0.05)
+      float windForce = windStrength * dot( windDirection, gradient ) * 0.015; // Slower buildup (was 0.025)
       
       // PHASE 3: Wind gusts (periodic variation)
       if ( windGust > 0.5 ) {
@@ -884,7 +895,7 @@ const shaderChange = {
       float noise3 = sin( uv.x * 120.0 + windTime * 1.5 ) * cos( uv.y * 120.0 - windTime * 1.8 ) * 0.25;
       float combinedNoise = ( noise1 + noise2 + noise3 ) / 1.75;
       
-      newHeight += windStrength * 0.001 * combinedNoise; // Reduced from 0.002
+      newHeight += windStrength * 0.0005 * combinedNoise; // Slower buildup (was 0.001)
     }
 
     // Mouse influence
@@ -892,8 +903,8 @@ const shaderChange = {
     newHeight -= ( cos( mousePhase ) + 1.0 ) * deep;
 
     // Wave height limiter - clamp to reasonable range
-    // Max wave height scales with wind strength
-    float maxWaveHeight = 0.15 + windStrength * 0.02; // 0.15-0.35 range
+    // Max wave height scales with wind strength (reduced for gentler waves)
+    float maxWaveHeight = 0.10 + windStrength * 0.015; // 0.10-0.25 range (was 0.15-0.35)
     newHeight = clamp( newHeight, -maxWaveHeight, maxWaveHeight );
 
     heightmapValue.y = heightmapValue.x;

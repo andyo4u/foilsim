@@ -149,7 +149,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Version
-const VERSION = "2.4";
+const VERSION = "2.5";
 
 // Texture width for simulation (adjustable via GUI)
 let WIDTH = 128;
@@ -198,7 +198,7 @@ let lastRippleSpawn = 0;
 const effectController = {
   mouseSize: 0.2,
   mouseDeep: 0.01,
-  viscosity: 0.97, // Higher viscosity for smoother, cleaner waves
+  viscosity: 0.95, // Reduced slightly to maintain wave energy for visible reflection
   speed: 5,
   ducksEnabled: ducksEnabled,
   wireframe: false,
@@ -844,12 +844,19 @@ const shaderChange = {
     vec4 east = texture2D( heightmap, uv + vec2( cellSize.x, 0.0 ) );
     vec4 west = texture2D( heightmap, uv + vec2( - cellSize.x, 0.0 ) );
 
-    // Reflecting boundary on west side (left edge, low u)
-    float edgeThreshold = 0.03; // Near left edge
+    // STRONG reflecting boundary on west side (left edge)
+    float edgeThreshold = 0.08; // Wider boundary zone for stronger reflection
     if ( uv.x < edgeThreshold ) {
-      // Strong reflection: invert the wave at boundary
-      // This creates a clear phase-reversed reflection (wave bounce)
-      west.x = -east.x + 2.0 * heightmapValue.x;
+      // Perfect hard-wall reflection
+      // Create standing wave at boundary by inverting velocity
+      float reflectionStrength = 1.5; // Amplify reflection
+      west.x = heightmapValue.x - reflectionStrength * ( east.x - heightmapValue.x );
+      
+      // Also invert north/south at boundary for complete reflection
+      if ( uv.x < edgeThreshold * 0.5 ) {
+        // Very close to wall - maximum reflection
+        west.x = -east.x + 2.5 * heightmapValue.x;
+      }
     }
 
     // Wave equation
@@ -879,8 +886,8 @@ const shaderChange = {
       // Slowly build up wave amplitude over time (0-10 seconds)
       float buildupTime = min( windTime * 0.1, 1.0 );
       
-      // Wind force creates directional waves
-      float windForce = windStrength * combinedWave * 0.003 * buildupTime;
+      // Wind force creates directional waves (increased amplitude for visibility)
+      float windForce = windStrength * combinedWave * 0.008 * buildupTime; // Increased from 0.003
       
       // PHASE 3: Wind gusts (periodic variation)
       if ( windGust > 0.5 ) {
@@ -898,8 +905,8 @@ const shaderChange = {
     newHeight -= ( cos( mousePhase ) + 1.0 ) * deep;
 
     // Wave height limiter - clamp to reasonable range
-    // Max wave height scales with wind strength
-    float maxWaveHeight = 0.15 + windStrength * 0.02; // 0.15-0.35 range
+    // Max wave height scales with wind strength (increased for visibility)
+    float maxWaveHeight = 0.25 + windStrength * 0.05; // 0.25-0.75 range (bigger waves)
     newHeight = clamp( newHeight, -maxWaveHeight, maxWaveHeight );
 
     heightmapValue.y = heightmapValue.x;

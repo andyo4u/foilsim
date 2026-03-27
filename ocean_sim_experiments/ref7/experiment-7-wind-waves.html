@@ -10,7 +10,7 @@
 
 <div id="info">
   <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span><br/>
-  Up to 1024×1024 · Wind propagation · Wave height limiting
+  West wall reflects waves · Wind propagation · Up to 1024×1024
 </div>
 
 <!-- This is just a smoothing 'compute shader' for using manually: -->
@@ -149,7 +149,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Version
-const VERSION = "2.0";
+const VERSION = "2.1";
 
 // Texture width for simulation (adjustable via GUI)
 let WIDTH = 128;
@@ -223,7 +223,7 @@ async function init() {
   document.body.appendChild( container );
 
   camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
-  camera.position.set( 0, 2.00, 4 );
+  camera.position.set( 1, 2.5, 5 ); // Angled to see west wall on left
   camera.lookAt( 0, 0, 0 );
 
   scene = new THREE.Scene();
@@ -392,11 +392,17 @@ function initWater() {
 
   scene.add( waterMesh );
 
-  // pool border
-  const borderGeom = new THREE.TorusGeometry( 4.2, 0.1, 12, 4 );
-  borderGeom.rotateX( Math.PI * 0.5 );
-  borderGeom.rotateY( Math.PI * 0.25 );
-  poolBorder = new THREE.Mesh( borderGeom, new THREE.MeshStandardMaterial( { color: 0x908877, roughness: 0.2 } ) );
+  // West wall (reflecting boundary)
+  const wallHeight = 1.5;
+  const wallThickness = 0.2;
+  const wallGeom = new THREE.BoxGeometry( wallThickness, wallHeight, BOUNDS );
+  const wallMat = new THREE.MeshStandardMaterial( { 
+    color: 0x6B5D4F, 
+    roughness: 0.8,
+    metalness: 0.1
+  } );
+  poolBorder = new THREE.Mesh( wallGeom, wallMat );
+  poolBorder.position.set( -BOUNDS_HALF, wallHeight / 2, 0 ); // West side at x = -3
   scene.add( poolBorder );
   poolBorder.receiveShadow = true;
   poolBorder.castShadow = true;
@@ -856,6 +862,13 @@ const shaderChange = {
     vec4 south = texture2D( heightmap, uv + vec2( 0.0, - cellSize.y ) );
     vec4 east = texture2D( heightmap, uv + vec2( cellSize.x, 0.0 ) );
     vec4 west = texture2D( heightmap, uv + vec2( - cellSize.x, 0.0 ) );
+
+    // Reflecting boundary on west side (left edge, low u)
+    float edgeThreshold = 0.02; // Near left edge
+    if ( uv.x < edgeThreshold ) {
+      // Reflect: use east neighbor as west neighbor (mirror)
+      west.x = east.x;
+    }
 
     // Wave equation
     float newHeight = ( ( north.x + south.x + east.x + west.x ) * 0.5 - (heightmapValue.y) ) * viscosity;

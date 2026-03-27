@@ -9,8 +9,8 @@
 <body>
 
 <div id="info">
-  <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - <span id="waterSize"></span> Wind-Driven Water<br/>
-  Click to disturb · Use Wind controls (right panel) · Try presets!
+  <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span><br/>
+  Up to 1024×1024 · Wind propagation · Wave height limiting
 </div>
 
 <!-- This is just a smoothing 'compute shader' for using manually: -->
@@ -148,8 +148,11 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
-// Texture width for simulation
-const WIDTH = 128;
+// Version
+const VERSION = "2.0";
+
+// Texture width for simulation (adjustable via GUI)
+let WIDTH = 128;
 
 // Water size in system units
 const BOUNDS = 6;
@@ -204,12 +207,17 @@ const effectController = {
   windDirection: 45, // degrees
   windStrength: 0, // 0-10 (Beaufort scale)
   windGust: false,
+  // Simulation size
+  simSize: 128,
 };
 
 init();
 
 
 async function init() {
+
+  // Display version
+  document.getElementById( 'version' ).textContent = VERSION;
 
   container = document.createElement( 'div' );
   document.body.appendChild( container );
@@ -329,6 +337,15 @@ async function init() {
   
   // Display controls folder
   const displayFolder = gui.addFolder( 'Display' );
+  displayFolder.add( effectController, 'simSize', { '128×128': 128, '256×256': 256, '512×512': 512, '1024×1024': 1024 } ).name( 'Sim Resolution' ).onChange( ( value ) => {
+    WIDTH = value;
+    // Show restart message
+    if ( confirm( `Restart simulation at ${value}×${value} resolution?\n\nHigher = more detail but slower FPS.` ) ) {
+      location.reload();
+    } else {
+      effectController.simSize = WIDTH; // Revert
+    }
+  } );
   displayFolder.add( effectController, 'ducksEnabled' ).onChange( valuesChanger ).name( 'Show Duck' );
   displayFolder.add( effectController, 'wireframe' ).onChange( ( v )=>{
     waterMesh.material.wireframe = v;
@@ -678,31 +695,12 @@ function onPointerMove( event ) {
 
 function raycast() {
 
-  // Set uniforms: mouse interaction
+  // Mouse interaction disabled - no water disturbance on click
+  // Always set mousePos far away so mouse only controls camera
   const uniforms = heightmapVariable.material.uniforms;
-  if ( mousedown ) {
-
-    raycaster.setFromCamera( mouseCoords, camera );
-
-    const intersects = raycaster.intersectObject( meshRay );
-
-    if ( intersects.length > 0 ) {
-
-      const point = intersects[ 0 ].point;
-      uniforms[ 'mousePos' ].value.set( point.x, point.z );
-      if ( controls.enabled ) controls.enabled = false;
-
-    } else {
-
-      uniforms[ 'mousePos' ].value.set( 10000, 10000 );
-
-    }
-
-  } else {
-
-    uniforms[ 'mousePos' ].value.set( 10000, 10000 );
-
-  }
+  uniforms[ 'mousePos' ].value.set( 10000, 10000 );
+  
+  // Keep orbit controls enabled for camera movement
 
 }
 
@@ -862,10 +860,25 @@ const shaderChange = {
     // Wave equation
     float newHeight = ( ( north.x + south.x + east.x + west.x ) * 0.5 - (heightmapValue.y) ) * viscosity;
 
-    // PHASE 1: Wind directional forcing
+    // PHASE 1: Wind directional forcing with propagation
     if ( windStrength > 0.1 ) {
       vec2 gradient = vec2( east.x - west.x, north.x - south.x );
-      float windForce = windStrength * dot( windDirection, gradient ) * 0.05; // Reduced from 0.08
+      
+      // Wind propagation: starts from upwind edge, moves across at ~1/2 wind speed
+      // Calculate position relative to wind direction
+      vec2 posFromCenter = uv - vec2( 0.5 );
+      float distAlongWind = dot( posFromCenter, -windDirection ); // Negative for upwind
+      
+      // Wind front position (moves from -0.5 to +0.5 across the domain)
+      float windSpeed = windStrength * 0.05; // Speed of wind propagation
+      float windFrontPos = -0.7 + windTime * windSpeed; // Start off-screen, move across
+      
+      // Smooth activation as wind front passes (smooth step over 0.3 units)
+      float windActivation = smoothstep( windFrontPos - 0.3, windFrontPos, distAlongWind );
+      
+      // Wind force with propagation
+      float windForce = windStrength * dot( windDirection, gradient ) * 0.05;
+      windForce *= windActivation; // Apply propagation mask
       
       // PHASE 3: Wind gusts (periodic variation)
       if ( windGust > 0.5 ) {

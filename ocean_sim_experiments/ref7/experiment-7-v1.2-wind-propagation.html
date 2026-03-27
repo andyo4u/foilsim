@@ -9,8 +9,8 @@
 <body>
 
 <div id="info">
-  <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - <span id="waterSize"></span> Wind-Driven Water<br/>
-  Click to disturb · Use Wind controls (right panel) · Try presets!
+  <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span><br/>
+  West wall reflects · Up to 1024×1024 · Wind propagates across view
 </div>
 
 <!-- This is just a smoothing 'compute shader' for using manually: -->
@@ -148,8 +148,11 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
-// Texture width for simulation
-const WIDTH = 128;
+// Version
+const VERSION = "1.2";
+
+// Texture width for simulation (adjustable via GUI)
+let WIDTH = 256;
 
 // Water size in system units
 const BOUNDS = 6;
@@ -195,7 +198,7 @@ let lastRippleSpawn = 0;
 const effectController = {
   mouseSize: 0.2,
   mouseDeep: 0.01,
-  viscosity: 0.93,
+  viscosity: 0.98, // Increased from 0.96 for even smoother, less steep waves
   speed: 5,
   ducksEnabled: ducksEnabled,
   wireframe: false,
@@ -204,6 +207,8 @@ const effectController = {
   windDirection: 45, // degrees
   windStrength: 0, // 0-10 (Beaufort scale)
   windGust: false,
+  // Simulation size
+  simSize: 256,
 };
 
 init();
@@ -211,11 +216,14 @@ init();
 
 async function init() {
 
+  // Display version
+  document.getElementById( 'version' ).textContent = VERSION;
+
   container = document.createElement( 'div' );
   document.body.appendChild( container );
 
   camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
-  camera.position.set( 0, 2.00, 4 );
+  camera.position.set( 1, 2.5, 5 ); // Angled to see west wall
   camera.lookAt( 0, 0, 0 );
 
   scene = new THREE.Scene();
@@ -329,6 +337,15 @@ async function init() {
   
   // Display controls folder
   const displayFolder = gui.addFolder( 'Display' );
+  displayFolder.add( effectController, 'simSize', { '128×128': 128, '256×256': 256, '512×512': 512, '1024×1024': 1024 } ).name( 'Sim Resolution' ).onChange( ( value ) => {
+    WIDTH = value;
+    // Show restart message
+    if ( confirm( `Restart simulation at ${value}×${value} resolution?\n\nHigher = more detail but slower FPS.` ) ) {
+      location.reload();
+    } else {
+      effectController.simSize = WIDTH; // Revert
+    }
+  } );
   displayFolder.add( effectController, 'ducksEnabled' ).onChange( valuesChanger ).name( 'Show Duck' );
   displayFolder.add( effectController, 'wireframe' ).onChange( ( v )=>{
     waterMesh.material.wireframe = v;
@@ -358,11 +375,12 @@ function initWater() {
 
   const material = new WaterMaterial( {
     color: 0x9bd2ec,
-    metalness: 0.9,
-    roughness: 0,
+    metalness: 0.0, // Reduced from 0.9 - no metallic reflections
+    roughness: 0.3, // Increased from 0 - less mirror-like
     transparent: true,
     opacity: 0.8,
-    side: THREE.DoubleSide
+    side: THREE.DoubleSide,
+    envMapIntensity: 0.0 // Disable environment reflections
   } );
 
   waterMesh = new THREE.Mesh( geometry, material );
@@ -375,11 +393,17 @@ function initWater() {
 
   scene.add( waterMesh );
 
-  // pool border
-  const borderGeom = new THREE.TorusGeometry( 4.2, 0.1, 12, 4 );
-  borderGeom.rotateX( Math.PI * 0.5 );
-  borderGeom.rotateY( Math.PI * 0.25 );
-  poolBorder = new THREE.Mesh( borderGeom, new THREE.MeshStandardMaterial( { color: 0x908877, roughness: 0.2 } ) );
+  // West wall (reflecting boundary)
+  const wallHeight = 1.5;
+  const wallThickness = 0.2;
+  const wallGeom = new THREE.BoxGeometry( wallThickness, wallHeight, BOUNDS );
+  const wallMat = new THREE.MeshStandardMaterial( { 
+    color: 0x6B5D4F, 
+    roughness: 0.8,
+    metalness: 0.1
+  } );
+  poolBorder = new THREE.Mesh( wallGeom, wallMat );
+  poolBorder.position.set( -BOUNDS_HALF, wallHeight / 2, 0 ); // West side at x = -3
   scene.add( poolBorder );
   poolBorder.receiveShadow = true;
   poolBorder.castShadow = true;
@@ -678,31 +702,12 @@ function onPointerMove( event ) {
 
 function raycast() {
 
-  // Set uniforms: mouse interaction
+  // Mouse interaction disabled - no water disturbance on click
+  // Always set mousePos far away so mouse only controls camera
   const uniforms = heightmapVariable.material.uniforms;
-  if ( mousedown ) {
-
-    raycaster.setFromCamera( mouseCoords, camera );
-
-    const intersects = raycaster.intersectObject( meshRay );
-
-    if ( intersects.length > 0 ) {
-
-      const point = intersects[ 0 ].point;
-      uniforms[ 'mousePos' ].value.set( point.x, point.z );
-      if ( controls.enabled ) controls.enabled = false;
-
-    } else {
-
-      uniforms[ 'mousePos' ].value.set( 10000, 10000 );
-
-    }
-
-  } else {
-
-    uniforms[ 'mousePos' ].value.set( 10000, 10000 );
-
-  }
+  uniforms[ 'mousePos' ].value.set( 10000, 10000 );
+  
+  // Keep orbit controls enabled for camera movement
 
 }
 
@@ -859,13 +864,35 @@ const shaderChange = {
     vec4 east = texture2D( heightmap, uv + vec2( cellSize.x, 0.0 ) );
     vec4 west = texture2D( heightmap, uv + vec2( - cellSize.x, 0.0 ) );
 
+    // Reflecting boundary on west side (left edge, low u)
+    float edgeThreshold = 0.02; // Near left edge
+    if ( uv.x < edgeThreshold ) {
+      // Reflect: use east neighbor as west neighbor (mirror)
+      west.x = east.x;
+    }
+
     // Wave equation
     float newHeight = ( ( north.x + south.x + east.x + west.x ) * 0.5 - (heightmapValue.y) ) * viscosity;
 
-    // PHASE 1: Wind directional forcing
+    // PHASE 1: Wind directional forcing with propagation
     if ( windStrength > 0.1 ) {
       vec2 gradient = vec2( east.x - west.x, north.x - south.x );
-      float windForce = windStrength * dot( windDirection, gradient ) * 0.05; // Reduced from 0.08
+      
+      // Wind propagation: starts from upwind edge, moves across at 1/2 wind speed
+      // Calculate position relative to wind direction
+      vec2 posFromCenter = uv - vec2( 0.5 );
+      float distAlongWind = dot( posFromCenter, -windDirection ); // Negative for upwind
+      
+      // Wind front position (moves from -0.5 to +0.5 across the domain)
+      float windSpeed = windStrength * 0.05; // Speed of wind propagation
+      float windFrontPos = -0.7 + windTime * windSpeed; // Start off-screen, move across
+      
+      // Smooth activation as wind front passes (smooth step over 0.3 units)
+      float windActivation = smoothstep( windFrontPos - 0.3, windFrontPos, distAlongWind );
+      
+      // Reduced wind force (less effect on waves)
+      float windForce = windStrength * dot( windDirection, gradient ) * 0.008; // Reduced from 0.015
+      windForce *= windActivation; // Apply propagation mask
       
       // PHASE 3: Wind gusts (periodic variation)
       if ( windGust > 0.5 ) {
@@ -876,14 +903,14 @@ const shaderChange = {
       newHeight += windForce;
     }
 
-    // PHASE 2: Ambient ripples (multi-octave noise)
+    // PHASE 2: Ambient ripples (multi-octave noise) - reduced effect
     if ( windStrength > 0.5 ) {
       float noise1 = sin( uv.x * 40.0 + windTime * 2.0 ) * cos( uv.y * 40.0 + windTime * 2.5 );
       float noise2 = sin( uv.x * 80.0 - windTime * 3.0 ) * cos( uv.y * 80.0 + windTime * 2.0 ) * 0.5;
       float noise3 = sin( uv.x * 120.0 + windTime * 1.5 ) * cos( uv.y * 120.0 - windTime * 1.8 ) * 0.25;
       float combinedNoise = ( noise1 + noise2 + noise3 ) / 1.75;
       
-      newHeight += windStrength * 0.001 * combinedNoise; // Reduced from 0.002
+      newHeight += windStrength * 0.0003 * combinedNoise; // Further reduced (was 0.0005)
     }
 
     // Mouse influence
@@ -891,8 +918,8 @@ const shaderChange = {
     newHeight -= ( cos( mousePhase ) + 1.0 ) * deep;
 
     // Wave height limiter - clamp to reasonable range
-    // Max wave height scales with wind strength
-    float maxWaveHeight = 0.15 + windStrength * 0.02; // 0.15-0.35 range
+    // Max wave height scales with wind strength (reduced for gentler waves)
+    float maxWaveHeight = 0.08 + windStrength * 0.012; // 0.08-0.20 range (reduced for less wind effect)
     newHeight = clamp( newHeight, -maxWaveHeight, maxWaveHeight );
 
     heightmapValue.y = heightmapValue.x;

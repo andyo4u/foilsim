@@ -10,7 +10,7 @@
 
 <div id="info">
   <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span><br/>
-  Dual wind sources · Continuous turbulence · 10s buildup · Up to 1024×1024
+  Realistic surface · Foam · Depth color · Sparkles · Up to 1024×1024
 </div>
 
 <!-- This is just a smoothing 'compute shader' for using manually: -->
@@ -149,7 +149,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Version
-const VERSION = "3.0";
+const VERSION = "3.1";
 
 // Texture width for simulation (adjustable via GUI)
 let WIDTH = 128;
@@ -407,12 +407,14 @@ function initWater() {
   const geometry = new THREE.PlaneGeometry( BOUNDS, BOUNDS, WIDTH - 1, WIDTH - 1 );
 
   const material = new WaterMaterial( {
-    color: 0x9bd2ec,
-    metalness: 0.9,
-    roughness: 0,
+    color: 0x156b8f, // Deeper ocean blue
+    metalness: 0.02, // Less metallic for more realistic water
+    roughness: 0.1, // Slight roughness for micro-surface detail
     transparent: true,
-    opacity: 0.8,
-    side: THREE.DoubleSide
+    opacity: 0.95, // More opaque for depth
+    side: THREE.DoubleSide,
+    envMapIntensity: 0.8, // Environment reflection
+    normalScale: new THREE.Vector2( 1.5, 1.5 ) // Enhanced normals
   } );
 
   waterMesh = new THREE.Mesh( geometry, material );
@@ -982,10 +984,25 @@ const shaderChange = {
   `,
   beginnormal_vertex: /* glsl */`
   vec2 cellSize = vec2( 1.0 / WIDTH, 1.0 / WIDTH );
-  vec3 objectNormal = vec3(
-  ( texture2D( heightmap, uv + vec2( - cellSize.x, 0 ) ).x - texture2D( heightmap, uv + vec2( cellSize.x, 0 ) ).x ) * WIDTH / BOUNDS,
-  ( texture2D( heightmap, uv + vec2( 0, - cellSize.y ) ).x - texture2D( heightmap, uv + vec2( 0, cellSize.y ) ).x ) * WIDTH / BOUNDS,
-  1.0 );
+  
+  // Sample heightmap with 3x3 neighborhood for better normals
+  float hL = texture2D( heightmap, uv + vec2( -cellSize.x, 0 ) ).x;
+  float hR = texture2D( heightmap, uv + vec2( cellSize.x, 0 ) ).x;
+  float hD = texture2D( heightmap, uv + vec2( 0, -cellSize.y ) ).x;
+  float hU = texture2D( heightmap, uv + vec2( 0, cellSize.y ) ).x;
+  
+  // Enhanced normal with stronger height influence
+  vec3 objectNormal = normalize( vec3(
+    ( hL - hR ) * WIDTH / BOUNDS * 2.0,
+    ( hD - hU ) * WIDTH / BOUNDS * 2.0,
+    1.0
+  ) );
+  
+  // Add micro-detail to normals (subtle high-frequency variation)
+  float microDetail = fract( sin( dot( uv * 200.0, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 ) * 0.05;
+  objectNormal.xy += vec2( microDetail );
+  objectNormal = normalize( objectNormal );
+  
   #ifdef USE_TANGENT
     vec3 objectTangent = vec3( tangent.xyz );
   #endif
@@ -996,6 +1013,44 @@ const shaderChange = {
   #ifdef USE_ALPHAHASH
     vPosition = vec3( position );
   #endif
+  `,
+  color_fragment: /* glsl */`
+  #if defined( USE_COLOR_ALPHA )
+    diffuseColor *= vColor;
+  #elif defined( USE_COLOR )
+    diffuseColor.rgb *= vColor;
+  #endif
+  
+  // Add foam on wave crests and steep slopes
+  vec2 cellSize = vec2( 1.0 / WIDTH, 1.0 / WIDTH );
+  float h = texture2D( heightmap, vUv ).x;
+  float hL = texture2D( heightmap, vUv + vec2( -cellSize.x, 0.0 ) ).x;
+  float hR = texture2D( heightmap, vUv + vec2( cellSize.x, 0.0 ) ).x;
+  float hD = texture2D( heightmap, vUv + vec2( 0.0, -cellSize.y ) ).x;
+  float hU = texture2D( heightmap, vUv + vec2( 0.0, cellSize.y ) ).x;
+  
+  // Calculate slope (wave steepness)
+  float slopeX = abs( hR - hL );
+  float slopeY = abs( hU - hD );
+  float slope = sqrt( slopeX * slopeX + slopeY * slopeY ) * 10.0;
+  
+  // Foam on wave crests (high points with steep slopes)
+  float crestFactor = smoothstep( 0.15, 0.3, h ) * smoothstep( 0.3, 0.6, slope );
+  vec3 foamColor = vec3( 0.95, 0.98, 1.0 ); // White-blue foam
+  
+  // Depth-based color variation
+  float depth = smoothstep( -0.2, 0.1, h );
+  vec3 deepColor = vec3( 0.02, 0.15, 0.25 ); // Deep ocean blue
+  vec3 shallowColor = vec3( 0.08, 0.35, 0.5 ); // Lighter blue
+  vec3 depthColor = mix( deepColor, shallowColor, depth );
+  
+  // Combine: base color tinted by depth, with foam on crests
+  diffuseColor.rgb = mix( diffuseColor.rgb * depthColor, foamColor, crestFactor );
+  
+  // Add subtle sparkle variation (sunlight glints)
+  float sparkle = fract( sin( dot( vUv * 100.0, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 );
+  sparkle = smoothstep( 0.95, 1.0, sparkle ) * 0.3 * smoothstep( 0.1, 0.3, slope );
+  diffuseColor.rgb += vec3( sparkle );
   `,
 };
 

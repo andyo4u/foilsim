@@ -10,7 +10,7 @@
 
 <div id="info">
   <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span><br/>
-  Dual wind sources · Open ocean · 10s buildup on change · Up to 1024×1024
+  Dual wind sources · Continuous turbulence · 10s buildup · Up to 1024×1024
 </div>
 
 <!-- This is just a smoothing 'compute shader' for using manually: -->
@@ -149,7 +149,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Version
-const VERSION = "2.9";
+const VERSION = "3.0";
 
 // Texture width for simulation (adjustable via GUI)
 let WIDTH = 128;
@@ -947,7 +947,17 @@ const shaderChange = {
       newHeight += wind2Force;
     }
 
-    // No ambient ripples - they cause grid patterns
+    // Continuous ambient turbulence (like initial simplex noise, but ongoing)
+    // Multiple scales of noise for natural appearance
+    float turbNoise1 = sin( uv.x * 50.0 + windTime * 0.3 ) * cos( uv.y * 50.0 + windTime * 0.4 );
+    float turbNoise2 = sin( uv.x * 80.0 - windTime * 0.5 ) * cos( uv.y * 80.0 + windTime * 0.35 ) * 0.6;
+    float turbNoise3 = sin( uv.x * 120.0 + windTime * 0.25 ) * cos( uv.y * 120.0 - windTime * 0.3 ) * 0.4;
+    float turbNoise4 = sin( uv.x * 200.0 + windTime * 0.15 ) * cos( uv.y * 200.0 + windTime * 0.2 ) * 0.2;
+    
+    float combinedTurbulence = ( turbNoise1 + turbNoise2 + turbNoise3 + turbNoise4 ) / 2.2;
+    
+    // Very subtle - just keeps surface alive like initial state
+    newHeight += combinedTurbulence * 0.0003;
 
     // Mouse influence
     float mousePhase = clamp( length( ( uv - vec2( 0.5 ) ) * BOUNDS - vec2( mousePos.x, - mousePos.y ) ) * PI / mouseSize, 0.0, PI );

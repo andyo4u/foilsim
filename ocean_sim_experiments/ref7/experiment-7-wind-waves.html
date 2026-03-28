@@ -10,7 +10,7 @@
 
 <div id="info">
   <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span><br/>
-  Dual wind sources · West wall reflects · Fast buildup · Up to 1024×1024
+  Dual wind sources · Open ocean · 10s stabilization · Up to 1024×1024
 </div>
 
 <!-- This is just a smoothing 'compute shader' for using manually: -->
@@ -149,7 +149,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Version
-const VERSION = "2.6";
+const VERSION = "2.7";
 
 // Texture width for simulation (adjustable via GUI)
 let WIDTH = 128;
@@ -419,20 +419,8 @@ function initWater() {
 
   scene.add( waterMesh );
 
-  // West wall (reflecting boundary)
-  const wallHeight = 1.5;
-  const wallThickness = 0.2;
-  const wallGeom = new THREE.BoxGeometry( wallThickness, wallHeight, BOUNDS );
-  const wallMat = new THREE.MeshStandardMaterial( { 
-    color: 0x6B5D4F, 
-    roughness: 0.8,
-    metalness: 0.1
-  } );
-  poolBorder = new THREE.Mesh( wallGeom, wallMat );
-  poolBorder.position.set( -BOUNDS_HALF, wallHeight / 2, 0 ); // West side at x = -3
-  scene.add( poolBorder );
-  poolBorder.receiveShadow = true;
-  poolBorder.castShadow = true;
+  // No wall - open ocean on all sides
+  // poolBorder removed for open ocean simulation
 
   // THREE.Mesh just for mouse raycasting
   const geometryRay = new THREE.PlaneGeometry( BOUNDS, BOUNDS, 1, 1 );
@@ -881,14 +869,8 @@ const shaderChange = {
     vec4 east = texture2D( heightmap, uv + vec2( cellSize.x, 0.0 ) );
     vec4 west = texture2D( heightmap, uv + vec2( - cellSize.x, 0.0 ) );
 
-    // Reflecting boundary on west side (left edge)
-    float edgeThreshold = 0.05; // Boundary zone
-    if ( uv.x < edgeThreshold ) {
-      // Hard-wall reflection by inverting velocity
-      float reflectionStrength = 1.3;
-      west.x = heightmapValue.x - reflectionStrength * ( east.x - heightmapValue.x );
-    }
-
+    // No boundary reflection - open ocean on all sides
+    
     // Wave equation
     float newHeight = ( ( north.x + south.x + east.x + west.x ) * 0.5 - (heightmapValue.y) ) * viscosity;
 
@@ -903,8 +885,8 @@ const shaderChange = {
       float wave3 = sin( distAlongWind * 5.0 * 3.14159 - windTime * waveSpeed * 0.6 ) * 0.5;
       float combinedWave = ( wave1 + wave2 + wave3 ) / 2.2;
       
-      // Faster buildup (3 seconds instead of 10)
-      float buildupTime = min( windTime * 0.3, 1.0 );
+      // Slow buildup (10 seconds to stabilize)
+      float buildupTime = min( windTime * 0.1, 1.0 );
       
       float windForce = windStrength * combinedWave * 0.008 * buildupTime;
       
@@ -927,8 +909,8 @@ const shaderChange = {
       float wave3_2 = sin( distAlongWind2 * 4.5 * 3.14159 - windTime * waveSpeed2 * 0.7 ) * 0.4;
       float combinedWave2 = ( wave1_2 + wave2_2 + wave3_2 ) / 2.0;
       
-      // Same fast buildup
-      float buildupTime2 = min( windTime * 0.3, 1.0 );
+      // Same slow buildup (10 seconds)
+      float buildupTime2 = min( windTime * 0.1, 1.0 );
       
       float wind2Force = wind2Strength * combinedWave2 * 0.008 * buildupTime2;
       

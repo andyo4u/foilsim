@@ -10,7 +10,7 @@
 
 <div id="info">
   <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span><br/>
-  Dual wind sources · Open ocean · 20s stabilization · Up to 1024×1024
+  Dual wind sources · Open ocean · 10s buildup on change · Up to 1024×1024
 </div>
 
 <!-- This is just a smoothing 'compute shader' for using manually: -->
@@ -149,7 +149,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Version
-const VERSION = "2.8";
+const VERSION = "2.9";
 
 // Texture width for simulation (adjustable via GUI)
 let WIDTH = 128;
@@ -194,6 +194,12 @@ let frame = 0;
 let windTime = 0;
 let gustPhase = 0;
 let lastRippleSpawn = 0;
+
+// Track wind strength changes for buildup timing
+let prevWind1Strength = 0;
+let prevWind2Strength = 0;
+let wind1BuildupStart = 0;
+let wind2BuildupStart = 0;
 
 const effectController = {
   mouseSize: 0.2,
@@ -453,11 +459,13 @@ function initWater() {
   heightmapVariable.material.uniforms[ 'windStrength' ] = { value: 0.0 };
   heightmapVariable.material.uniforms[ 'windGust' ] = { value: 0.0 };
   heightmapVariable.material.uniforms[ 'windTime' ] = { value: 0.0 };
+  heightmapVariable.material.uniforms[ 'wind1BuildupStart' ] = { value: 0.0 };
   
   // Wind 2 uniforms (independent second wind source)
   heightmapVariable.material.uniforms[ 'wind2Direction' ] = { value: new THREE.Vector2( 0.707, -0.707 ) }; // 315°
   heightmapVariable.material.uniforms[ 'wind2Strength' ] = { value: 0.0 };
   heightmapVariable.material.uniforms[ 'wind2Gust' ] = { value: 0.0 };
+  heightmapVariable.material.uniforms[ 'wind2BuildupStart' ] = { value: 0.0 };
   
   heightmapVariable.material.defines.BOUNDS = BOUNDS.toFixed( 1 );
 
@@ -747,6 +755,19 @@ function render() {
   windTime += 0.016;
   if ( heightmapVariable ) {
     heightmapVariable.material.uniforms[ 'windTime' ].value = windTime;
+    
+    // Detect wind strength changes and reset buildup timer
+    if ( effectController.windStrength !== prevWind1Strength ) {
+      wind1BuildupStart = windTime;
+      prevWind1Strength = effectController.windStrength;
+      heightmapVariable.material.uniforms[ 'wind1BuildupStart' ].value = wind1BuildupStart;
+    }
+    
+    if ( effectController.wind2Strength !== prevWind2Strength ) {
+      wind2BuildupStart = windTime;
+      prevWind2Strength = effectController.wind2Strength;
+      heightmapVariable.material.uniforms[ 'wind2BuildupStart' ].value = wind2BuildupStart;
+    }
   }
   
   // Random ripple spawning disabled - causes noise and grid artifacts
@@ -847,11 +868,13 @@ const shaderChange = {
   uniform float windStrength;
   uniform float windGust;
   uniform float windTime;
+  uniform float wind1BuildupStart; // When wind 1 strength last changed
   
   // Wind 2 uniforms (independent second wind source)
   uniform vec2 wind2Direction;
   uniform float wind2Strength;
   uniform float wind2Gust;
+  uniform float wind2BuildupStart; // When wind 2 strength last changed
 
   void main()	{
 
@@ -885,8 +908,9 @@ const shaderChange = {
       float wave3 = sin( distAlongWind * 5.0 * 3.14159 - windTime * waveSpeed * 0.6 ) * 0.5;
       float combinedWave = ( wave1 + wave2 + wave3 ) / 2.2;
       
-      // Very slow buildup (20 seconds to stabilize)
-      float buildupTime = min( windTime * 0.05, 1.0 );
+      // 10 second buildup (from when wind strength last changed)
+      float elapsedTime = windTime - wind1BuildupStart;
+      float buildupTime = min( elapsedTime * 0.1, 1.0 );
       
       float windForce = windStrength * combinedWave * 0.008 * buildupTime;
       
@@ -909,8 +933,9 @@ const shaderChange = {
       float wave3_2 = sin( distAlongWind2 * 4.5 * 3.14159 - windTime * waveSpeed2 * 0.7 ) * 0.4;
       float combinedWave2 = ( wave1_2 + wave2_2 + wave3_2 ) / 2.0;
       
-      // Same very slow buildup (20 seconds)
-      float buildupTime2 = min( windTime * 0.05, 1.0 );
+      // Same 10 second buildup (from when wind strength last changed)
+      float elapsedTime2 = windTime - wind2BuildupStart;
+      float buildupTime2 = min( elapsedTime2 * 0.1, 1.0 );
       
       float wind2Force = wind2Strength * combinedWave2 * 0.008 * buildupTime2;
       

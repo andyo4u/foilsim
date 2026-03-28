@@ -10,7 +10,7 @@
 
 <div id="info">
   <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span><br/>
-  Clean directional waves · West wall reflects · Slow buildup · Up to 1024×1024
+  Dual wind sources · West wall reflects · Fast buildup · Up to 1024×1024
 </div>
 
 <!-- This is just a smoothing 'compute shader' for using manually: -->
@@ -149,7 +149,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Version
-const VERSION = "2.5";
+const VERSION = "2.6";
 
 // Texture width for simulation (adjustable via GUI)
 let WIDTH = 128;
@@ -203,10 +203,14 @@ const effectController = {
   ducksEnabled: ducksEnabled,
   wireframe: false,
   shadow: false,
-  // Wind controls
+  // Wind 1 controls
   windDirection: 270, // degrees (default toward wall for easy testing)
   windStrength: 0, // 0-10 (Beaufort scale)
   windGust: false,
+  // Wind 2 controls (independent second wind source)
+  wind2Direction: 315, // degrees (slightly different direction)
+  wind2Strength: 0, // 0-10 (Beaufort scale)
+  wind2Gust: false,
   // Simulation size
   simSize: 128,
 };
@@ -272,6 +276,7 @@ async function init() {
   gui.domElement.style.right = '0px';
   
   let windFolder; // Declare so updateWind can access it
+  let wind2Folder; // Declare for second wind source
 
   const valuesChanger = function () {
 
@@ -289,7 +294,7 @@ async function init() {
 
   };
 
-  // Wind control update function
+  // Wind 1 control update function
   function updateWind() {
     const angleRad = effectController.windDirection * Math.PI / 180;
     const windDirX = Math.cos( angleRad );
@@ -302,6 +307,21 @@ async function init() {
     // Update GUI controllers to reflect preset changes
     if ( windFolder ) {
       windFolder.controllers.forEach( c => c.updateDisplay() );
+    }
+  }
+
+  // Wind 2 control update function
+  function updateWind2() {
+    const angleRad = effectController.wind2Direction * Math.PI / 180;
+    const windDirX = Math.cos( angleRad );
+    const windDirY = Math.sin( angleRad );
+    
+    heightmapVariable.material.uniforms[ 'wind2Direction' ].value.set( windDirX, windDirY );
+    heightmapVariable.material.uniforms[ 'wind2Strength' ].value = effectController.wind2Strength;
+    heightmapVariable.material.uniforms[ 'wind2Gust' ].value = effectController.wind2Gust ? 1.0 : 0.0;
+    
+    if ( wind2Folder ) {
+      wind2Folder.controllers.forEach( c => c.updateDisplay() );
     }
   }
 
@@ -335,6 +355,12 @@ async function init() {
   windFolder.add( presets, 'gale' ).name( '🌪️ Gale (8)' );
   windFolder.add( presets, 'storm' ).name( '⛈️ Storm (10)' );
   
+  // Wind 2 controls folder (independent second wind source)
+  wind2Folder = gui.addFolder( 'Wind 2 (Independent)' );
+  wind2Folder.add( effectController, 'wind2Direction', 0, 360, 1 ).onChange( updateWind2 ).name( 'Direction (°)' );
+  wind2Folder.add( effectController, 'wind2Strength', 0, 10, 0.5 ).onChange( updateWind2 ).name( 'Strength' );
+  wind2Folder.add( effectController, 'wind2Gust' ).onChange( updateWind2 ).name( 'Gusts' );
+  
   // Display controls folder
   const displayFolder = gui.addFolder( 'Display' );
   displayFolder.add( effectController, 'simSize', { '128×128': 128, '256×256': 256, '512×512': 512, '1024×1024': 1024 } ).name( 'Sim Resolution' ).onChange( ( value ) => {
@@ -362,7 +388,8 @@ async function init() {
   createducks();
 
   valuesChanger();
-  updateWind(); // Initialize wind uniforms
+  updateWind(); // Initialize wind 1 uniforms
+  updateWind2(); // Initialize wind 2 uniforms
 
   renderer.setAnimationLoop( animate );
 
@@ -433,11 +460,16 @@ function initWater() {
   heightmapVariable.material.uniforms[ 'viscosity' ] = { value: 0.93 };
   heightmapVariable.material.uniforms[ 'deep' ] = { value: 0.01 };
   
-  // Wind uniforms
+  // Wind 1 uniforms
   heightmapVariable.material.uniforms[ 'windDirection' ] = { value: new THREE.Vector2( 1, 0 ) };
   heightmapVariable.material.uniforms[ 'windStrength' ] = { value: 0.0 };
   heightmapVariable.material.uniforms[ 'windGust' ] = { value: 0.0 };
   heightmapVariable.material.uniforms[ 'windTime' ] = { value: 0.0 };
+  
+  // Wind 2 uniforms (independent second wind source)
+  heightmapVariable.material.uniforms[ 'wind2Direction' ] = { value: new THREE.Vector2( 0.707, -0.707 ) }; // 315°
+  heightmapVariable.material.uniforms[ 'wind2Strength' ] = { value: 0.0 };
+  heightmapVariable.material.uniforms[ 'wind2Gust' ] = { value: 0.0 };
   
   heightmapVariable.material.defines.BOUNDS = BOUNDS.toFixed( 1 );
 
@@ -822,11 +854,16 @@ const shaderChange = {
   uniform float viscosity;
   uniform float deep;
   
-  // Wind uniforms
+  // Wind 1 uniforms
   uniform vec2 windDirection;
   uniform float windStrength;
   uniform float windGust;
   uniform float windTime;
+  
+  // Wind 2 uniforms (independent second wind source)
+  uniform vec2 wind2Direction;
+  uniform float wind2Strength;
+  uniform float wind2Gust;
 
   void main()	{
 
@@ -844,58 +881,63 @@ const shaderChange = {
     vec4 east = texture2D( heightmap, uv + vec2( cellSize.x, 0.0 ) );
     vec4 west = texture2D( heightmap, uv + vec2( - cellSize.x, 0.0 ) );
 
-    // STRONG reflecting boundary on west side (left edge)
-    float edgeThreshold = 0.08; // Wider boundary zone for stronger reflection
+    // Reflecting boundary on west side (left edge)
+    float edgeThreshold = 0.05; // Boundary zone
     if ( uv.x < edgeThreshold ) {
-      // Perfect hard-wall reflection
-      // Create standing wave at boundary by inverting velocity
-      float reflectionStrength = 1.5; // Amplify reflection
+      // Hard-wall reflection by inverting velocity
+      float reflectionStrength = 1.3;
       west.x = heightmapValue.x - reflectionStrength * ( east.x - heightmapValue.x );
-      
-      // Also invert north/south at boundary for complete reflection
-      if ( uv.x < edgeThreshold * 0.5 ) {
-        // Very close to wall - maximum reflection
-        west.x = -east.x + 2.5 * heightmapValue.x;
-      }
     }
 
     // Wave equation
     float newHeight = ( ( north.x + south.x + east.x + west.x ) * 0.5 - (heightmapValue.y) ) * viscosity;
 
-    // PHASE 1: Clean directional wind waves (no grid artifacts)
+    // WIND 1: Clean directional wind waves
     if ( windStrength > 0.1 ) {
-      // Position relative to wind direction
       vec2 posFromCenter = uv - vec2( 0.5 );
       float distAlongWind = dot( posFromCenter, -windDirection );
       
-      // Traveling wave pattern moving in wind direction
-      // Multiple wavelengths for realistic ocean appearance
-      float waveFreq1 = 12.0;
-      float waveFreq2 = 8.0;
-      float waveFreq3 = 5.0;
-      
       float waveSpeed = 2.0;
-      
-      // Three wave components with different frequencies
-      float wave1 = sin( distAlongWind * waveFreq1 * 3.14159 - windTime * waveSpeed );
-      float wave2 = sin( distAlongWind * waveFreq2 * 3.14159 - windTime * waveSpeed * 0.8 ) * 0.7;
-      float wave3 = sin( distAlongWind * waveFreq3 * 3.14159 - windTime * waveSpeed * 0.6 ) * 0.5;
-      
+      float wave1 = sin( distAlongWind * 12.0 * 3.14159 - windTime * waveSpeed );
+      float wave2 = sin( distAlongWind * 8.0 * 3.14159 - windTime * waveSpeed * 0.8 ) * 0.7;
+      float wave3 = sin( distAlongWind * 5.0 * 3.14159 - windTime * waveSpeed * 0.6 ) * 0.5;
       float combinedWave = ( wave1 + wave2 + wave3 ) / 2.2;
       
-      // Slowly build up wave amplitude over time (0-10 seconds)
-      float buildupTime = min( windTime * 0.1, 1.0 );
+      // Faster buildup (3 seconds instead of 10)
+      float buildupTime = min( windTime * 0.3, 1.0 );
       
-      // Wind force creates directional waves (increased amplitude for visibility)
-      float windForce = windStrength * combinedWave * 0.008 * buildupTime; // Increased from 0.003
+      float windForce = windStrength * combinedWave * 0.008 * buildupTime;
       
-      // PHASE 3: Wind gusts (periodic variation)
       if ( windGust > 0.5 ) {
         float gustFactor = 1.0 + 0.3 * sin( windTime * 0.5 ) * sin( windTime * 0.7 );
         windForce *= gustFactor;
       }
       
       newHeight += windForce;
+    }
+    
+    // WIND 2: Independent second wind source from different direction
+    if ( wind2Strength > 0.1 ) {
+      vec2 posFromCenter = uv - vec2( 0.5 );
+      float distAlongWind2 = dot( posFromCenter, -wind2Direction );
+      
+      float waveSpeed2 = 2.2; // Slightly different speed
+      float wave1_2 = sin( distAlongWind2 * 10.0 * 3.14159 - windTime * waveSpeed2 );
+      float wave2_2 = sin( distAlongWind2 * 7.0 * 3.14159 - windTime * waveSpeed2 * 0.85 ) * 0.6;
+      float wave3_2 = sin( distAlongWind2 * 4.5 * 3.14159 - windTime * waveSpeed2 * 0.7 ) * 0.4;
+      float combinedWave2 = ( wave1_2 + wave2_2 + wave3_2 ) / 2.0;
+      
+      // Same fast buildup
+      float buildupTime2 = min( windTime * 0.3, 1.0 );
+      
+      float wind2Force = wind2Strength * combinedWave2 * 0.008 * buildupTime2;
+      
+      if ( wind2Gust > 0.5 ) {
+        float gust2Factor = 1.0 + 0.3 * sin( windTime * 0.6 ) * sin( windTime * 0.8 );
+        wind2Force *= gust2Factor;
+      }
+      
+      newHeight += wind2Force;
     }
 
     // No ambient ripples - they cause grid patterns
@@ -904,9 +946,9 @@ const shaderChange = {
     float mousePhase = clamp( length( ( uv - vec2( 0.5 ) ) * BOUNDS - vec2( mousePos.x, - mousePos.y ) ) * PI / mouseSize, 0.0, PI );
     newHeight -= ( cos( mousePhase ) + 1.0 ) * deep;
 
-    // Wave height limiter - clamp to reasonable range
-    // Max wave height scales with wind strength (increased for visibility)
-    float maxWaveHeight = 0.25 + windStrength * 0.05; // 0.25-0.75 range (bigger waves)
+    // Wave height limiter - accounts for both wind sources
+    float totalWindStrength = windStrength + wind2Strength;
+    float maxWaveHeight = 0.25 + totalWindStrength * 0.05;
     newHeight = clamp( newHeight, -maxWaveHeight, maxWaveHeight );
 
     heightmapValue.y = heightmapValue.x;

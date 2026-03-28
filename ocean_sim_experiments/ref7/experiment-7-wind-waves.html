@@ -10,7 +10,7 @@
 
 <div id="info">
   <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span><br/>
-  Realistic surface · Foam · Depth color · Sparkles · Up to 1024×1024
+  Duck bobs and drifts · Sim follows duck · Realistic surface · Up to 1024×1024
 </div>
 
 <!-- This is just a smoothing 'compute shader' for using manually: -->
@@ -149,7 +149,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Version
-const VERSION = "3.1";
+const VERSION = "3.2";
 
 // Texture width for simulation (adjustable via GUI)
 let WIDTH = 128;
@@ -200,6 +200,10 @@ let prevWind1Strength = 0;
 let prevWind2Strength = 0;
 let wind1BuildupStart = 0;
 let wind2BuildupStart = 0;
+
+// Track duck drift for simulation offset (keep duck centered)
+let duckDriftX = 0;
+let duckDriftZ = 0;
 
 const effectController = {
   mouseSize: 0.2,
@@ -469,6 +473,9 @@ function initWater() {
   heightmapVariable.material.uniforms[ 'wind2Gust' ] = { value: 0.0 };
   heightmapVariable.material.uniforms[ 'wind2BuildupStart' ] = { value: 0.0 };
   
+  // Wave offset to follow duck
+  heightmapVariable.material.uniforms[ 'waveOffset' ] = { value: new THREE.Vector2( 0, 0 ) };
+  
   heightmapVariable.material.defines.BOUNDS = BOUNDS.toFixed( 1 );
 
   const error = gpuCompute.init();
@@ -644,40 +651,24 @@ function duckDynamics() {
       // Set height
       pos.y = pixels[ 0 ];
 
-      // Move sphere
+      // Move sphere (accumulate drift)
       waterNormal.multiplyScalar( 0.01 );
       sphere.userData.velocity.add( waterNormal );
       sphere.userData.velocity.multiplyScalar( 0.998 );
-      pos.add( sphere.userData.velocity );
+      
+      // Track drift for wave offset (keep duck at center)
+      const driftX = sphere.userData.velocity.x;
+      const driftZ = sphere.userData.velocity.z;
+      duckDriftX += driftX;
+      duckDriftZ += driftZ;
+      
+      // Keep duck at center (0, 0) - don't actually move it
+      // pos.add( sphere.userData.velocity );
+      pos.x = 0;
+      pos.z = 0;
 
-
-
-      const decal = 0.001;
-      const limit = BOUNDS_HALF - 0.2;
-
-      if ( pos.x < - limit ) {
-
-        pos.x = - limit + decal;
-        sphere.userData.velocity.x *= - 0.3;
-
-      } else if ( pos.x > limit ) {
-
-        pos.x = limit - decal;
-        sphere.userData.velocity.x *= - 0.3;
-
-      }
-
-      if ( pos.z < - limit ) {
-
-        pos.z = - limit + decal;
-        sphere.userData.velocity.z *= - 0.3;
-
-      } else if ( pos.z > limit ) {
-
-        pos.z = limit - decal;
-        sphere.userData.velocity.z *= - 0.3;
-
-      }
+      // No boundary checks needed - duck stays at center
+      // Wave simulation shifts instead
 
       // duck orientation test
 
@@ -780,7 +771,15 @@ function render() {
     gpuCompute.compute();
     tmpHeightmap = gpuCompute.getCurrentRenderTarget( heightmapVariable ).texture;
 
-    if ( ducksEnabled ) duckDynamics();
+    if ( ducksEnabled ) {
+      duckDynamics();
+      
+      // Update wave offset to follow duck drift
+      // Convert world space drift to UV space (normalized 0-1)
+      const offsetX = duckDriftX / BOUNDS;
+      const offsetZ = duckDriftZ / BOUNDS;
+      heightmapVariable.material.uniforms[ 'waveOffset' ].value.set( offsetX, offsetZ );
+    }
 
     // Get compute output in custom uniform
     if ( waterMesh ) waterMesh.material.heightmap = tmpHeightmap;
@@ -877,6 +876,9 @@ const shaderChange = {
   uniform float wind2Strength;
   uniform float wind2Gust;
   uniform float wind2BuildupStart; // When wind 2 strength last changed
+  
+  // Wave offset to follow duck drift
+  uniform vec2 waveOffset;
 
   void main()	{
 
@@ -901,7 +903,7 @@ const shaderChange = {
 
     // WIND 1: Clean directional wind waves
     if ( windStrength > 0.1 ) {
-      vec2 posFromCenter = uv - vec2( 0.5 );
+      vec2 posFromCenter = uv - vec2( 0.5 ) + waveOffset; // Offset to follow duck
       float distAlongWind = dot( posFromCenter, -windDirection );
       
       float waveSpeed = 2.0;
@@ -926,7 +928,7 @@ const shaderChange = {
     
     // WIND 2: Independent second wind source from different direction
     if ( wind2Strength > 0.1 ) {
-      vec2 posFromCenter = uv - vec2( 0.5 );
+      vec2 posFromCenter = uv - vec2( 0.5 ) + waveOffset; // Offset to follow duck
       float distAlongWind2 = dot( posFromCenter, -wind2Direction );
       
       float waveSpeed2 = 2.2; // Slightly different speed

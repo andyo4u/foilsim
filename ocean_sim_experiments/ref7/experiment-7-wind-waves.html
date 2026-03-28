@@ -10,7 +10,7 @@
 
 <div id="info">
   <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span><br/>
-  Dual wind sources · Open ocean · 10s stabilization · Up to 1024×1024
+  Dual wind sources · Open ocean · 20s stabilization · Up to 1024×1024
 </div>
 
 <!-- This is just a smoothing 'compute shader' for using manually: -->
@@ -149,7 +149,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Version
-const VERSION = "2.7";
+const VERSION = "2.8";
 
 // Texture width for simulation (adjustable via GUI)
 let WIDTH = 128;
@@ -885,8 +885,8 @@ const shaderChange = {
       float wave3 = sin( distAlongWind * 5.0 * 3.14159 - windTime * waveSpeed * 0.6 ) * 0.5;
       float combinedWave = ( wave1 + wave2 + wave3 ) / 2.2;
       
-      // Slow buildup (10 seconds to stabilize)
-      float buildupTime = min( windTime * 0.1, 1.0 );
+      // Very slow buildup (20 seconds to stabilize)
+      float buildupTime = min( windTime * 0.05, 1.0 );
       
       float windForce = windStrength * combinedWave * 0.008 * buildupTime;
       
@@ -909,8 +909,8 @@ const shaderChange = {
       float wave3_2 = sin( distAlongWind2 * 4.5 * 3.14159 - windTime * waveSpeed2 * 0.7 ) * 0.4;
       float combinedWave2 = ( wave1_2 + wave2_2 + wave3_2 ) / 2.0;
       
-      // Same slow buildup (10 seconds)
-      float buildupTime2 = min( windTime * 0.1, 1.0 );
+      // Same very slow buildup (20 seconds)
+      float buildupTime2 = min( windTime * 0.05, 1.0 );
       
       float wind2Force = wind2Strength * combinedWave2 * 0.008 * buildupTime2;
       

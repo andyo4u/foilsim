@@ -10,7 +10,7 @@
 
 <div id="info">
   <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span><br/>
-  Duck bobs and drifts · Sim follows duck · Realistic surface · Up to 1024×1024
+  Duck bobs · Sim follows duck · Hot-swap resolution · <span id="waterSize"></span>
 </div>
 
 <!-- This is just a smoothing 'compute shader' for using manually: -->
@@ -149,7 +149,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Version
-const VERSION = "3.2";
+const VERSION = "3.3";
 
 // Texture width for simulation (adjustable via GUI)
 let WIDTH = 128;
@@ -230,8 +230,9 @@ init();
 
 async function init() {
 
-  // Display version
+  // Display version and resolution
   document.getElementById( 'version' ).textContent = VERSION;
+  document.getElementById( 'waterSize' ).textContent = WIDTH + 'x' + WIDTH;
 
   container = document.createElement( 'div' );
   document.body.appendChild( container );
@@ -375,12 +376,8 @@ async function init() {
   const displayFolder = gui.addFolder( 'Display' );
   displayFolder.add( effectController, 'simSize', { '128×128': 128, '256×256': 256, '512×512': 512, '1024×1024': 1024 } ).name( 'Sim Resolution' ).onChange( ( value ) => {
     WIDTH = value;
-    // Show restart message
-    if ( confirm( `Restart simulation at ${value}×${value} resolution?\n\nHigher = more detail but slower FPS.` ) ) {
-      location.reload();
-    } else {
-      effectController.simSize = WIDTH; // Revert
-    }
+    document.getElementById( 'waterSize' ).textContent = WIDTH + 'x' + WIDTH;
+    reinitWater();
   } );
   displayFolder.add( effectController, 'ducksEnabled' ).onChange( valuesChanger ).name( 'Show Duck' );
   displayFolder.add( effectController, 'wireframe' ).onChange( ( v )=>{
@@ -405,6 +402,42 @@ async function init() {
 
 }
 
+
+function reinitWater() {
+  
+  // Dispose old water mesh and geometry
+  if ( waterMesh ) {
+    if ( waterMesh.geometry ) waterMesh.geometry.dispose();
+    if ( waterMesh.material ) waterMesh.material.dispose();
+    scene.remove( waterMesh );
+  }
+  
+  // Dispose old raycast mesh
+  if ( meshRay ) {
+    if ( meshRay.geometry ) meshRay.geometry.dispose();
+    if ( meshRay.material ) meshRay.material.dispose();
+    scene.remove( meshRay );
+  }
+  
+  // Dispose old GPU compute resources
+  if ( gpuCompute ) {
+    // GPUComputationRenderer doesn't have a dispose method, but we can recreate it
+    gpuCompute = null;
+  }
+  
+  // Reset duck drift tracking
+  duckDriftX = 0;
+  duckDriftZ = 0;
+  
+  // Reinitialize water with new WIDTH
+  initWater();
+  
+  // Restore wind uniforms from effectController
+  updateWind();
+  updateWind2();
+  valuesChanger();
+  
+}
 
 function initWater() {
 

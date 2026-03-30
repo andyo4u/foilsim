@@ -10,7 +10,7 @@
 
 <div id="info">
   <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span><br/>
-  Duck bobs · Sim follows duck · Hot-swap resolution · <span id="waterSize"></span>
+  Controls: W/↑ forward · A/← turn left · D/→ turn right · <span id="waterSize"></span>
 </div>
 
 <!-- This is just a smoothing 'compute shader' for using manually: -->
@@ -149,7 +149,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Version
-const VERSION = "3.3";
+const VERSION = "3.4";
 
 // Texture width for simulation (adjustable via GUI)
 let WIDTH = 128;
@@ -204,6 +204,11 @@ let wind2BuildupStart = 0;
 // Track duck drift for simulation offset (keep duck centered)
 let duckDriftX = 0;
 let duckDriftZ = 0;
+
+// Duck control
+let duckHeading = 0; // Radians, 0 = north (negative Z)
+let userTurning = 0; // -1 = left, 0 = none, 1 = right
+let userThrust = 0; // 0 = none, 1 = forward
 
 const effectController = {
   mouseSize: 0.2,
@@ -397,6 +402,42 @@ async function init() {
   valuesChanger();
   updateWind(); // Initialize wind 1 uniforms
   updateWind2(); // Initialize wind 2 uniforms
+
+  // Duck keyboard controls
+  document.addEventListener( 'keydown', ( event ) => {
+    switch ( event.key.toLowerCase() ) {
+      case 'arrowleft':
+      case 'a':
+        userTurning = -1; // Turn left
+        event.preventDefault();
+        break;
+      case 'arrowright':
+      case 'd':
+        userTurning = 1; // Turn right
+        event.preventDefault();
+        break;
+      case 'arrowup':
+      case 'w':
+        userThrust = 1; // Forward
+        event.preventDefault();
+        break;
+    }
+  } );
+
+  document.addEventListener( 'keyup', ( event ) => {
+    switch ( event.key.toLowerCase() ) {
+      case 'arrowleft':
+      case 'a':
+      case 'arrowright':
+      case 'd':
+        userTurning = 0;
+        break;
+      case 'arrowup':
+      case 'w':
+        userThrust = 0;
+        break;
+    }
+  } );
 
   renderer.setAnimationLoop( animate );
 
@@ -684,7 +725,21 @@ function duckDynamics() {
       // Set height
       pos.y = pixels[ 0 ];
 
-      // Move sphere (accumulate drift)
+      // USER CONTROL: Apply turning
+      if ( userTurning !== 0 ) {
+        duckHeading += userTurning * 0.03; // Turn rate (radians per frame)
+      }
+      
+      // USER CONTROL: Apply forward thrust
+      if ( userThrust > 0 ) {
+        const thrustPower = 0.002; // Forward acceleration
+        const forwardX = Math.sin( duckHeading ) * thrustPower;
+        const forwardZ = -Math.cos( duckHeading ) * thrustPower; // Negative Z is forward
+        sphere.userData.velocity.x += forwardX;
+        sphere.userData.velocity.z += forwardZ;
+      }
+      
+      // Move sphere (accumulate drift from waves)
       waterNormal.multiplyScalar( 0.01 );
       sphere.userData.velocity.add( waterNormal );
       sphere.userData.velocity.multiplyScalar( 0.998 );
@@ -703,20 +758,19 @@ function duckDynamics() {
       // No boundary checks needed - duck stays at center
       // Wave simulation shifts instead
 
-      // duck orientation test
-
+      // Duck orientation: user heading + wave tilt
+      
+      // Wave tilt (up vector follows water normal)
       const startNormal = new THREE.Vector3( pixels[ 1 ], 1, - pixels[ 2 ] ).normalize();
-
-      const dir = startPos.sub( pos );
-      dir.y = 0;
-      dir.normalize();
-
       const yAxis = new THREE.Vector3( 0, 1, 0 );
-      const zAxis = new THREE.Vector3( 0, 0, - 1 );
-      tmpQuatX.setFromUnitVectors( zAxis, dir );
       tmpQuatZ.setFromUnitVectors( yAxis, startNormal );
+      
+      // User heading (rotation around Y axis)
+      tmpQuatX.setFromAxisAngle( yAxis, duckHeading );
+      
+      // Combine: heading first, then wave tilt
       tmpQuat.multiplyQuaternions( tmpQuatZ, tmpQuatX );
-      sphere.quaternion.slerp( tmpQuat, 0.017 );
+      sphere.quaternion.slerp( tmpQuat, 0.1 ); // Faster interpolation for responsive steering
 
     }
 

@@ -149,7 +149,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Version
-const VERSION = "3.4";
+const VERSION = "3.5";
 
 // Texture width for simulation (adjustable via GUI)
 let WIDTH = 128;
@@ -725,22 +725,22 @@ function duckDynamics() {
       // Set height
       pos.y = pixels[ 0 ];
 
-      // USER CONTROL: Apply turning
+      // USER CONTROL: Apply turning (faster)
       if ( userTurning !== 0 ) {
-        duckHeading += userTurning * 0.03; // Turn rate (radians per frame)
+        duckHeading += userTurning * 0.06; // Turn rate increased 2x (was 0.03)
       }
       
-      // USER CONTROL: Apply forward thrust
+      // USER CONTROL: Apply forward thrust (faster)
       if ( userThrust > 0 ) {
-        const thrustPower = 0.002; // Forward acceleration
+        const thrustPower = 0.006; // Forward acceleration increased 3x (was 0.002)
         const forwardX = Math.sin( duckHeading ) * thrustPower;
         const forwardZ = -Math.cos( duckHeading ) * thrustPower; // Negative Z is forward
         sphere.userData.velocity.x += forwardX;
         sphere.userData.velocity.z += forwardZ;
       }
       
-      // Move sphere (accumulate drift from waves)
-      waterNormal.multiplyScalar( 0.01 );
+      // Move sphere (accumulate drift from waves) - increased slope influence
+      waterNormal.multiplyScalar( 0.03 ); // Wave slope push increased 3x (was 0.01)
       sphere.userData.velocity.add( waterNormal );
       sphere.userData.velocity.multiplyScalar( 0.998 );
       

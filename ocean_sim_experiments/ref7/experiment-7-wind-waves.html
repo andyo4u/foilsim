@@ -5,12 +5,59 @@
 <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 <title>Experiment 7: Wind-Driven Water</title>
 <link type="text/css" rel="stylesheet" href="https://threejs.org/examples/main.css">
+<style>
+/* Virtual Joystick for mobile/touch devices */
+#joystick-container {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  width: 120px;
+  height: 120px;
+  display: none; /* Hidden by default, shown on touch devices */
+  z-index: 1000;
+  touch-action: none;
+  user-select: none;
+}
+
+#joystick-base {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.1) 100%);
+  border: 3px solid rgba(255,255,255,0.4);
+  border-radius: 50%;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+
+#joystick-stick {
+  position: absolute;
+  width: 50px;
+  height: 50px;
+  background: radial-gradient(circle, rgba(100,150,255,0.8) 0%, rgba(100,150,255,0.6) 100%);
+  border: 2px solid rgba(255,255,255,0.6);
+  border-radius: 50%;
+  left: 35px;
+  top: 35px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+  pointer-events: none;
+}
+
+#joystick-container.active #joystick-stick {
+  background: radial-gradient(circle, rgba(150,200,255,0.9) 0%, rgba(100,150,255,0.7) 100%);
+}
+</style>
 </head>
 <body>
 
 <div id="info">
   <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span><br/>
-  Controls: W/↑ forward · A/← turn left · D/→ turn right · <span id="waterSize"></span>
+  <span id="controls-text">Controls: W/↑ forward · A/← turn left · D/→ turn right</span> · <span id="waterSize"></span>
+</div>
+
+<!-- Virtual Joystick (shown on touch devices) -->
+<div id="joystick-container">
+  <div id="joystick-base"></div>
+  <div id="joystick-stick"></div>
 </div>
 
 <!-- This is just a smoothing 'compute shader' for using manually: -->
@@ -149,7 +196,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Version
-const VERSION = "3.5";
+const VERSION = "3.6";
 
 // Texture width for simulation (adjustable via GUI)
 let WIDTH = 128;
@@ -438,6 +485,111 @@ async function init() {
         break;
     }
   } );
+
+  // Virtual Joystick for touch devices
+  const joystickContainer = document.getElementById( 'joystick-container' );
+  const joystickStick = document.getElementById( 'joystick-stick' );
+  const joystickBase = document.getElementById( 'joystick-base' );
+  
+  // Show joystick on touch devices
+  if ( 'ontouchstart' in window || navigator.maxTouchPoints > 0 ) {
+    joystickContainer.style.display = 'block';
+    document.getElementById( 'controls-text' ).textContent = 'Controls: Use joystick (upper right)';
+  }
+  
+  let joystickActive = false;
+  let joystickTouchId = null;
+  
+  function handleJoystickStart( event ) {
+    event.preventDefault();
+    const touch = event.changedTouches[0];
+    const rect = joystickBase.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const dx = touch.clientX - centerX;
+    const dy = touch.clientY - centerY;
+    const distance = Math.sqrt( dx * dx + dy * dy );
+    
+    // Only activate if touch starts within joystick base
+    if ( distance < rect.width / 2 ) {
+      joystickActive = true;
+      joystickTouchId = touch.identifier;
+      joystickContainer.classList.add( 'active' );
+      updateJoystickPosition( touch );
+    }
+  }
+  
+  function handleJoystickMove( event ) {
+    if ( !joystickActive ) return;
+    event.preventDefault();
+    
+    // Find the touch that started on the joystick
+    for ( let i = 0; i < event.changedTouches.length; i++ ) {
+      const touch = event.changedTouches[i];
+      if ( touch.identifier === joystickTouchId ) {
+        updateJoystickPosition( touch );
+        break;
+      }
+    }
+  }
+  
+  function handleJoystickEnd( event ) {
+    if ( !joystickActive ) return;
+    
+    // Check if the released touch is the joystick touch
+    for ( let i = 0; i < event.changedTouches.length; i++ ) {
+      const touch = event.changedTouches[i];
+      if ( touch.identifier === joystickTouchId ) {
+        joystickActive = false;
+        joystickTouchId = null;
+        joystickContainer.classList.remove( 'active' );
+        
+        // Reset joystick to center
+        joystickStick.style.left = '35px';
+        joystickStick.style.top = '35px';
+        
+        // Reset duck controls
+        userTurning = 0;
+        userThrust = 0;
+        break;
+      }
+    }
+  }
+  
+  function updateJoystickPosition( touch ) {
+    const rect = joystickBase.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    
+    let dx = touch.clientX - centerX;
+    let dy = touch.clientY - centerY;
+    
+    // Limit stick to base radius
+    const maxRadius = 35; // Half of base minus half of stick
+    const distance = Math.sqrt( dx * dx + dy * dy );
+    if ( distance > maxRadius ) {
+      const angle = Math.atan2( dy, dx );
+      dx = Math.cos( angle ) * maxRadius;
+      dy = Math.sin( angle ) * maxRadius;
+    }
+    
+    // Update stick position
+    joystickStick.style.left = ( 35 + dx ) + 'px';
+    joystickStick.style.top = ( 35 + dy ) + 'px';
+    
+    // Map joystick position to duck controls
+    // X axis: turning (-1 = left, +1 = right)
+    userTurning = dx / maxRadius;
+    
+    // Y axis: thrust (negative Y = up = forward)
+    userThrust = Math.max( 0, -dy / maxRadius ); // Only forward, no backward
+  }
+  
+  // Add touch event listeners to joystick container
+  joystickContainer.addEventListener( 'touchstart', handleJoystickStart, { passive: false } );
+  joystickContainer.addEventListener( 'touchmove', handleJoystickMove, { passive: false } );
+  joystickContainer.addEventListener( 'touchend', handleJoystickEnd, { passive: false } );
+  joystickContainer.addEventListener( 'touchcancel', handleJoystickEnd, { passive: false } );
 
   renderer.setAnimationLoop( animate );
 

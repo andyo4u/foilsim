@@ -45,19 +45,48 @@
 #joystick-container.active #joystick-stick {
   background: radial-gradient(circle, rgba(150,200,255,0.9) 0%, rgba(100,150,255,0.7) 100%);
 }
+
+/* Speed display */
+#speed-display {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 18px;
+  font-weight: bold;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  min-width: 120px;
+  text-align: center;
+}
+
+#speed-display .speed-value {
+  color: #4af;
+  font-size: 24px;
+}
 </style>
 </head>
 <body>
 
 <div id="info">
   <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - Wind-Driven Water v<span id="version"></span><br/>
-  <span id="controls-text">Controls: W/↑ forward · A/← turn left · D/→ turn right</span> · <span id="waterSize"></span>
+  <span id="controls-text">Controls: W/↑ forward · A/← turn left · D/→ turn right</span> · Max 18 knots · <span id="waterSize"></span>
 </div>
 
 <!-- Virtual Joystick (shown on touch devices) -->
 <div id="joystick-container">
   <div id="joystick-base"></div>
   <div id="joystick-stick"></div>
+</div>
+
+<!-- Speed display -->
+<div id="speed-display">
+  <div><span class="speed-value">0.0</span> knots</div>
 </div>
 
 <!-- This is just a smoothing 'compute shader' for using manually: -->
@@ -196,7 +225,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // Version
-const VERSION = "3.6";
+const VERSION = "3.7";
 
 // Texture width for simulation (adjustable via GUI)
 let WIDTH = 128;
@@ -895,6 +924,35 @@ function duckDynamics() {
       waterNormal.multiplyScalar( 0.03 ); // Wave slope push increased 3x (was 0.01)
       sphere.userData.velocity.add( waterNormal );
       sphere.userData.velocity.multiplyScalar( 0.998 );
+      
+      // Calculate speed and limit to 18 knots
+      const velocityMagnitude = Math.sqrt( 
+        sphere.userData.velocity.x * sphere.userData.velocity.x + 
+        sphere.userData.velocity.z * sphere.userData.velocity.z 
+      );
+      
+      // Convert simulation velocity to knots
+      // Assume: 1 unit/frame ≈ 60 units/sec at 60fps
+      // Scale: 60 units/sec ≈ 10 knots (reasonable for small scale)
+      // So: knots = velocity * 60fps * (10 knots / 60 units/sec) = velocity * 10
+      const speedKnots = velocityMagnitude * 600; // Display scale factor
+      
+      // Update speed display (only for first duck)
+      if ( i === 0 ) {
+        const speedDisplay = document.querySelector( '#speed-display .speed-value' );
+        if ( speedDisplay ) {
+          speedDisplay.textContent = speedKnots.toFixed( 1 );
+        }
+      }
+      
+      // Limit speed to 18 knots
+      const maxSpeedKnots = 18;
+      const maxVelocity = maxSpeedKnots / 600; // Convert back to simulation units
+      if ( velocityMagnitude > maxVelocity ) {
+        const scale = maxVelocity / velocityMagnitude;
+        sphere.userData.velocity.x *= scale;
+        sphere.userData.velocity.z *= scale;
+      }
       
       // Track drift for wave offset (keep duck at center)
       const driftX = sphere.userData.velocity.x;

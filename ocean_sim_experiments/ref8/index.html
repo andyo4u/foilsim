@@ -1,0 +1,2603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Ocean Simulation — Hydrofoil</title>
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-0EFFHXMKG2"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-0EFFHXMKG2');
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; background: #0a1628; font-family: 'DM Sans', sans-serif; touch-action: none; }
+  canvas { display: block; }
+
+  #controls-toggle {
+    position: fixed; top: 16px; right: 16px; z-index: 100;
+    width: 44px; height: 44px; border-radius: 12px;
+    background: rgba(8,18,38,0.85); backdrop-filter: blur(12px);
+    border: 1px solid rgba(100,160,255,0.2);
+    color: #7eb8ff; font-size: 20px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.3s ease;
+  }
+  #controls-toggle:hover { background: rgba(20,40,70,0.9); }
+
+  #controls-panel {
+    position: fixed; top: 16px; right: 16px; z-index: 99;
+    width: 310px; max-height: calc(100vh - 32px);
+    background: rgba(8,18,38,0.9); backdrop-filter: blur(16px);
+    border: 1px solid rgba(100,160,255,0.15);
+    border-radius: 16px; padding: 18px;
+    overflow-y: auto; transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
+    scrollbar-width: thin; scrollbar-color: rgba(100,160,255,0.2) transparent;
+  }
+  #controls-panel.hidden { opacity: 0; pointer-events: none; transform: translateX(20px) scale(0.95); }
+  #controls-panel::-webkit-scrollbar { width: 4px; }
+  #controls-panel::-webkit-scrollbar-thumb { background: rgba(100,160,255,0.2); border-radius: 2px; }
+
+  .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid rgba(100,160,255,0.1); }
+  .panel-title { color: #c0d8ff; font-size: 14px; font-weight: 600; letter-spacing: 0.5px; }
+  .close-btn { width: 30px; height: 30px; border-radius: 8px; background: rgba(255,255,255,0.05); border: none; color: #7eb8ff; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+  .section { margin-bottom: 12px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 10px; border: 1px solid rgba(100,160,255,0.08); }
+  .section-title { color: #7eb8ff; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 10px; }
+
+  .preset-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .preset-btn {
+    flex: 1; min-width: 60px; padding: 7px 0; border-radius: 8px;
+    background: rgba(100,160,255,0.08); border: 1px solid rgba(100,160,255,0.18);
+    color: #8ab8e8; font-size: 11px; font-weight: 500; cursor: pointer;
+    font-family: inherit; transition: all 0.15s;
+  }
+  .preset-btn:hover { background: rgba(100,160,255,0.18); border-color: rgba(100,160,255,0.35); color: #b0d4ff; }
+  .preset-btn:active { background: rgba(74,158,255,0.3); transform: scale(0.96); }
+  .preset-btn.active-preset { background: rgba(74,158,255,0.25); border-color: rgba(100,180,255,0.5); color: #fff; }
+
+  .control-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .control-row:last-child { margin-bottom: 0; }
+  .control-label { color: #8aa4c8; font-size: 11px; font-weight: 400; min-width: 60px; }
+  .control-value { color: #a0c4f0; font-size: 10px; font-weight: 500; min-width: 40px; text-align: right; margin-left: 6px; font-variant-numeric: tabular-nums; }
+
+  input[type="range"] { flex: 1; height: 4px; -webkit-appearance: none; appearance: none; background: rgba(100,160,255,0.15); border-radius: 2px; outline: none; margin: 0 6px; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #4a9eff; border: 2px solid rgba(255,255,255,0.2); cursor: pointer; }
+  input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #4a9eff; border: 2px solid rgba(255,255,255,0.2); cursor: pointer; }
+
+  /* HUD */
+  #hud {
+    position: fixed; top: 16px; left: 16px; z-index: 50;
+    color: #c0d8ff; font-size: 13px; pointer-events: none;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6); line-height: 1.6;
+  }
+  #hud .speed { font-size: 28px; font-weight: 600; color: #fff; }
+  #hud .unit { font-size: 13px; color: #8ab4e0; font-weight: 400; margin-left: 2px; }
+  #hud .label { font-size: 10px; color: #6a94c0; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* Ride controls */
+  #ride-controls {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    z-index: 80; display: flex; gap: 10px; align-items: end;
+  }
+  .ride-btn {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: rgba(8,18,38,0.75); backdrop-filter: blur(10px);
+    border: 1.5px solid rgba(100,160,255,0.25);
+    color: #aaccff; font-size: 22px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.12s; user-select: none; -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent; position: relative;
+  }
+  .ride-btn:active, .ride-btn.active {
+    background: rgba(74,158,255,0.35); border-color: rgba(100,180,255,0.6);
+    transform: scale(0.92); color: #fff;
+  }
+  .ride-btn.pump-btn {
+    width: 72px; height: 72px; font-size: 14px; font-weight: 600;
+    border-color: rgba(100,220,180,0.35); color: #80e0c0;
+  }
+  .ride-btn.pump-btn:active, .ride-btn.pump-btn.active {
+    background: rgba(80,220,180,0.35); border-color: rgba(100,220,180,0.6); color: #fff;
+  }
+  .btn-label { position: absolute; bottom: -18px; font-size: 9px; color: #6a94c0; text-transform: uppercase; letter-spacing: 0.8px; white-space: nowrap; pointer-events: none; }
+
+  #info-bar {
+    position: fixed; bottom: 110px; left: 50%; transform: translateX(-50%);
+    z-index: 50; color: rgba(140,180,230,0.35); font-size: 10px; pointer-events: none;
+    text-align: center; white-space: nowrap;
+  }
+
+  #hud-pocket {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    z-index: 60; pointer-events: none;
+    font-size: 24px; font-weight: 600; color: #5effa0;
+    text-shadow: 0 0 20px rgba(80,255,160,0.5), 0 2px 8px rgba(0,0,0,0.4);
+    opacity: 0; transition: opacity 0.25s;
+    letter-spacing: 1px;
+  }
+  #hud-pocket.show { opacity: 1; }
+
+  @media (max-width: 480px) {
+    #controls-panel { width: calc(100vw - 32px); max-height: 55vh; }
+    .ride-btn { width: 50px; height: 50px; font-size: 20px; }
+    .ride-btn.pump-btn { width: 64px; height: 64px; font-size: 13px; }
+    #hud .speed { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.57</div>
+
+<!-- Gear button hidden — use Tab key to toggle controls panel -->
+<button id="controls-toggle" style="display:none" onclick="toggleControls()">⚙</button>
+
+<div id="controls-panel" class="hidden">
+  <div class="panel-header">
+    <span class="panel-title">Ocean Parameters</span>
+    <button class="close-btn" onclick="toggleControls()">✕</button>
+  </div>
+  <div class="section">
+    <div class="section-title">🎛 Presets</div>
+    <div class="preset-row">
+      <button class="preset-btn" onclick="applyPreset('clean',this)">Clean</button>
+      <button class="preset-btn" onclick="applyPreset('river',this)">River</button>
+      <button class="preset-btn" onclick="applyPreset('messy',this)">Messy</button>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">☀ Environment</div>
+    <div class="control-row"><span class="control-label">Sun Angle</span><input type="range" id="sunAngle" min="5" max="85" value="25" step="1" oninput="updateVal(this)"><span class="control-value" id="sunAngle-val">25°</span></div>
+    <div class="control-row"><span class="control-label">Sun Dir</span><input type="range" id="sunDir" min="0" max="360" value="180" step="1" oninput="updateVal(this)"><span class="control-value" id="sunDir-val">180°</span></div>
+    <div class="control-row"><span class="control-label">Cloud Cover</span><input type="range" id="cloudCover" min="0" max="1" value="0.45" step="0.05" oninput="updateVal(this)"><span class="control-value" id="cloudCover-val">45%</span></div>
+  </div>
+  <div class="section">
+    <div class="section-title">💨 Wind Chop</div>
+    <div class="control-row"><span class="control-label">Height</span><input type="range" id="chopHeight" min="0" max="2" value="0.4" step="0.01" oninput="updateVal(this)"><span class="control-value" id="chopHeight-val">0.40m</span></div>
+    <div class="control-row"><span class="control-label">Direction</span><input type="range" id="chopDir" min="0" max="360" value="45" step="1" oninput="updateVal(this)"><span class="control-value" id="chopDir-val">45°</span></div>
+  </div>
+  <div class="section">
+    <div class="section-title">🌊 Swell 1 (Primary)</div>
+    <div class="control-row"><span class="control-label">Height</span><input type="range" id="swell1Height" min="0" max="6" value="2.0" step="0.1" oninput="updateVal(this)"><span class="control-value" id="swell1Height-val">2.0m</span></div>
+    <div class="control-row"><span class="control-label">Period</span><input type="range" id="swell1Period" min="4" max="22" value="12" step="0.5" oninput="updateVal(this)"><span class="control-value" id="swell1Period-val">12.0s</span></div>
+    <div class="control-row"><span class="control-label">Direction</span><input type="range" id="swell1Dir" min="0" max="360" value="270" step="1" oninput="updateVal(this)"><span class="control-value" id="swell1Dir-val">270°</span></div>
+  </div>
+  <div class="section">
+    <div class="section-title">🌊 Swell 2</div>
+    <div class="control-row"><span class="control-label">Height</span><input type="range" id="swell2Height" min="0" max="4" value="0.8" step="0.1" oninput="updateVal(this)"><span class="control-value" id="swell2Height-val">0.8m</span></div>
+    <div class="control-row"><span class="control-label">Period</span><input type="range" id="swell2Period" min="4" max="22" value="8" step="0.5" oninput="updateVal(this)"><span class="control-value" id="swell2Period-val">8.0s</span></div>
+    <div class="control-row"><span class="control-label">Direction</span><input type="range" id="swell2Dir" min="0" max="360" value="315" step="1" oninput="updateVal(this)"><span class="control-value" id="swell2Dir-val">315°</span></div>
+  </div>
+  <div class="section">
+    <div class="section-title">🌊 Swell 3</div>
+    <div class="control-row"><span class="control-label">Height</span><input type="range" id="swell3Height" min="0" max="4" value="0.3" step="0.1" oninput="updateVal(this)"><span class="control-value" id="swell3Height-val">0.3m</span></div>
+    <div class="control-row"><span class="control-label">Period</span><input type="range" id="swell3Period" min="4" max="22" value="16" step="0.5" oninput="updateVal(this)"><span class="control-value" id="swell3Period-val">16.0s</span></div>
+    <div class="control-row"><span class="control-label">Direction</span><input type="range" id="swell3Dir" min="0" max="360" value="200" step="1" oninput="updateVal(this)"><span class="control-value" id="swell3Dir-val">200°</span></div>
+  </div>
+  <!-- Sandbox controls hidden — values still set by presets via applyPreset() -->
+  <div class="section" style="display:none;">
+    <div class="section-title">🏄 Sandbox</div>
+    <div class="control-row"><span class="control-label">Glide</span><input type="range" id="sbGlide" min="0.1" max="2.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbGlide-val">1.00×</span></div>
+    <div class="control-row"><span class="control-label">Pump Power</span><input type="range" id="sbPumpPower" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbPumpPower-val">1.00×</span></div>
+    <div class="control-row"><span class="control-label">Turn Speed</span><input type="range" id="sbTurnSpeed" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbTurnSpeed-val">1.00×</span></div>
+    <div class="control-row"><span class="control-label">Top Speed</span><input type="range" id="sbTopSpeed" min="8" max="40" value="22" step="1" oninput="updateVal(this)"><span class="control-value" id="sbTopSpeed-val">22 kts</span></div>
+    <div class="control-row"><span class="control-label">Battery Cap</span><input type="range" id="sbBatteryCap" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbBatteryCap-val">1.00×</span></div>
+    <div class="control-row"><span class="control-label">Battery Drain</span><input type="range" id="sbBatteryDrain" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbBatteryDrain-val">1.00×</span></div>
+    <div class="control-row"><span class="control-label">Wave Energy</span><input type="range" id="sbWaveEnergy" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbWaveEnergy-val">1.00×</span></div>
+    <div class="control-row"><span class="control-label">Foil Stability</span><input type="range" id="sbStability" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbStability-val">1.00×</span></div>
+    <div class="control-row"><span class="control-label">Water Drag</span><input type="range" id="sbDrag" min="0.1" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbDrag-val">1.00×</span></div>
+    <div class="control-row" style="margin-top:6px;"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="sbFreeCam" onchange="toggleFreeCam(this.checked)" style="width:14px;height:14px;accent-color:#4af;"><span class="control-label" style="flex:1;">Free Camera</span></label></div>
+  </div>
+  <div class="section">
+    <div class="section-title">🏝 Background</div>
+    <div class="preset-row" style="margin-bottom:8px;">
+      <button class="preset-btn bg-preset-btn" data-bg="ocean-islands" onclick="rebuildTerrain('ocean-islands')">Islands</button>
+      <button class="preset-btn bg-preset-btn" data-bg="big-sur" onclick="rebuildTerrain('big-sur')">Big Sur</button>
+      <button class="preset-btn bg-preset-btn" data-bg="sheltered-bay" onclick="rebuildTerrain('sheltered-bay')">Bay</button>
+      <button class="preset-btn bg-preset-btn" data-bg="columbia-gorge" onclick="rebuildTerrain('columbia-gorge')">Gorge</button>
+      <button class="preset-btn bg-preset-btn" data-bg="kauai" onclick="rebuildTerrain('kauai')">Kauai</button>
+      <button class="preset-btn bg-preset-btn" data-bg="open-ocean" onclick="rebuildTerrain('open-ocean')">Open</button>
+      <button class="preset-btn bg-preset-btn active-preset" data-bg="gorge-real" onclick="rebuildTerrain('gorge-real')" style="border-color:rgba(80,220,130,0.35);color:#70d8a0;">Gorge HD</button>
+      <button class="preset-btn bg-preset-btn" data-bg="maliko-real" onclick="rebuildTerrain('maliko-real')" style="border-color:rgba(255,180,60,0.35);color:#ffb840;">Maliko HD</button>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">🔧 Tuner</div>
+    <div style="display:flex;gap:6px;">
+      <button class="preset-btn" style="flex:1;padding:9px 0;font-size:12px;" onclick="copySettings()">📋 Copy Settings</button>
+      <button class="preset-btn" style="flex:1;padding:9px 0;font-size:12px;" onclick="copySettingsJSON()">{ } Copy JSON</button>
+    </div>
+    <div id="copy-toast" style="margin-top:6px;font-size:10px;color:#5ef0a0;opacity:0;transition:opacity 0.3s;text-align:center;"></div>
+  </div>
+</div>
+
+<div id="hud">
+  <div class="label">Speed</div>
+  <div style="display:flex;align-items:baseline;gap:6px">
+    <span class="speed" id="hud-speed">0</span><span class="unit">kts</span>
+    <span id="hud-accel" style="font-size:18px;font-weight:600;transition:opacity 0.2s;"></span>
+  </div>
+  <div class="label" style="margin-top:6px">Status</div>
+  <div id="hud-status" style="font-size:12px; color:#80e0c0;">In Water</div>
+  <div class="label" style="margin-top:8px">Energy</div>
+  <div style="width:100px;height:8px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;margin-top:3px;">
+    <div id="hud-energy-bar" style="width:100%;height:100%;background:linear-gradient(90deg,#4ae88a,#5ef0a0);border-radius:4px;transition:width 0.15s,background 0.3s;"></div>
+  </div>
+  <div id="hud-energy-text" style="font-size:10px;color:#6a94c0;margin-top:2px;">100%</div>
+  <div class="label" style="margin-top:8px">Wave Power</div>
+  <div style="width:100px;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;margin-top:3px;position:relative;">
+    <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:rgba(255,255,255,0.2);"></div>
+    <div id="hud-swell-bar" style="position:absolute;top:0;height:100%;border-radius:4px;transition:left 0.1s,width 0.1s,background 0.15s;width:0;left:50%;background:#4ae88a;"></div>
+  </div>
+</div>
+
+<div id="hud-pocket">🤙 In the Pocket!</div>
+
+<!-- Ride controls hidden — keyboard only for now (A/D turn, W pump, S power, Space boost) -->
+<div id="ride-controls" style="display:none;">
+  <button class="ride-btn" id="btn-left" data-action="left">◀<span class="btn-label">A / ←</span></button>
+  <button class="ride-btn" id="btn-up" data-action="up">▲<span class="btn-label">Pump · W</span></button>
+  <button class="ride-btn pump-btn" id="btn-pump" data-action="pump">⚡<span class="btn-label">Boost · Space</span></button>
+  <button class="ride-btn" id="btn-down" data-action="down">▼<span class="btn-label">Power · S</span></button>
+  <button class="ride-btn" id="btn-right" data-action="right">▶<span class="btn-label">D / →</span></button>
+</div>
+
+<div id="info-bar">AD: turn · W: pump · W+S: power pump · Space: boost · Drag to orbit</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/objects/Sky.js"></script>
+<script>
+// ═══════════════════════════
+// HELPERS
+// ═══════════════════════════
+function updateVal(el) {
+  const id = el.id, v = parseFloat(el.value);
+  cachedParams[id] = v; // update cache on slider change
+  const span = document.getElementById(id + '-val');
+  if (id === 'sbTopSpeed') span.textContent = v + ' kts';
+  else if (id.startsWith('sb')) span.textContent = v.toFixed(2) + '×';
+  else if (id === 'cloudCover') span.textContent = Math.round(v * 100) + '%';
+  else if (id.includes('Dir') || id.includes('Angle')) span.textContent = v + '°';
+  else if (id.includes('Period')) span.textContent = v.toFixed(1) + 's';
+  else span.textContent = v.toFixed(2) + 'm';
+}
+function toggleControls() {
+  const p = document.getElementById('controls-panel');
+  p.classList.toggle('hidden');
+  // Gear button stays hidden — Tab key is the only toggle
+}
+function getVal(id) { return cachedParams[id]; }
+
+// Cached slider values — updated on input, read every frame without DOM access
+const cachedParams = {};
+function cacheAllSliders() {
+  ['sunAngle','sunDir','cloudCover','chopHeight','chopDir',
+   'swell1Height','swell1Period','swell1Dir',
+   'swell2Height','swell2Period','swell2Dir',
+   'swell3Height','swell3Period','swell3Dir',
+   'sbGlide','sbPumpPower','sbTurnSpeed','sbTopSpeed',
+   'sbBatteryCap','sbBatteryDrain','sbWaveEnergy','sbStability','sbDrag'].forEach(id => {
+    cachedParams[id] = parseFloat(document.getElementById(id).value);
+  });
+}
+// Initial cache
+document.addEventListener('DOMContentLoaded', cacheAllSliders);
+// Also cache immediately in case DOM is already ready
+cacheAllSliders();
+
+// ═══════════════════════════
+// AUDIO — Wave Power Sound
+// ═══════════════════════════
+let audioCtx = null, audioInited = false;
+let noiseGain, toneOsc, toneGain, toneFilter, masterGain;
+
+function initAudio() {
+  if (audioInited) return;
+  audioInited = true;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.5;
+  masterGain.connect(audioCtx.destination);
+
+  // ── Surf whoosh: filtered noise ──
+  const bufSize = audioCtx.sampleRate * 2;
+  const noiseBuf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+  const data = noiseBuf.getChannelData(0);
+  for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+
+  const noiseNode = audioCtx.createBufferSource();
+  noiseNode.buffer = noiseBuf;
+  noiseNode.loop = true;
+
+  const noiseFilter = audioCtx.createBiquadFilter();
+  noiseFilter.type = 'bandpass';
+  noiseFilter.frequency.value = 400;
+  noiseFilter.Q.value = 0.8;
+
+  noiseGain = audioCtx.createGain();
+  noiseGain.gain.value = 0;
+
+  noiseNode.connect(noiseFilter);
+  noiseFilter.connect(noiseGain);
+  noiseGain.connect(masterGain);
+  noiseNode.start();
+
+  // Store filter ref for frequency modulation
+  noiseGain._filter = noiseFilter;
+
+  // ── Tonal "pocket" chime: smooth sine ──
+  toneOsc = audioCtx.createOscillator();
+  toneOsc.type = 'sine';
+  toneOsc.frequency.value = 220;
+
+  toneFilter = audioCtx.createBiquadFilter();
+  toneFilter.type = 'lowpass';
+  toneFilter.frequency.value = 600;
+  toneFilter.Q.value = 1;
+
+  toneGain = audioCtx.createGain();
+  toneGain.gain.value = 0;
+
+  toneOsc.connect(toneFilter);
+  toneFilter.connect(toneGain);
+  toneGain.connect(masterGain);
+  toneOsc.start();
+
+  // ── Secondary harmonic for richer tone ──
+  const toneOsc2 = audioCtx.createOscillator();
+  toneOsc2.type = 'sine';
+  toneOsc2.frequency.value = 330;
+  const toneGain2 = audioCtx.createGain();
+  toneGain2.gain.value = 0;
+  toneOsc2.connect(toneGain2);
+  toneGain2.connect(masterGain);
+  toneOsc2.start();
+  toneGain._g2 = toneGain2;
+  toneOsc._o2 = toneOsc2;
+}
+
+function updateAudio(slopeForce, normForce, speed) {
+  if (!audioCtx) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const now = audioCtx.currentTime;
+  const sm = 0.08; // smoothing time
+
+  // Speed factor: sound only when moving
+  const sf = Math.min(1, speed / 5);
+
+  if (normForce > 0.05) {
+    // ── Positive: riding the pocket ──
+    // Whoosh gets louder and higher-pitched
+    const whooshVol = normForce * 0.25 * sf;
+    const whooshFreq = 300 + normForce * 600;
+    noiseGain.gain.linearRampToValueAtTime(whooshVol, now + sm);
+    noiseGain._filter.frequency.linearRampToValueAtTime(whooshFreq, now + sm);
+
+    // Tone: pleasant ascending pitch, louder in the pocket
+    const toneVol = normForce * 0.12 * sf;
+    const toneFreq = 200 + normForce * 180;
+    toneGain.gain.linearRampToValueAtTime(toneVol, now + sm);
+    toneOsc.frequency.linearRampToValueAtTime(toneFreq, now + sm);
+    toneGain._g2.gain.linearRampToValueAtTime(toneVol * 0.4, now + sm);
+    toneOsc._o2.frequency.linearRampToValueAtTime(toneFreq * 1.5, now + sm);
+  } else if (normForce < -0.05) {
+    // ── Negative: climbing uphill ──
+    const abN = Math.abs(normForce);
+    // Lower, duller whoosh
+    const whooshVol = abN * 0.12 * sf;
+    const whooshFreq = 150 + abN * 150;
+    noiseGain.gain.linearRampToValueAtTime(whooshVol, now + sm);
+    noiseGain._filter.frequency.linearRampToValueAtTime(whooshFreq, now + sm);
+
+    // Low droning tone
+    const toneVol = abN * 0.06 * sf;
+    toneGain.gain.linearRampToValueAtTime(toneVol, now + sm);
+    toneOsc.frequency.linearRampToValueAtTime(120, now + sm);
+    toneGain._g2.gain.linearRampToValueAtTime(0, now + sm);
+  } else {
+    // ── Neutral: quiet ambient ──
+    noiseGain.gain.linearRampToValueAtTime(0.01 * sf, now + sm * 2);
+    noiseGain._filter.frequency.linearRampToValueAtTime(250, now + sm);
+    toneGain.gain.linearRampToValueAtTime(0, now + sm * 2);
+    toneGain._g2.gain.linearRampToValueAtTime(0, now + sm * 2);
+  }
+}
+
+// Init audio on first user interaction
+['click','keydown','touchstart'].forEach(evt => {
+  window.addEventListener(evt, initAudio, { once: true });
+});
+
+// ── Presets ──
+const presets = {
+  clean: {
+    chopHeight:0, chopDir:0,
+    swell1Height:1.5, swell1Period:14, swell1Dir:270,
+    swell2Height:0.5, swell2Period:10, swell2Dir:290,
+    swell3Height:0.3, swell3Period:18, swell3Dir:250
+  },
+  river: {
+    chopHeight:1.0, chopDir:0,
+    swell1Height:2.9, swell1Period:4.5, swell1Dir:0,
+    swell2Height:0.5, swell2Period:4, swell2Dir:20,
+    swell3Height:0, swell3Period:8, swell3Dir:0
+  },
+  messy: {
+    chopHeight:1.4, chopDir:60,
+    swell1Height:2.5, swell1Period:9, swell1Dir:290,
+    swell2Height:1.8, swell2Period:7, swell2Dir:190,
+    swell3Height:1.2, swell3Period:5.5, swell3Dir:45
+  },
+  gorge: {
+    sunAngle:11, sunDir:110, cloudCover:0.45,
+    chopHeight:0.49, chopDir:0,
+    swell1Height:2.3, swell1Period:5, swell1Dir:297,
+    swell2Height:0.7, swell2Period:4.5, swell2Dir:347,
+    swell3Height:0.5, swell3Period:6, swell3Dir:268,
+    sbGlide:0.8, sbPumpPower:1, sbTurnSpeed:1, sbTopSpeed:22,
+    sbBatteryCap:1, sbBatteryDrain:1, sbWaveEnergy:1, sbStability:1, sbDrag:1
+  }
+};
+function applyPreset(name, btn) {
+  const p = presets[name]; if(!p) return;
+  Object.keys(p).forEach(id => {
+    const el = document.getElementById(id);
+    if(el){ el.value = p[id]; updateVal(el); }
+  });
+  cacheAllSliders(); // ensure full cache sync after preset
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active-preset'));
+  if(btn) btn.classList.add('active-preset');
+}
+// ── Tuner: copy all current settings to clipboard ──
+function showToast(msg) {
+  const el = document.getElementById('copy-toast');
+  el.textContent = msg;
+  el.style.opacity = '1';
+  setTimeout(() => { el.style.opacity = '0'; }, 2000);
+}
+
+function getAllSettings() {
+  // Ocean preset values
+  const oceanIds = ['sunAngle','sunDir','cloudCover','chopHeight','chopDir',
+    'swell1Height','swell1Period','swell1Dir',
+    'swell2Height','swell2Period','swell2Dir',
+    'swell3Height','swell3Period','swell3Dir'];
+  const sandboxIds = ['sbGlide','sbPumpPower','sbTurnSpeed','sbTopSpeed',
+    'sbBatteryCap','sbBatteryDrain','sbWaveEnergy','sbStability','sbDrag'];
+
+  const ocean = {};
+  oceanIds.forEach(id => { ocean[id] = getVal(id); });
+  const sandbox = {};
+  sandboxIds.forEach(id => { sandbox[id] = getVal(id); });
+
+  return {
+    ocean,
+    sandbox,
+    background: activeBgPreset,
+    bgCliffs: bgPresets[activeBgPreset] ? bgPresets[activeBgPreset].cliffs : []
+  };
+}
+
+function copySettings() {
+  const s = getAllSettings();
+  // Format as readable JS code ready to paste into presets
+  let lines = [];
+  lines.push('// ── Ocean Preset ──');
+  lines.push('const oceanPreset = {');
+  Object.entries(s.ocean).forEach(([k, v]) => {
+    lines.push('  ' + k + ': ' + (Number.isInteger(v) ? v : Number(v.toFixed(2))) + ',');
+  });
+  lines.push('};');
+  lines.push('');
+  lines.push('// ── Sandbox Settings ──');
+  lines.push('const sandboxPreset = {');
+  Object.entries(s.sandbox).forEach(([k, v]) => {
+    lines.push('  ' + k + ': ' + (Number.isInteger(v) ? v : Number(v.toFixed(2))) + ',');
+  });
+  lines.push('};');
+  lines.push('');
+  lines.push('// ── Background: ' + s.background + ' ──');
+  lines.push('const bgCliffs = [');
+  s.bgCliffs.forEach(c => {
+    lines.push('  { angle: ' + c.angle + ', dist: ' + c.dist + ', height: ' + c.height
+      + ', width: ' + c.width + ', depth: ' + c.depth + ', seed: ' + c.seed + ' },');
+  });
+  lines.push('];');
+
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    showToast('Settings copied to clipboard!');
+  }).catch(() => {
+    // Fallback: log to console
+    console.log(lines.join('\n'));
+    showToast('Logged to console (clipboard blocked)');
+  });
+}
+
+function copySettingsJSON() {
+  const s = getAllSettings();
+  const json = JSON.stringify(s, null, 2);
+  navigator.clipboard.writeText(json).then(() => {
+    showToast('JSON copied to clipboard!');
+  }).catch(() => {
+    console.log(json);
+    showToast('JSON logged to console (clipboard blocked)');
+  });
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function smoothstep(e0, e1, x) { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); }
+function degToDir(deg) { const r = deg * Math.PI / 180; return { x: -Math.sin(r), y: -Math.cos(r) }; }
+
+// ═══════════════════════════
+// RENDERER + SCENE
+// ═══════════════════════════
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.65;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.5, 20000);
+const ambLight = new THREE.AmbientLight(0x8899bb, 0.6);
+scene.add(ambLight);
+const dirLight = new THREE.DirectionalLight(0xffeedd, 1.2);
+dirLight.position.set(50, 80, -60);
+scene.add(dirLight);
+
+
+// ═══════════════════════════
+// SKY — Preetham atmospheric scattering via THREE.Sky
+// ═══════════════════════════
+const sky = new THREE.Sky();
+sky.scale.setScalar(4500);
+scene.add(sky);
+const skyUniforms = sky.material.uniforms;
+skyUniforms['turbidity'].value = 4;
+skyUniforms['rayleigh'].value = 2;
+skyUniforms['mieCoefficient'].value = 0.005;
+skyUniforms['mieDirectionalG'].value = 0.8;
+
+// ═══════════════════════════
+// CLOUDS — procedural FBM on a dome
+// ═══════════════════════════
+const cloudMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  transparent: true,
+  depthWrite: false,
+  uniforms: {
+    uTime: { value: 0 },
+    uSunDir: { value: new THREE.Vector3(0, 0.4, -1).normalize() },
+    uCloudCover: { value: 0.45 },
+    uCloudBright: { value: 1.0 }
+  },
+  vertexShader: `
+    varying vec3 vWP;
+    void main(){
+      vWP = (modelMatrix * vec4(position, 1.0)).xyz;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: `
+    uniform vec3 uSunDir;
+    uniform float uTime, uCloudCover, uCloudBright;
+    varying vec3 vWP;
+
+    // Hash & noise
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+    float noise(vec2 p){
+      vec2 i = floor(p), f = fract(p);
+      f = f*f*(3.0-2.0*f);
+      float a = hash(i), b = hash(i+vec2(1,0));
+      float c = hash(i+vec2(0,1)), d = hash(i+vec2(1,1));
+      return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+    }
+    float fbm(vec2 p){
+      float v = 0.0, a = 0.5;
+      mat2 rot = mat2(0.8,-0.6,0.6,0.8);
+      for(int i=0; i<5; i++){
+        v += a * noise(p);
+        p = rot * p * 2.0;
+        a *= 0.5;
+      }
+      return v;
+    }
+
+    void main(){
+      vec3 d = normalize(vWP);
+      // Only render above horizon
+      if(d.y < 0.01){ discard; }
+
+      // Project onto a flat plane at height 1.0 for stable cloud UVs
+      vec2 uv = d.xz / d.y;
+
+      // Drift clouds slowly
+      float t = uTime * 0.008;
+      vec2 st = uv * 1.8 + vec2(t, t * 0.4);
+
+      // FBM cloud density
+      float n = fbm(st);
+      float density = smoothstep(1.0 - uCloudCover, 1.0 - uCloudCover + 0.3, n);
+
+      // Sunlit cloud coloring
+      float sunDot = max(dot(d, normalize(uSunDir)), 0.0);
+      vec3 bright = vec3(1.0, 0.97, 0.92) * uCloudBright;
+      vec3 dark = vec3(0.55, 0.58, 0.65) * uCloudBright;
+      vec3 col = mix(dark, bright, 0.5 + 0.5 * sunDot);
+
+      // Sun-side glow on cloud edges
+      col += vec3(1.0, 0.85, 0.5) * pow(sunDot, 8.0) * 0.3 * density;
+
+      // Fade near horizon to prevent hard edge
+      float horizFade = smoothstep(0.01, 0.15, d.y);
+      // Fade at high elevation (clouds stay near horizon/mid-sky)
+      float topFade = 1.0 - smoothstep(0.4, 0.9, d.y);
+
+      float alpha = density * horizFade * topFade * 0.85;
+      gl_FragColor = vec4(col, alpha);
+    }`
+});
+const cloudMesh = new THREE.Mesh(new THREE.SphereGeometry(3500, 64, 32), cloudMat);
+scene.add(cloudMesh);
+
+// ═══════════════════════════
+// TERRAIN — Distant Silhouettes + 3D Cliff Segments
+// ═══════════════════════════
+
+// ── Layer 1: Horizon silhouette ring (shader-based, follows camera) ──
+const silhouetteMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  transparent: true,
+  depthWrite: false,
+  uniforms: {
+    uSunDir: { value: new THREE.Vector3(0, 0.4, -1).normalize() },
+    uFogColor: { value: new THREE.Color(0.55, 0.7, 0.85) },
+    uFogSunColor: { value: new THREE.Color(0.8, 0.75, 0.6) }
+  },
+  vertexShader: `
+    varying vec3 vWP;
+    varying vec2 vUV;
+    void main(){
+      vWP = (modelMatrix * vec4(position, 1.0)).xyz;
+      vUV = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: `
+    uniform vec3 uSunDir, uFogColor, uFogSunColor;
+    varying vec3 vWP;
+    varying vec2 vUV;
+
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+    float noise(vec2 p){
+      vec2 i = floor(p), f = fract(p);
+      f = f*f*(3.0-2.0*f);
+      float a = hash(i), b = hash(i+vec2(1,0));
+      float c = hash(i+vec2(0,1)), d = hash(i+vec2(1,1));
+      return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+    }
+    float fbm(vec2 p){
+      float v = 0.0, a = 0.5;
+      mat2 rot = mat2(0.8,-0.6,0.6,0.8);
+      for(int i=0; i<5; i++){
+        v += a * noise(p);
+        p = rot * p * 2.0;
+        a *= 0.5;
+      }
+      return v;
+    }
+
+    void main(){
+      // Angle around cylinder = vUV.x, height = vUV.y (0=bottom, 1=top)
+      float angle = vUV.x * 6.2832 * 3.0; // scale for variation
+
+      // Generate cliff/mountain profile at this angle
+      float profile = fbm(vec2(angle, 0.0)) * 0.6
+                    + fbm(vec2(angle * 2.3, 1.5)) * 0.25
+                    + fbm(vec2(angle * 5.0, 3.0)) * 0.15;
+
+      // Map profile to height: mountains are 15-65% of cylinder height
+      float mountainTop = 0.12 + profile * 0.4;
+      float heightInCyl = vUV.y;
+
+      // Below mountain top = rock, above = transparent
+      if(heightInCyl > mountainTop) discard;
+
+      // Rock color: darker at base, lighter toward peaks
+      float heightRatio = heightInCyl / max(mountainTop, 0.01);
+      vec3 rockDark = vec3(0.08, 0.07, 0.06);
+      vec3 rockLight = vec3(0.22, 0.20, 0.18);
+      vec3 col = mix(rockDark, rockLight, heightRatio * heightRatio);
+
+      // Sun-facing rim highlight
+      vec3 d = normalize(vWP);
+      float sunDot = max(dot(d, normalize(uSunDir)), 0.0);
+      col += vec3(0.15, 0.10, 0.05) * pow(sunDot, 3.0) * heightRatio;
+
+      // Heavy atmospheric fog — these are far away
+      float fogStr = 0.65 + 0.25 * (1.0 - heightRatio); // foggier at base
+      vec3 fogCol = mix(uFogColor, uFogSunColor, pow(sunDot, 4.0));
+      col = mix(col, fogCol, fogStr);
+
+      // Fade at very top of mountains for soft edge
+      float topFade = smoothstep(mountainTop, mountainTop - 0.03, heightInCyl);
+
+      gl_FragColor = vec4(col, topFade * 0.85);
+    }`
+});
+const silhouetteMesh = new THREE.Mesh(
+  new THREE.CylinderGeometry(2500, 2500, 600, 128, 1, true),
+  silhouetteMat
+);
+silhouetteMesh.position.y = -50; // sink base below water
+scene.add(silhouetteMesh);
+
+// ── JS-side FBM for CPU terrain generation ──
+function hashJS(x, y) {
+  return ((Math.sin(x * 127.1 + y * 311.7) * 43758.5453) % 1 + 1) % 1;
+}
+function noiseJS(x, y) {
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = x - ix, fy = y - iy;
+  const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+  const a = hashJS(ix, iy), b = hashJS(ix + 1, iy);
+  const c = hashJS(ix, iy + 1), d = hashJS(ix + 1, iy + 1);
+  return (a + (b - a) * ux) + (c - a + (a - b - c + d) * ux) * uy;
+}
+function fbmJS(x, y, octaves) {
+  let v = 0, a = 0.5;
+  for (let i = 0; i < (octaves || 5); i++) {
+    v += a * noiseJS(x, y);
+    const nx = 0.8 * x - 0.6 * y, ny = 0.6 * x + 0.8 * y;
+    x = nx * 2; y = ny * 2;
+    a *= 0.5;
+  }
+  return v;
+}
+
+// ── Layer 2: 3D cliff segments (procedural geometry, follows player via SNAP) ──
+
+// Cliff ShaderMaterial — fog-aware, sun-lit, matches ocean fog exactly
+const cliffMat = new THREE.ShaderMaterial({
+  side: THREE.FrontSide,
+  uniforms: {
+    uSunDir: { value: new THREE.Vector3(0, 0.4, -1).normalize() },
+    uCamPos: { value: new THREE.Vector3() },
+    uFogColor: { value: new THREE.Color(0.55, 0.7, 0.85) },
+    uFogSunColor: { value: new THREE.Color(0.8, 0.75, 0.6) },
+    uMaxHeight: { value: 120.0 }
+  },
+  vertexShader: `
+    varying vec3 vWorldPos;
+    varying vec3 vNormal;
+    varying float vHeight;
+    void main(){
+      vec4 wp = modelMatrix * vec4(position, 1.0);
+      vWorldPos = wp.xyz;
+      vNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+      vHeight = position.y;
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }`,
+  fragmentShader: `
+    uniform vec3 uSunDir, uCamPos, uFogColor, uFogSunColor;
+    uniform float uMaxHeight;
+    varying vec3 vWorldPos;
+    varying vec3 vNormal;
+    varying float vHeight;
+
+    // Simple hash for vegetation noise
+    float hash(vec2 p) {
+      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+    }
+    float vnoise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      float a = hash(i);
+      float b = hash(i + vec2(1.0, 0.0));
+      float c = hash(i + vec2(0.0, 1.0));
+      float d = hash(i + vec2(1.0, 1.0));
+      return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+    }
+
+    void main(){
+      vec3 N = normalize(vNormal);
+      vec3 L = normalize(uSunDir);
+      vec3 V = normalize(uCamPos - vWorldPos);
+
+      // Rock color with height variation
+      vec3 rockBase = vec3(0.12, 0.10, 0.08);
+      vec3 rockMid  = vec3(0.25, 0.22, 0.18);
+      vec3 rockTop  = vec3(0.35, 0.32, 0.28);
+      float hNorm = clamp(vHeight / uMaxHeight, 0.0, 1.0);
+      vec3 rockCol = mix(rockBase, rockMid, smoothstep(0.0, 0.3, hNorm));
+      rockCol = mix(rockCol, rockTop, smoothstep(0.5, 1.0, hNorm));
+
+      // Vegetation — green on gentle slopes, rock on steep cliffs
+      float slope = abs(N.y); // 1.0 = flat, 0.0 = vertical
+      float vegMask = smoothstep(0.3, 0.7, slope); // green appears on gentler slopes
+      float treeline = smoothstep(1.0, 0.6, hNorm); // fade out above 60% height
+      float vegNoise = vnoise(vWorldPos.xz * 0.08) * 0.4 + vnoise(vWorldPos.xz * 0.03) * 0.6;
+      vegMask *= treeline * smoothstep(0.25, 0.55, vegNoise); // noisy edge
+      vec3 vegDark = vec3(0.12, 0.22, 0.08);
+      vec3 vegLight = vec3(0.18, 0.30, 0.12);
+      vec3 vegCol = mix(vegDark, vegLight, vegNoise);
+      vec3 surfCol = mix(rockCol, vegCol, vegMask);
+
+      // Half-Lambert lighting
+      float NdL = dot(N, L) * 0.5 + 0.5;
+      vec3 col = surfCol * (0.3 + 0.7 * NdL);
+
+      // Subtle specular
+      vec3 H = normalize(L + V);
+      col += vec3(0.15, 0.12, 0.08) * pow(max(dot(N, H), 0.0), 32.0) * 0.3;
+
+      // Fog — same formula as ocean
+      float cd = length(uCamPos - vWorldPos);
+      float fog = 1.0 - exp(-cd * 0.0012);
+      vec3 fogCol = mix(uFogColor, uFogSunColor, pow(max(dot(normalize(vWorldPos - uCamPos), L), 0.0), 4.0));
+      col = mix(col, fogCol, fog);
+
+      gl_FragColor = vec4(col, 1.0);
+    }`
+});
+
+// Generate a single cliff segment
+function createCliffSegment(angle, dist, height, width, depth, seed) {
+  const steps = 24; // horizontal resolution
+  const vSteps = 8;  // vertical resolution
+  const positions = [];
+  const normals = [];
+  const indices = [];
+
+  // Generate jagged top profile
+  const profile = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const px = (t - 0.5) * width;
+    const n = fbmJS(seed + t * 4.0, seed * 0.7, 4);
+    // Height varies: taller in center, tapers at edges
+    const edgeFade = 1.0 - Math.pow(Math.abs(t - 0.5) * 2.0, 2.0);
+    const h = height * (0.4 + 0.6 * n) * edgeFade;
+    profile.push({ x: px, h: Math.max(h, 2) });
+  }
+
+  // Build front face vertices (grid: steps+1 × vSteps+1)
+  for (let j = 0; j <= vSteps; j++) {
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const vt = j / vSteps;
+      const px = profile[i].x;
+      const py = -5 + vt * (profile[i].h + 5); // start below water
+      const pz = 0;
+      // Slight irregularity in the face
+      const jitter = fbmJS(seed + i * 0.5, seed + j * 0.5, 3) * 3.0;
+      positions.push(px, py, pz + jitter);
+      normals.push(0, 0, 1); // front-facing
+    }
+  }
+
+  // Front face indices
+  const w = steps + 1;
+  for (let j = 0; j < vSteps; j++) {
+    for (let i = 0; i < steps; i++) {
+      const a = j * w + i, b = a + 1, c = a + w, d = c + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+
+  // Back face (offset by depth)
+  const frontCount = positions.length / 3;
+  for (let j = 0; j <= vSteps; j++) {
+    for (let i = 0; i <= steps; i++) {
+      const idx = (j * w + i) * 3;
+      positions.push(positions[idx], positions[idx + 1], positions[idx + 2] - depth);
+      normals.push(0, 0, -1);
+    }
+  }
+  for (let j = 0; j < vSteps; j++) {
+    for (let i = 0; i < steps; i++) {
+      const a = frontCount + j * w + i, b = a + 1, c = a + w, d = c + 1;
+      indices.push(a, b, c, b, d, c); // reversed winding
+    }
+  }
+
+  // Top edge — connect front to back
+  const topStart = positions.length / 3;
+  for (let i = 0; i <= steps; i++) {
+    const fi = vSteps * w + i;
+    const idx = fi * 3;
+    // Front top vertex
+    positions.push(positions[idx], positions[idx + 1], positions[idx + 2]);
+    normals.push(0, 1, 0);
+    // Back top vertex
+    positions.push(positions[idx], positions[idx + 1], positions[idx + 2] - depth);
+    normals.push(0, 1, 0);
+  }
+  for (let i = 0; i < steps; i++) {
+    const a = topStart + i * 2, b = a + 1, c = a + 2, d = a + 3;
+    indices.push(a, c, b, b, c, d);
+  }
+
+  // Side caps (left and right)
+  const sideStart = positions.length / 3;
+  // Left side
+  for (let j = 0; j <= vSteps; j++) {
+    const fi = j * w;
+    const idx = fi * 3;
+    positions.push(positions[idx], positions[idx + 1], positions[idx + 2]);
+    normals.push(-1, 0, 0);
+    positions.push(positions[idx], positions[idx + 1], positions[idx + 2] - depth);
+    normals.push(-1, 0, 0);
+  }
+  for (let j = 0; j < vSteps; j++) {
+    const a = sideStart + j * 2, b = a + 1, c = a + 2, d = a + 3;
+    indices.push(a, b, c, b, d, c);
+  }
+  // Right side
+  const rightStart = positions.length / 3;
+  for (let j = 0; j <= vSteps; j++) {
+    const fi = j * w + steps;
+    const idx = fi * 3;
+    positions.push(positions[idx], positions[idx + 1], positions[idx + 2]);
+    normals.push(1, 0, 0);
+    positions.push(positions[idx], positions[idx + 1], positions[idx + 2] - depth);
+    normals.push(1, 0, 0);
+  }
+  for (let j = 0; j < vSteps; j++) {
+    const a = rightStart + j * 2, b = a + 1, c = a + 2, d = a + 3;
+    indices.push(a, c, b, b, d, c);
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geom.setIndex(indices);
+  geom.computeVertexNormals(); // smooth out the auto-normals
+
+  const mesh = new THREE.Mesh(geom, cliffMat);
+
+  // Position: convert polar (angle, dist) to cartesian
+  mesh.position.set(Math.sin(angle) * dist, 0, Math.cos(angle) * dist);
+  // Face toward center
+  mesh.lookAt(0, mesh.position.y, 0);
+
+  return mesh;
+}
+
+// Create terrain ring group
+const terrainGroup = new THREE.Group();
+scene.add(terrainGroup);
+
+// ── Real terrain state (declared early so rebuildTerrain can reference them) ──
+let realTerrainMesh = null;
+let realTerrainReady = false;
+let realTerrainHeightData = null;
+let realTerrainSatTex = null;
+let realTerrainHmImg = null;
+let realTerrainRiverMask = null; // THREE.CanvasTexture — white=water, black=land
+let _terrainReadyCallback = null; // callback for async terrain loading
+
+// ═══════════════════════════
+// REAL TERRAIN — per-location configurations (must be before rebuildTerrain)
+// ═══════════════════════════
+const terrainConfigs = {
+  gorge: {
+    label: 'Columbia River Gorge',
+    heightmap: 'terrain-data/gorge_heightmap_1024.png',
+    satellite: 'terrain-data/gorge_satellite_2048.jpg',
+    elevMin: 24.0,
+    elevMax: 1090.1,
+    worldW: 14382,   // meters east-west
+    worldD: 11054,   // meters north-south
+    waterY: 6.0,     // ~30m real elevation → 6m in scene
+    waterThresh: 12,  // heightmap pixel ≤ this = water
+    useRiverMask: true,
+    preset: 'gorge',
+    startPos: null     // auto-detect from heightmap
+  },
+  maliko: {
+    label: 'Maliko Run, Maui',
+    heightmap: 'terrain-data/maliko_heightmap_1024.png',
+    satellite: 'terrain-data/maliko_satellite_2048.jpg',
+    elevMin: 0.0,
+    elevMax: 3055.5,
+    worldW: 75967,   // meters east-west (full Maui island)
+    worldD: 51207,   // meters north-south
+    waterY: 0.0,     // sea level
+    waterThresh: 2,   // heightmap pixel ≤ this = water (ocean)
+    useRiverMask: true,
+    preset: 'clean',
+    // Start offshore Maliko Gulch, heading west toward Kahului
+    startPos: { x: -5310, z: 22201, heading: Math.PI }
+  }
+};
+
+// Active terrain config — set when switching locations
+let activeTerrainCfg = terrainConfigs.gorge;
+
+// Convenience accessors (used throughout the code)
+function RT_ELEV_MIN() { return activeTerrainCfg.elevMin; }
+function RT_ELEV_MAX() { return activeTerrainCfg.elevMax; }
+function RT_ELEV_RANGE() { return activeTerrainCfg.elevMax - activeTerrainCfg.elevMin; }
+function RT_WORLD_W() { return activeTerrainCfg.worldW; }
+function RT_WORLD_D() { return activeTerrainCfg.worldD; }
+function RT_WATER_Y() { return activeTerrainCfg.waterY; }
+
+// ── Background presets — different terrain configurations ──
+const bgPresets = {
+  'ocean-islands': {
+    label: 'Ocean Islands',
+    maxHeight: 150,
+    cliffs: [
+      { angle: 0.0,    dist: 800,  height: 120, width: 250, depth: 60, seed: 1.0  },
+      { angle: 0.85,   dist: 900,  height: 90,  width: 200, depth: 50, seed: 2.3  },
+      { angle: 1.5,    dist: 750,  height: 140, width: 300, depth: 70, seed: 3.7  },
+      { angle: 2.3,    dist: 850,  height: 70,  width: 180, depth: 45, seed: 4.1  },
+      { angle: 3.14,   dist: 950,  height: 110, width: 280, depth: 65, seed: 5.9  },
+      { angle: 4.0,    dist: 780,  height: 150, width: 320, depth: 75, seed: 6.2  },
+      { angle: 4.9,    dist: 880,  height: 85,  width: 220, depth: 55, seed: 7.5  },
+      { angle: 5.7,    dist: 820,  height: 100, width: 260, depth: 60, seed: 8.8  },
+    ]
+  },
+  'big-sur': {
+    label: 'Big Sur',
+    maxHeight: 350,
+    cliffs: [
+      // ── Main coastline wall (angles ~5.0 through 0 to ~1.4) ──
+      // Front row — dramatic sea cliffs right at the water
+      { angle: 5.0,    dist: 550,  height: 140, width: 380, depth: 90, seed: 10.1 },
+      { angle: 5.35,   dist: 520,  height: 180, width: 350, depth: 85, seed: 11.4 },
+      { angle: 5.7,    dist: 540,  height: 200, width: 400, depth: 95, seed: 12.7 },
+      { angle: 6.05,   dist: 510,  height: 160, width: 370, depth: 80, seed: 13.2 },
+      { angle: 0.1,    dist: 530,  height: 220, width: 420, depth: 100,seed: 14.5 },
+      { angle: 0.45,   dist: 550,  height: 190, width: 390, depth: 90, seed: 15.8 },
+      { angle: 0.8,    dist: 520,  height: 170, width: 360, depth: 85, seed: 16.1 },
+      { angle: 1.15,   dist: 540,  height: 150, width: 340, depth: 80, seed: 17.3 },
+      // Back row — taller mountains rising behind the cliffs
+      { angle: 5.15,   dist: 750,  height: 280, width: 500, depth: 120,seed: 18.6 },
+      { angle: 5.6,    dist: 720,  height: 320, width: 480, depth: 130,seed: 19.2 },
+      { angle: 5.95,   dist: 740,  height: 350, width: 520, depth: 140,seed: 20.8 },
+      { angle: 0.25,   dist: 760,  height: 300, width: 500, depth: 125,seed: 21.4 },
+      { angle: 0.65,   dist: 730,  height: 260, width: 460, depth: 110,seed: 22.1 },
+      { angle: 1.0,    dist: 750,  height: 240, width: 440, depth: 105,seed: 23.5 },
+      // Headland extensions at each end of the coastline
+      { angle: 4.65,   dist: 600,  height: 110, width: 300, depth: 70, seed: 24.9 },
+      { angle: 1.45,   dist: 620,  height: 100, width: 280, depth: 65, seed: 25.3 },
+    ]
+  },
+  'sheltered-bay': {
+    label: 'Sheltered Bay',
+    maxHeight: 120,
+    cliffs: [
+      { angle: 0.0,    dist: 600,  height: 100, width: 350, depth: 70, seed: 20.5 },
+      { angle: 0.6,    dist: 550,  height: 80,  width: 280, depth: 55, seed: 21.2 },
+      { angle: 1.2,    dist: 580,  height: 110, width: 320, depth: 65, seed: 22.8 },
+      { angle: 1.9,    dist: 620,  height: 90,  width: 300, depth: 60, seed: 23.1 },
+      { angle: 2.6,    dist: 560,  height: 120, width: 340, depth: 70, seed: 24.4 },
+      { angle: 3.3,    dist: 600,  height: 95,  width: 310, depth: 65, seed: 25.7 },
+      { angle: 4.0,    dist: 570,  height: 105, width: 330, depth: 68, seed: 26.0 },
+      { angle: 4.7,    dist: 590,  height: 85,  width: 290, depth: 58, seed: 27.3 },
+      { angle: 5.3,    dist: 610,  height: 115, width: 360, depth: 72, seed: 28.6 },
+      { angle: 5.9,    dist: 580,  height: 75,  width: 260, depth: 50, seed: 29.9 },
+    ]
+  },
+  'columbia-gorge': {
+    label: 'Columbia Gorge',
+    maxHeight: 380,
+    cliffs: [
+      // ── East wall (right side) — angles ~0.85 to ~2.50, centered on π/2 ──
+      // Front row — immediate gorge wall, close and dramatic
+      { angle: 0.85,   dist: 370,  height: 160, width: 340, depth: 80, seed: 30.1 },
+      { angle: 1.08,   dist: 390,  height: 190, width: 360, depth: 85, seed: 31.4 },
+      { angle: 1.31,   dist: 350,  height: 220, width: 380, depth: 90, seed: 32.7 },
+      { angle: 1.54,   dist: 380,  height: 200, width: 400, depth: 95, seed: 33.2 },
+      { angle: 1.77,   dist: 360,  height: 180, width: 370, depth: 85, seed: 34.5 },
+      { angle: 2.00,   dist: 400,  height: 210, width: 350, depth: 90, seed: 35.8 },
+      { angle: 2.23,   dist: 370,  height: 170, width: 330, depth: 80, seed: 36.1 },
+      { angle: 2.46,   dist: 420,  height: 120, width: 300, depth: 75, seed: 37.3 },
+      // Back row — tall Cascade mountains behind east wall
+      { angle: 0.95,   dist: 620,  height: 320, width: 500, depth: 120, seed: 38.6 },
+      { angle: 1.25,   dist: 640,  height: 370, width: 530, depth: 130, seed: 39.2 },
+      { angle: 1.57,   dist: 600,  height: 380, width: 550, depth: 140, seed: 40.8 },
+      { angle: 1.90,   dist: 650,  height: 340, width: 510, depth: 125, seed: 41.4 },
+      { angle: 2.20,   dist: 660,  height: 260, width: 480, depth: 110, seed: 42.1 },
+
+      // ── West wall (left side) — angles ~4.00 to ~5.70, centered on 3π/2 ──
+      // Front row — matching gorge wall on the opposite side
+      { angle: 4.00,   dist: 390,  height: 150, width: 330, depth: 80, seed: 43.5 },
+      { angle: 4.24,   dist: 370,  height: 185, width: 360, depth: 85, seed: 44.9 },
+      { angle: 4.48,   dist: 360,  height: 215, width: 390, depth: 90, seed: 45.3 },
+      { angle: 4.71,   dist: 380,  height: 200, width: 400, depth: 95, seed: 46.7 },
+      { angle: 4.95,   dist: 400,  height: 190, width: 370, depth: 85, seed: 47.1 },
+      { angle: 5.18,   dist: 350,  height: 210, width: 350, depth: 90, seed: 48.4 },
+      { angle: 5.42,   dist: 380,  height: 165, width: 340, depth: 80, seed: 49.8 },
+      { angle: 5.65,   dist: 410,  height: 130, width: 310, depth: 75, seed: 50.2 },
+      // Back row — tall Cascade mountains behind west wall
+      { angle: 4.12,   dist: 630,  height: 300, width: 490, depth: 120, seed: 51.6 },
+      { angle: 4.45,   dist: 650,  height: 360, width: 520, depth: 130, seed: 52.0 },
+      { angle: 4.71,   dist: 610,  height: 370, width: 540, depth: 140, seed: 53.3 },
+      { angle: 5.05,   dist: 640,  height: 330, width: 500, depth: 125, seed: 54.7 },
+      { angle: 5.40,   dist: 660,  height: 280, width: 480, depth: 115, seed: 55.1 },
+
+      // ── End caps — scattered low cliffs at channel openings ──
+      // North end (around angle 0)
+      { angle: 0.15,   dist: 580,  height: 100, width: 280, depth: 65, seed: 56.5 },
+      { angle: 0.45,   dist: 650,  height: 140, width: 320, depth: 70, seed: 57.9 },
+      { angle: 6.00,   dist: 620,  height: 120, width: 300, depth: 68, seed: 58.3 },
+      // South end (around angle π)
+      { angle: 2.85,   dist: 600,  height: 110, width: 290, depth: 65, seed: 59.7 },
+      { angle: 3.14,   dist: 680,  height: 160, width: 340, depth: 75, seed: 60.1 },
+      { angle: 3.45,   dist: 720,  height: 75,  width: 260, depth: 55, seed: 61.4 },
+    ]
+  },
+  'kauai': {
+    label: 'Kauai',
+    maxHeight: 80,
+    usePanorama: true,
+    waterStyle: 'tropical',
+    cliffs: [
+      // Small volcanic outcrops on the coastline side (around angle π, matching photo center)
+      // These sit in front of the photo but don't block it — low and scattered
+      { angle: 2.7,    dist: 480,  height: 55,  width: 200, depth: 50, seed: 70.1 },
+      { angle: 3.0,    dist: 520,  height: 70,  width: 240, depth: 55, seed: 71.4 },
+      { angle: 3.3,    dist: 460,  height: 45,  width: 180, depth: 45, seed: 72.7 },
+      { angle: 3.6,    dist: 500,  height: 60,  width: 210, depth: 48, seed: 73.2 },
+      // A couple of reef rocks on the open ocean side
+      { angle: 0.3,    dist: 700,  height: 25,  width: 120, depth: 35, seed: 74.5 },
+      { angle: 5.8,    dist: 750,  height: 20,  width: 100, depth: 30, seed: 75.8 },
+    ]
+  },
+  'open-ocean': {
+    label: 'Open Ocean',
+    maxHeight: 120,
+    cliffs: [] // no terrain — pure open water
+  },
+  'gorge-real': {
+    label: 'Gorge HD',
+    maxHeight: 120,
+    useRealTerrain: 'gorge',
+    waterStyle: 'normal',
+    cliffs: []
+  },
+  'maliko-real': {
+    label: 'Maliko HD',
+    maxHeight: 120,
+    useRealTerrain: 'maliko',
+    waterStyle: 'normal',
+    cliffs: []
+  }
+};
+
+let activeBgPreset = 'ocean-islands';
+let panoCylinder = null;       // panoramic photo cylinder mesh (created for Kauai preset)
+let activeWaterStyle = 'normal'; // 'tropical' for Kauai, 'normal' for everything else
+
+function rebuildTerrain(presetName) {
+  // Clear existing cliff meshes
+  while (terrainGroup.children.length > 0) {
+    const child = terrainGroup.children[0];
+    if (child.geometry) child.geometry.dispose();
+    terrainGroup.remove(child);
+  }
+  // Build new ones from preset
+  const preset = bgPresets[presetName];
+  if (!preset) return;
+  activeBgPreset = presetName;
+  cliffMat.uniforms.uMaxHeight.value = preset.maxHeight || 120.0;
+
+  // Panoramic photo background toggle
+  if (preset.usePanorama) {
+    buildPanoCylinder();
+    silhouetteMesh.visible = false;
+  } else {
+    removePanoCylinder();
+    silhouetteMesh.visible = true;
+  }
+
+  // Real terrain toggle
+  // Note: foil, oceanMat, oceanMesh are const-declared later in the file.
+  // At initial page load, rebuildTerrain('ocean-islands') runs before those exist.
+  // We defer ocean/foil setup to a microtask so it runs after all declarations.
+  if (preset.useRealTerrain) {
+    activeTerrainCfg = terrainConfigs[preset.useRealTerrain] || terrainConfigs.gorge;
+    silhouetteMesh.visible = false;
+    terrainGroup.visible = false;
+    buildRealTerrain(function onTerrainReady() {
+      Promise.resolve().then(() => {
+        const startPos = findRiverStartPosition();
+        foil.x = startPos.x; foil.z = startPos.z; foil.heading = startPos.heading;
+        foil.speed = 3;
+        applyPreset(activeTerrainCfg.preset || 'clean');
+        if (activeTerrainCfg.useRiverMask && realTerrainRiverMask) {
+          oceanMat.uniforms.uRiverMask.value = realTerrainRiverMask;
+          oceanMat.uniforms.uUseRiverMask.value = 1;
+        } else {
+          oceanMat.uniforms.uUseRiverMask.value = 0;
+        }
+        oceanMat.uniforms.uRiverBounds.value.set(-RT_WORLD_W()/2, -RT_WORLD_D()/2, RT_WORLD_W()/2, RT_WORLD_D()/2);
+        oceanMat.transparent = true;
+        oceanMat.depthWrite = true;
+        oceanMat.needsUpdate = true;
+        realTerrainMat.uniforms.uWaterLevel.value = RT_WATER_Y();
+        oceanMesh.scale.set(1, 1, 1);
+      });
+    });
+  } else {
+    removeRealTerrain();
+    terrainGroup.visible = true;
+    Promise.resolve().then(() => {
+      oceanMat.uniforms.uUseRiverMask.value = 0;
+      oceanMat.transparent = false;
+      oceanMat.needsUpdate = true;
+      oceanMesh.scale.set(1, 1, 1);
+      oceanMesh.position.y = 0;
+    });
+  }
+
+  // Water style — tropical vs normal
+  activeWaterStyle = preset.waterStyle || 'normal';
+
+  preset.cliffs.forEach(c => {
+    const cliff = createCliffSegment(c.angle, c.dist, c.height, c.width, c.depth, c.seed);
+    terrainGroup.add(cliff);
+  });
+  // Update button states
+  document.querySelectorAll('.bg-preset-btn').forEach(b => b.classList.remove('active-preset'));
+  const activeBtn = document.querySelector(`.bg-preset-btn[data-bg="${presetName}"]`);
+  if (activeBtn) activeBtn.classList.add('active-preset');
+}
+
+// ═══════════════════════════
+// PANORAMIC PHOTO BACKGROUND — flat billboard, loaded from file
+// ═══════════════════════════
+let panoTexture = null;
+let panoReady = false;
+const PANO_DIST = 1600;
+const PANO_WIDTH = 2800;
+const PANO_HEIGHT = 900;
+const PANO_ANGLE = Math.PI; // coastline faces south
+
+// Load Kauai photo — works on HTTP/HTTPS (Netlify etc), also tries base64 fallback for file://
+{
+  const loader = new THREE.TextureLoader();
+  loader.load('kauai.jpg', function(tex) {
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    panoTexture = tex;
+    panoReady = true;
+    console.log('Kauai panorama loaded from file');
+    if (activeBgPreset === 'kauai') buildPanoBackdrop();
+  }, undefined, function() {
+    console.warn('kauai.jpg file load failed, trying base64 fallback');
+    if (typeof KAUAI_B64 !== 'undefined') {
+      const img = new Image();
+      img.onload = function() {
+        panoTexture = new THREE.Texture(img);
+        panoTexture.needsUpdate = true;
+        panoTexture.minFilter = THREE.LinearMipmapLinearFilter;
+        panoTexture.magFilter = THREE.LinearFilter;
+        panoTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        panoReady = true;
+        console.log('Kauai panorama loaded from base64');
+        if (activeBgPreset === 'kauai') buildPanoBackdrop();
+      };
+      img.src = 'data:image/jpeg;base64,' + KAUAI_B64;
+    }
+  });
+}
+
+// Photo billboard material
+const panoMat = new THREE.ShaderMaterial({
+  side: THREE.DoubleSide,
+  transparent: true,
+  depthWrite: false,
+  uniforms: {
+    uPanoTex:      { value: null },
+    uSunDir:       { value: new THREE.Vector3(0, 0.4, -1).normalize() },
+    uCamPos:       { value: new THREE.Vector3() },
+    uFogColor:     { value: new THREE.Color(0.55, 0.7, 0.85) },
+    uFogSunColor:  { value: new THREE.Color(0.8, 0.75, 0.6) }
+  },
+  vertexShader: `
+    varying vec2 vUV;
+    varying vec3 vWorldPos;
+    void main() {
+      vUV = uv;
+      vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: `
+    uniform sampler2D uPanoTex;
+    uniform vec3 uSunDir, uCamPos, uFogColor, uFogSunColor;
+    varying vec2 vUV;
+    varying vec3 vWorldPos;
+
+    void main() {
+      vec2 uv = vUV;
+
+      vec4 texCol = texture2D(uPanoTex, uv);
+      vec3 col = texCol.rgb;
+
+      // Bottom edge: fade where image meets our 3D ocean
+      float bottomFade = smoothstep(0.0, 0.12, vUV.y);
+
+      // Top edge: fade sky into Three.js sky
+      float topFade = smoothstep(1.0, 0.85, vUV.y);
+
+      // Side fades — soft edges
+      float leftFade = smoothstep(0.0, 0.05, vUV.x);
+      float rightFade = smoothstep(1.0, 0.95, vUV.x);
+
+      float alpha = bottomFade * topFade * leftFade * rightFade;
+
+      // Light atmospheric fog
+      float cd = length(uCamPos - vWorldPos);
+      float fog = 1.0 - exp(-cd * 0.00025);
+      vec3 viewDir = normalize(vWorldPos - uCamPos);
+      float sunDot = max(dot(viewDir, normalize(uSunDir)), 0.0);
+      vec3 fogCol = mix(uFogColor, uFogSunColor, pow(sunDot, 4.0));
+      col = mix(col, fogCol, fog * 0.5);
+
+      gl_FragColor = vec4(col, alpha);
+    }`
+});
+
+function buildPanoBackdrop() {
+  removePanoBackdrop();
+  if (!panoReady) return;
+  panoMat.uniforms.uPanoTex.value = panoTexture;
+  const geo = new THREE.PlaneGeometry(PANO_WIDTH, PANO_HEIGHT);
+  panoCylinder = new THREE.Mesh(geo, panoMat);
+  panoCylinder.position.set(
+    Math.sin(PANO_ANGLE) * PANO_DIST,
+    PANO_HEIGHT * 0.35,
+    Math.cos(PANO_ANGLE) * PANO_DIST
+  );
+  panoCylinder.rotation.y = PANO_ANGLE;
+  scene.add(panoCylinder);
+  console.log('Pano backdrop built at', panoCylinder.position.toArray());
+}
+
+function removePanoBackdrop() {
+  if (panoCylinder) {
+    scene.remove(panoCylinder);
+    panoCylinder.geometry.dispose();
+    panoCylinder = null;
+  }
+}
+
+function buildPanoCylinder() { buildPanoBackdrop(); }
+function removePanoCylinder() { removePanoBackdrop(); }
+
+// ═══════════════════════════
+// REAL TERRAIN — heightmap + satellite imagery
+// ═══════════════════════════
+// Terrain shader — satellite texture + fog + lighting
+const realTerrainMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uSatTex:      { value: null },
+    uSunDir:      { value: new THREE.Vector3(0, 0.4, -1).normalize() },
+    uCamPos:      { value: new THREE.Vector3() },
+    uFogColor:    { value: new THREE.Color(0.55, 0.7, 0.85) },
+    uFogSunColor: { value: new THREE.Color(0.8, 0.75, 0.6) },
+    uWaterLevel:  { value: RT_WATER_Y() }
+  },
+  vertexShader: `
+    varying vec3 vWorldPos;
+    varying vec3 vNormal;
+    varying vec2 vUV;
+    void main() {
+      vec4 wp = modelMatrix * vec4(position, 1.0);
+      vWorldPos = wp.xyz;
+      vNormal = normalize(normalMatrix * normal);
+      vUV = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: `
+    uniform sampler2D uSatTex;
+    uniform vec3 uSunDir, uCamPos, uFogColor, uFogSunColor;
+    uniform float uWaterLevel;
+    varying vec3 vWorldPos;
+    varying vec3 vNormal;
+    varying vec2 vUV;
+
+    void main() {
+      vec3 texCol = texture2D(uSatTex, vUV).rgb;
+      texCol = pow(texCol, vec3(2.2)); // sRGB → linear
+
+      // Diffuse lighting
+      float NdotL = max(dot(vNormal, normalize(uSunDir)), 0.0);
+      float diffuse = 0.35 + 0.65 * NdotL;
+
+      // Height-based ambient occlusion (darker in valleys)
+      float aoFactor = smoothstep(0.0, 150.0, vWorldPos.y) * 0.25 + 0.75;
+
+      vec3 col = texCol * diffuse * aoFactor;
+
+      // Atmospheric fog (matches ocean fog)
+      float dist = length(vWorldPos - uCamPos);
+      float fogF = 1.0 - exp(-dist * 0.00018);
+      vec3 viewDir = normalize(vWorldPos - uCamPos);
+      float sunDot = max(dot(viewDir, normalize(uSunDir)), 0.0);
+      vec3 fogCol = mix(uFogColor, uFogSunColor, pow(sunDot, 4.0));
+      col = mix(col, fogCol, fogF);
+
+      col = pow(col, vec3(1.0/2.2)); // linear → sRGB
+
+      // Fade out underwater terrain
+      float underwaterFade = smoothstep(uWaterLevel - 5.0, uWaterLevel + 2.0, vWorldPos.y);
+      if (underwaterFade < 0.01) discard;
+
+      gl_FragColor = vec4(col, underwaterFade);
+    }`
+});
+realTerrainMat.transparent = true;
+realTerrainMat.depthWrite = true;
+
+// Asset cache — keyed by terrain config name (gorge, maliko, etc.)
+const terrainAssetCache = {};
+
+// Load terrain assets on demand for a given config
+function loadTerrainAssets(cfgName, callback) {
+  if (terrainAssetCache[cfgName]) {
+    // Already loaded
+    callback(terrainAssetCache[cfgName]);
+    return;
+  }
+
+  const cfg = terrainConfigs[cfgName];
+  if (!cfg) { console.warn('Unknown terrain config:', cfgName); return; }
+
+  const entry = { satTex: null, hmImg: null };
+  let loaded = 0;
+  function check() {
+    loaded++;
+    if (loaded === 2) {
+      terrainAssetCache[cfgName] = entry;
+      console.log(`Terrain assets loaded: ${cfg.label}`);
+      callback(entry);
+    }
+  }
+
+  const tLoader = new THREE.TextureLoader();
+  tLoader.load(cfg.satellite, function(tex) {
+    tex.encoding = THREE.sRGBEncoding;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    entry.satTex = tex;
+    console.log(`Satellite loaded: ${cfg.label}`);
+    check();
+  });
+
+  const hmImg = new Image();
+  hmImg.onload = function() {
+    entry.hmImg = hmImg;
+    console.log(`Heightmap loaded: ${cfg.label} (${hmImg.width}x${hmImg.height})`);
+    check();
+  };
+  hmImg.onerror = function() { console.warn(`Heightmap load failed: ${cfg.label}`); };
+  hmImg.src = cfg.heightmap;
+}
+
+// Preload gorge assets at page start (non-blocking)
+loadTerrainAssets('gorge', function() {});
+
+function buildRealTerrain(onReady) {
+  if (onReady) _terrainReadyCallback = onReady;
+  removeRealTerrain();
+  const cfgName = activeTerrainCfg === terrainConfigs.gorge ? 'gorge' :
+                  activeTerrainCfg === terrainConfigs.maliko ? 'maliko' : null;
+  if (!cfgName) return;
+
+  const assets = terrainAssetCache[cfgName];
+  if (!assets) {
+    // Assets still loading — will be called again when ready
+    loadTerrainAssets(cfgName, function() { buildRealTerrain(); });
+    return;
+  }
+
+  realTerrainSatTex = assets.satTex;
+  realTerrainHmImg = assets.hmImg;
+
+  // Extract elevation data from heightmap
+  const canvas = document.createElement('canvas');
+  canvas.width = realTerrainHmImg.width;
+  canvas.height = realTerrainHmImg.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(realTerrainHmImg, 0, 0);
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+  // ── Generate river mask: white = water, black = land ──
+  const WATER_THRESH = activeTerrainCfg.waterThresh || 12;
+  const FEATHER = 4;       // pixels of edge softening
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = canvas.width;
+  maskCanvas.height = canvas.height;
+  const mCtx = maskCanvas.getContext('2d');
+  const maskImg = mCtx.createImageData(canvas.width, canvas.height);
+  const mData = maskImg.data;
+
+  // First pass: binary mask
+  for (let i = 0; i < canvas.width * canvas.height; i++) {
+    const elev = pixels[i * 4]; // R channel = grayscale height
+    const isWater = elev <= WATER_THRESH ? 255 : 0;
+    mData[i * 4] = isWater;
+    mData[i * 4 + 1] = isWater;
+    mData[i * 4 + 2] = isWater;
+    mData[i * 4 + 3] = 255;
+  }
+  mCtx.putImageData(maskImg, 0, 0);
+
+  // Feather the edges with a blur for smooth shoreline
+  if (FEATHER > 0) {
+    mCtx.filter = `blur(${FEATHER}px)`;
+    mCtx.drawImage(maskCanvas, 0, 0);
+    mCtx.filter = 'none';
+  }
+
+  // Create Three.js texture from mask
+  if (realTerrainRiverMask) realTerrainRiverMask.dispose();
+  realTerrainRiverMask = new THREE.CanvasTexture(maskCanvas);
+  realTerrainRiverMask.minFilter = THREE.LinearFilter;
+  realTerrainRiverMask.magFilter = THREE.LinearFilter;
+  realTerrainRiverMask.wrapS = THREE.ClampToEdgeWrapping;
+  realTerrainRiverMask.wrapT = THREE.ClampToEdgeWrapping;
+  console.log('River mask generated, threshold:', WATER_THRESH);
+
+  // Build geometry — sample every 2 pixels for performance
+  const step = 2;
+  const geoSegX = Math.floor((canvas.width - 1) / step);
+  const geoSegZ = Math.floor((canvas.height - 1) / step);
+
+  const geometry = new THREE.PlaneGeometry(RT_WORLD_W(), RT_WORLD_D(), geoSegX, geoSegZ);
+  geometry.rotateX(-Math.PI / 2);
+
+  const positions = geometry.attributes.position.array;
+
+  for (let i = 0; i <= geoSegZ; i++) {
+    for (let j = 0; j <= geoSegX; j++) {
+      const vertexIndex = i * (geoSegX + 1) + j;
+      const px = Math.min(Math.floor((j / geoSegX) * (canvas.width - 1)), canvas.width - 1);
+      const py = Math.min(Math.floor((i / geoSegZ) * (canvas.height - 1)), canvas.height - 1);
+      const pixelIndex = (py * canvas.width + px) * 4;
+      const heightValue = pixels[pixelIndex] / 255;
+      positions[vertexIndex * 3 + 1] = heightValue * RT_ELEV_RANGE();
+    }
+  }
+
+  geometry.attributes.position.needsUpdate = true;
+  geometry.computeVertexNormals();
+
+  // Set material textures
+  realTerrainMat.uniforms.uSatTex.value = realTerrainSatTex;
+
+  realTerrainMesh = new THREE.Mesh(geometry, realTerrainMat);
+
+  // Position terrain so the river is roughly centered on the player start
+  // Player starts at (0,0) — put terrain centered there
+  // River runs east-west; north is -Z in our Three.js coordinate system
+  realTerrainMesh.position.set(0, 0, 0);
+
+  scene.add(realTerrainMesh);
+
+  // Store height data for potential physics interaction
+  realTerrainHeightData = { pixels, width: canvas.width, height: canvas.height };
+
+  console.log('Real terrain built:', (geoSegX+1)*(geoSegZ+1), 'vertices', 'mesh in scene:', scene.children.includes(realTerrainMesh));
+
+  // Notify caller that terrain is ready (handles async asset loading)
+  if (_terrainReadyCallback) { console.log('Calling terrainReady callback'); const cb = _terrainReadyCallback; _terrainReadyCallback = null; cb(); }
+}
+
+// Find a good starting position in the water
+function findRiverStartPosition() {
+  // Use explicit start position if configured
+  if (activeTerrainCfg.startPos) return activeTerrainCfg.startPos;
+
+  if (!realTerrainHeightData) return { x: 0, z: 0, heading: 0 };
+  const d = realTerrainHeightData;
+  const WATER_THRESH = activeTerrainCfg.waterThresh || 12;
+
+  // Scan at ~20% from the west edge (pixel column ~205 of 1024)
+  const targetCol = Math.floor(d.width * 0.20);
+
+  // Find all water pixels in this column
+  let waterRows = [];
+  for (let row = 0; row < d.height; row++) {
+    const idx = (row * d.width + targetCol) * 4;
+    if (d.pixels[idx] <= WATER_THRESH) {
+      waterRows.push(row);
+    }
+  }
+
+  // If no water found at 20%, scan progressively further east
+  if (waterRows.length === 0) {
+    for (let colPct = 0.25; colPct <= 0.5; colPct += 0.05) {
+      const col = Math.floor(d.width * colPct);
+      for (let row = 0; row < d.height; row++) {
+        const idx = (row * d.width + col) * 4;
+        if (d.pixels[idx] <= WATER_THRESH) {
+          waterRows.push(row);
+        }
+      }
+      if (waterRows.length > 0) {
+        // Use the center of the water band
+        const midRow = waterRows[Math.floor(waterRows.length / 2)];
+        const u = col / (d.width - 1);
+        const v = midRow / (d.height - 1);
+        const worldX = (u - 0.5) * RT_WORLD_W();
+        const worldZ = -(v - 0.5) * RT_WORLD_D(); // flip Z
+        console.log(`River start found at col ${colPct*100}%: pixel(${col},${midRow}) → world(${worldX.toFixed(0)}, ${worldZ.toFixed(0)})`);
+        return { x: worldX, z: worldZ, heading: Math.PI/2 }; // heading PI/2 = east (+X, downriver)
+      }
+    }
+    console.warn('No river water found, defaulting to center');
+    return { x: 0, z: 0, heading: 0 };
+  }
+
+  // Use the center of the water band at the target column
+  const midRow = waterRows[Math.floor(waterRows.length / 2)];
+  const u = targetCol / (d.width - 1);
+  const v = midRow / (d.height - 1);
+  const worldX = (u - 0.5) * RT_WORLD_W();
+  const worldZ = -(v - 0.5) * RT_WORLD_D(); // flip Z
+  console.log(`River start: pixel(${targetCol},${midRow}) → world(${worldX.toFixed(0)}, ${worldZ.toFixed(0)})`);
+  return { x: worldX, z: worldZ, heading: Math.PI/2 }; // heading PI/2 = east (+X, downriver)
+}
+
+function removeRealTerrain() {
+  if (realTerrainMesh) {
+    scene.remove(realTerrainMesh);
+    if (realTerrainMesh.geometry) realTerrainMesh.geometry.dispose();
+    realTerrainMesh = null;
+  }
+}
+
+// Query real terrain elevation at a world position
+function getRealTerrainHeight(worldX, worldZ) {
+  if (!realTerrainHeightData || !realTerrainMesh) return null;
+  const d = realTerrainHeightData;
+  const localX = worldX - realTerrainMesh.position.x;
+  const localZ = worldZ - realTerrainMesh.position.z;
+  const u = (localX / RT_WORLD_W()) + 0.5;
+  const v = 1.0 - ((localZ / RT_WORLD_D()) + 0.5); // flip Z to match heightmap rows
+  if (u < 0 || u > 1 || v < 0 || v > 1) return null;
+  const px = Math.floor(u * (d.width - 1));
+  const py = Math.floor(v * (d.height - 1));
+  const idx = (py * d.width + px) * 4;
+  return (d.pixels[idx] / 255) * RT_ELEV_RANGE();
+}
+
+// Build initial terrain (must be after all terrain declarations above)
+rebuildTerrain('gorge-real');
+
+// ═══════════════════════════
+// ENVIRONMENT MAP — for foil reflections
+// ═══════════════════════════
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+pmremGenerator.compileCubemapShader();
+let envMap = null;
+let envDirty = true;
+
+function updateEnvMap() {
+  // Render just the sky (not clouds/ocean) into a cubemap for reflections
+  const envScene = new THREE.Scene();
+  const envSky = new THREE.Sky();
+  envSky.scale.setScalar(1000);
+  const eu = envSky.material.uniforms;
+  eu['turbidity'].value = skyUniforms['turbidity'].value;
+  eu['rayleigh'].value = skyUniforms['rayleigh'].value;
+  eu['mieCoefficient'].value = skyUniforms['mieCoefficient'].value;
+  eu['mieDirectionalG'].value = skyUniforms['mieDirectionalG'].value;
+  eu['sunPosition'].value.copy(skyUniforms['sunPosition'].value);
+  envScene.add(envSky);
+  if (envMap) envMap.dispose();
+  envMap = pmremGenerator.fromScene(envScene).texture;
+  scene.environment = envMap;
+  envSky.material.dispose();
+  envSky.geometry.dispose();
+}
+
+
+// ═══════════════════════════
+// OCEAN SHADER
+// ═══════════════════════════
+const OCEAN_SIZE = 800, SEGMENTS = 512;
+const oceanGeo = new THREE.PlaneGeometry(OCEAN_SIZE, OCEAN_SIZE, SEGMENTS, SEGMENTS);
+oceanGeo.rotateX(-Math.PI / 2);
+const oceanMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime:{value:0},uSunDir:{value:new THREE.Vector3(0,.4,-1).normalize()},uCamPos:{value:new THREE.Vector3()},
+    uChopHeight:{value:.4},uChopDir:{value:new THREE.Vector2(.707,.707)},
+    uSwell1:{value:new THREE.Vector4(-1,0,12,2)},uSwell2:{value:new THREE.Vector4(-.707,.707,8,.8)},uSwell3:{value:new THREE.Vector4(.34,-.94,16,.3)},
+    uDeepColor:{value:new THREE.Color(0,.04,.12)},uShallowColor:{value:new THREE.Color(0,.15,.3)},uFoamColor:{value:new THREE.Color(.85,.9,.95)},
+    uFogColor:{value:new THREE.Color(.55,.7,.85)},uFogSunColor:{value:new THREE.Color(.8,.75,.6)},
+    uRiverMask:{value:null},uUseRiverMask:{value:0},
+    uRiverBounds:{value:new THREE.Vector4(-RT_WORLD_W()/2, -RT_WORLD_D()/2, RT_WORLD_W()/2, RT_WORLD_D()/2)},
+  },
+  vertexShader: `
+    precision highp float;
+    uniform float uTime;uniform float uChopHeight;uniform vec2 uChopDir;
+    uniform vec4 uSwell1,uSwell2,uSwell3;
+    varying vec3 vWorldPos;varying vec3 vNormal;varying float vFoam;varying float vHeight;
+    vec2 hash2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
+    float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);return mix(mix(dot(hash2(i),f),dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)),dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
+    float fbm(vec2 p){float v=0.,a=.5;mat2 r=mat2(.8,.6,-.6,.8);for(int i=0;i<6;i++){v+=a*noise(p);p=r*p*2.03;a*=.48;}return v;}
+    vec3 gw(vec2 pos,vec2 dir,float per,float ht,float t,out vec3 T,out vec3 B){
+      float wl=1.56*per*per,k=6.28318/wl,spd=sqrt(9.81/k),st=min(ht*k/2.,.4);
+      float ph=k*dot(dir,pos)-spd*t*k,s=sin(ph),c=cos(ph),a=ht*.5;
+      T=vec3(1.-st*dir.x*dir.x*c,st*dir.x*s,-st*dir.x*dir.y*c);
+      B=vec3(-st*dir.x*dir.y*c,st*dir.y*s,1.-st*dir.y*dir.y*c);
+      return vec3(-dir.x*a*st*s,a*c,-dir.y*a*st*s);
+    }
+    void main(){
+      vec3 pos=(modelMatrix*vec4(position,1.0)).xyz;
+      vec3 d=vec3(0),T=vec3(1,0,0),B_=vec3(0,0,1),t1,b1;
+      if(uSwell1.w>.01){d+=gw(pos.xz,uSwell1.xy,uSwell1.z,uSwell1.w,uTime,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,uSwell1.xy*1.07,uSwell1.z*.7,uSwell1.w*.22,uTime*1.05,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+      if(uSwell2.w>.01){d+=gw(pos.xz,uSwell2.xy,uSwell2.z,uSwell2.w,uTime,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,uSwell2.xy*.95,uSwell2.z*.65,uSwell2.w*.2,uTime*.98,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+      if(uSwell3.w>.01){d+=gw(pos.xz,uSwell3.xy,uSwell3.z,uSwell3.w,uTime,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+      if(uChopHeight>.01){float ch=uChopHeight;vec2 cd=uChopDir;
+        d+=gw(pos.xz,cd,3.,ch*.5,uTime,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,vec2(cd.y,-cd.x)*.8+cd*.6,2.2,ch*.35,uTime*1.1,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,cd*.7+vec2(-cd.y,cd.x)*.7,1.8,ch*.25,uTime*1.3,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
+        d+=gw(pos.xz,cd*.9+vec2(cd.y,-cd.x)*.4,1.3,ch*.18,uTime*.9,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
+      float det=fbm(pos.xz*mix(.08,.02,smoothstep(50.,400.,length(pos.xz)))+uTime*.15)*.3+fbm(pos.xz*.03-uTime*.08)*.15;
+      d.y+=det*(uChopHeight+.2);
+      pos+=d;
+      vNormal=normalize(cross(B_,T));if(vNormal.y<0.)vNormal=-vNormal;
+      float jac=T.x*B_.z-T.z*B_.x;vFoam=smoothstep(.3,-.1,jac)*.8;
+      vFoam+=smoothstep(.4,.8,fbm(pos.xz*.15+uTime*.2))*.2*uChopHeight;vFoam=clamp(vFoam,0.,1.);
+      vWorldPos=pos;vHeight=d.y;
+      gl_Position=projectionMatrix*viewMatrix*vec4(pos,1.0);
+    }`,
+  fragmentShader: `
+    precision highp float;
+    uniform float uTime;uniform vec3 uSunDir,uCamPos,uDeepColor,uShallowColor,uFoamColor,uFogColor,uFogSunColor;
+    uniform sampler2D uRiverMask;uniform float uUseRiverMask;uniform vec4 uRiverBounds;
+    varying vec3 vWorldPos,vNormal;varying float vFoam,vHeight;
+    vec2 hash2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
+    float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);return mix(mix(dot(hash2(i),f),dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)),dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
+    void main(){
+      // River mask: discard fragments outside the river
+      if (uUseRiverMask > 0.5) {
+        vec2 muv = vec2(
+          (vWorldPos.x - uRiverBounds.x) / (uRiverBounds.z - uRiverBounds.x),
+          1.0 - (vWorldPos.z - uRiverBounds.y) / (uRiverBounds.w - uRiverBounds.y)
+        );
+        if (muv.x < 0.0 || muv.x > 1.0 || muv.y < 0.0 || muv.y > 1.0) discard;
+        float mask = texture2D(uRiverMask, muv).r;
+        if (mask < 0.08) discard;
+      }
+
+      vec3 N=normalize(vNormal),V=normalize(uCamPos-vWorldPos),L=normalize(uSunDir);
+      float e=.5;vec2 p=vWorldPos.xz;
+      N=normalize(N+vec3(noise(p*.8+uTime*.3+vec2(e,0))-noise(p*.8+uTime*.3-vec2(e,0)),0,noise(p*.8+uTime*.3+vec2(0,e))-noise(p*.8+uTime*.3-vec2(0,e)))*.12);
+      float cd=length(uCamPos-vWorldPos);
+      if(cd<100.){float d2=1.-smoothstep(0.,100.,cd);
+        N=normalize(N+vec3(noise(p*3.+uTime*.5+vec2(e,0))-noise(p*3.+uTime*.5-vec2(e,0)),0,noise(p*3.+uTime*.5+vec2(0,e))-noise(p*3.+uTime*.5-vec2(0,e)))*.06*d2);}
+      float fr=pow(1.-max(dot(N,V),0.),4.);fr=mix(.04,1.,fr);
+      vec3 wc=mix(uDeepColor,uShallowColor,smoothstep(-1.,2.,vHeight)*.5+fr*.3);
+      vec3 sssC=vec3(0,.35,.3)*pow(max(dot(V,-L+N*.6),0.),3.)*.3;
+      vec3 H=normalize(L+V);vec3 sunS=vec3(1,.95,.8)*(pow(max(dot(N,H),0.),512.)*3.+pow(max(dot(N,H),0.),64.)*.6);
+      vec3 R=reflect(-V,N);vec3 skyR=mix(vec3(.55,.7,.85),vec3(.12,.25,.55),pow(max(R.y,0.),.5));
+      skyR+=vec3(1,.9,.7)*pow(max(dot(R,L),0.),64.)*.5;
+      vec3 col=mix(wc+sssC,skyR,fr)+sunS;
+      float fp=noise(vWorldPos.xz*1.5+uTime*.2)*.5+.5;fp*=noise(vWorldPos.xz*4.-uTime*.15)*.5+.5;
+      col=mix(col,uFoamColor*(.8+.2*fp),smoothstep(.15,.6,vFoam*fp)*.85);
+      float fog=1.-exp(-cd*.0012);
+      col=mix(col,mix(uFogColor,uFogSunColor,pow(max(dot(normalize(vWorldPos-uCamPos),L),0.),4.)),fog);
+
+      // Soft shoreline edge (alpha blend at river boundaries)
+      float alpha = 1.0;
+      if (uUseRiverMask > 0.5) {
+        vec2 muv = vec2(
+          (vWorldPos.x - uRiverBounds.x) / (uRiverBounds.z - uRiverBounds.x),
+          1.0 - (vWorldPos.z - uRiverBounds.y) / (uRiverBounds.w - uRiverBounds.y)
+        );
+        alpha = smoothstep(0.08, 0.35, texture2D(uRiverMask, muv).r);
+      }
+      gl_FragColor=vec4(col, alpha);
+    }`
+});
+const oceanMesh = new THREE.Mesh(oceanGeo, oceanMat);
+scene.add(oceanMesh);
+
+// ═══════════════════════════
+// CPU WAVE HEIGHT (mirrors GPU)
+// ═══════════════════════════
+function gerstnerY(px,pz,dx,dz,per,ht,t){
+  if(ht<.01)return 0;
+  const wl=1.56*per*per,k=6.28318/wl,spd=Math.sqrt(9.81/k);
+  return ht*.5*Math.cos(k*(dx*px+dz*pz)-spd*t*k);
+}
+// CPU noise to match GPU fbm detail displacement
+function cpuNoise2D(x,y){
+  // Simple hash-based gradient noise matching the GPU hash2/noise functions
+  function h2(px,py){
+    const sx=Math.sin(px*127.1+py*311.7)*43758.5453;
+    const sy=Math.sin(px*269.5+py*183.3)*43758.5453;
+    return[(sx-Math.floor(sx))*2-1,(sy-Math.floor(sy))*2-1];
+  }
+  const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy;
+  const ux=fx*fx*(3-2*fx),uy=fy*fy*(3-2*fy);
+  const a=h2(ix,iy),b=h2(ix+1,iy),c=h2(ix,iy+1),d=h2(ix+1,iy+1);
+  const va=a[0]*fx+a[1]*fy, vb=b[0]*(fx-1)+b[1]*fy;
+  const vc=c[0]*fx+c[1]*(fy-1), vd=d[0]*(fx-1)+d[1]*(fy-1);
+  return va+(vb-va)*ux+(vc-va)*uy+(va-vb-vc+vd)*ux*uy;
+}
+function cpuFbm(x,y){
+  let v=0,a=.5,px=x,py=y;
+  for(let i=0;i<6;i++){
+    v+=a*cpuNoise2D(px,py);
+    const nx=.8*px+.6*py, ny=-.6*px+.8*py;
+    px=nx*2.03; py=ny*2.03; a*=.48;
+  }
+  return v;
+}
+
+function getWaveHeight(px,pz,t){
+  let h=0;
+  const s1d=degToDir(getVal('swell1Dir')),s1p=getVal('swell1Period'),s1h=getVal('swell1Height');
+  const s2d=degToDir(getVal('swell2Dir')),s2p=getVal('swell2Period'),s2h=getVal('swell2Height');
+  const s3d=degToDir(getVal('swell3Dir')),s3p=getVal('swell3Period'),s3h=getVal('swell3Height');
+  const ch=getVal('chopHeight'),cd_=degToDir(getVal('chopDir'));
+  h+=gerstnerY(px,pz,s1d.x,s1d.y,s1p,s1h,t);
+  h+=gerstnerY(px,pz,s1d.x*1.07,s1d.y*1.07,s1p*.7,s1h*.22,t*1.05);
+  h+=gerstnerY(px,pz,s2d.x,s2d.y,s2p,s2h,t);
+  h+=gerstnerY(px,pz,s2d.x*.95,s2d.y*.95,s2p*.65,s2h*.2,t*.98);
+  h+=gerstnerY(px,pz,s3d.x,s3d.y,s3p,s3h,t);
+  h+=gerstnerY(px,pz,cd_.x,cd_.y,3,ch*.5,t);
+  const cx=cd_.y*.8+cd_.x*.6,cz=-cd_.x*.8+cd_.y*.6;
+  h+=gerstnerY(px,pz,cx,cz,2.2,ch*.35,t*1.1);
+  // Extra chop components matching GPU vertex shader
+  const cx2=cd_.x*.7+(-cd_.y)*.7, cz2=cd_.y*.7+cd_.x*.7;
+  h+=gerstnerY(px,pz,cx2,cz2,1.8,ch*.25,t*1.3);
+  const cx3=cd_.x*.9+cd_.y*.4, cz3=cd_.y*.9+(-cd_.x)*.4;
+  h+=gerstnerY(px,pz,cx3,cz3,1.3,ch*.18,t*.9);
+  // Detail fbm displacement matching GPU (line 1645-1646)
+  const detScale=.08; // GPU uses mix(.08,.02,...) — close range uses .08
+  const det=cpuFbm(px*detScale+t*.15,pz*detScale+t*.15)*.3
+           +cpuFbm(px*.03-t*.08,pz*.03-t*.08)*.15;
+  h+=det*(ch+.2);
+  return h;
+}
+function getWaveSlope(px,pz,t){
+  const e=.5;
+  return{
+    dhdx:(getWaveHeight(px+e,pz,t)-getWaveHeight(px-e,pz,t))/(2*e),
+    dhdz:(getWaveHeight(px,pz+e,t)-getWaveHeight(px,pz-e,t))/(2*e)
+  };
+}
+
+// ═══════════════════════════
+// HYDROFOIL MODEL
+// ═══════════════════════════
+const foilGroup = new THREE.Group();
+scene.add(foilGroup);
+// Inner group rotated so the board's long axis (built along X) aligns with +Z travel
+// PI/2 Y-rotation sends +X → -Z, so use -PI/2 to send +X → +Z (nose forward)
+// Using YXZ Euler order so: Y (align board) → X (pitch) → Z (roll along board axis)
+const modelGroup = new THREE.Group();
+modelGroup.rotation.order = 'YXZ';
+modelGroup.rotation.y = -Math.PI / 2;
+foilGroup.add(modelGroup);
+
+const boardMat=new THREE.MeshStandardMaterial({color:0xf0f0f0,roughness:.25});
+const carbonMat=new THREE.MeshStandardMaterial({color:0x1a1a1a,roughness:.3,metalness:.4});
+
+function createFoilAsset() {
+  const foilAsset = new THREE.Group();
+  // 1. THE BOARD (surfboard shape)
+  const boardLength = 1.1;
+  const bL = boardLength / 2;
+  const bW = 0.3; // half-width
+  const boardShape = new THREE.Shape();
+  boardShape.moveTo(-bL, 0);
+  boardShape.bezierCurveTo(-bL + 0.05, bW * 0.6, -bL + 0.2, bW * 0.95, -bL * 0.3, bW);
+  boardShape.bezierCurveTo(bL * 0.3, bW * 0.95, bL - 0.12, bW * 0.5, bL, 0);
+  boardShape.bezierCurveTo(bL - 0.12, -bW * 0.5, bL * 0.3, -bW * 0.95, -bL * 0.3, -bW);
+  boardShape.bezierCurveTo(-bL + 0.2, -bW * 0.95, -bL + 0.05, -bW * 0.6, -bL, 0);
+  const boardGeom = new THREE.ExtrudeGeometry(boardShape, {
+    steps: 1, depth: 0.08,
+    bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 3,
+  });
+  boardGeom.rotateX(-Math.PI / 2);
+  const boardOffset = boardLength / 6;
+  const board = new THREE.Mesh(boardGeom, boardMat);
+  board.position.set(boardOffset, 0.81, 0);
+  board.castShadow = true;
+  board.receiveShadow = true;
+  foilAsset.add(board);
+  // 2. THE MAST
+  const mast = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.85, 0.18), carbonMat);
+  mast.position.set(0, 0.4, 0);
+  mast.rotation.y = Math.PI / 2;
+  mast.castShadow = true;
+  foilAsset.add(mast);
+  // 3. THE FUSELAGE
+  const fuse = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.05, 0.05), carbonMat);
+  fuse.position.set(-0.125, 0, 0);
+  fuse.castShadow = true;
+  foilAsset.add(fuse);
+  // 4. FRONT WING
+  const fWing = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.02, 1.1), carbonMat);
+  fWing.position.set(0.25, 0, 0);
+  fWing.scale.set(1, 1, 0.8);
+  fWing.castShadow = true;
+  foilAsset.add(fWing);
+  // 5. STABILIZER
+  const bWing = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.02, 0.4), carbonMat);
+  bWing.position.set(-0.5, 0, 0);
+  bWing.castShadow = true;
+  foilAsset.add(bWing);
+  return foilAsset;
+}
+
+const foilAsset = createFoilAsset();
+// Offset so the board deck (at Y=0.81 in asset) sits at Y=0 in modelGroup
+foilAsset.position.y = -0.81;
+modelGroup.add(foilAsset);
+
+// Wing tip markers (invisible) - used to track world positions for streamers
+// Front wing is at X=0.25, Z span = 1.1*0.8/2 = 0.44, Y=0 in foilAsset
+const tipL=new THREE.Object3D(); tipL.position.set(.25, 0, .44); foilAsset.add(tipL);
+const tipR=new THREE.Object3D(); tipR.position.set(.25, 0, -.44); foilAsset.add(tipR);
+
+// ═══════════════════════════
+// SPRAY PARTICLES
+// ═══════════════════════════
+const SPRAY_N=200;
+const spGeo=new THREE.BufferGeometry();
+const spPos=new Float32Array(SPRAY_N*3),spSz=new Float32Array(SPRAY_N),spAl=new Float32Array(SPRAY_N);
+spGeo.setAttribute('position',new THREE.BufferAttribute(spPos,3));
+spGeo.setAttribute('size',new THREE.BufferAttribute(spSz,1));
+spGeo.setAttribute('alpha',new THREE.BufferAttribute(spAl,1));
+const spMat=new THREE.ShaderMaterial({
+  transparent:true,depthWrite:false,
+  uniforms:{uColor:{value:new THREE.Color(.9,.95,1)}},
+  vertexShader:`attribute float size;attribute float alpha;varying float vA;void main(){vA=alpha;vec4 mv=modelViewMatrix*vec4(position,1);gl_PointSize=size*(200./-mv.z);gl_Position=projectionMatrix*mv;}`,
+  fragmentShader:`uniform vec3 uColor;varying float vA;void main(){float d=length(gl_PointCoord-.5);if(d>.5)discard;gl_FragColor=vec4(uColor,vA*(1.-d*2.)*.6);}`
+});
+scene.add(new THREE.Points(spGeo,spMat));
+
+const spParts=[];for(let i=0;i<SPRAY_N;i++)spParts.push({x:0,y:-100,z:0,vx:0,vy:0,vz:0,life:0,ml:1});
+function emitSpray(px,py,pz,vx,vy,vz,n){
+  let e=0;
+  for(let i=0;i<SPRAY_N&&e<n;i++){
+    if(spParts[i].life<=0){
+      const p=spParts[i];
+      p.x=px+(Math.random()-.5)*.3;p.y=py+Math.random()*.1;p.z=pz+(Math.random()-.5)*.3;
+      p.vx=vx+(Math.random()-.5)*1.5;p.vy=vy+Math.random()*2.5;p.vz=vz+(Math.random()-.5)*1.5;
+      p.life=.6+Math.random()*.8;p.ml=p.life;e++;
+    }
+  }
+}
+function updateSpray(dt){
+  for(let i=0;i<SPRAY_N;i++){
+    const p=spParts[i];
+    if(p.life>0){p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.z+=p.vz*dt;p.vy-=6*dt;
+      const f=Math.max(0,p.life/p.ml);
+      spPos[i*3]=p.x;spPos[i*3+1]=p.y;spPos[i*3+2]=p.z;
+      spSz[i]=lerp(.05,.4,1-f);spAl[i]=f*f;
+    } else{spPos[i*3+1]=-100;spAl[i]=0;}
+  }
+  spGeo.attributes.position.needsUpdate=true;
+  spGeo.attributes.size.needsUpdate=true;
+  spGeo.attributes.alpha.needsUpdate=true;
+}
+
+// ═══════════════════════════
+// WAKE TRAIL
+// ═══════════════════════════
+const WK_N=80;
+const wkGeo=new THREE.BufferGeometry();
+const wkPos=new Float32Array(WK_N*3),wkAl=new Float32Array(WK_N);
+wkGeo.setAttribute('position',new THREE.BufferAttribute(wkPos,3));
+wkGeo.setAttribute('alpha',new THREE.BufferAttribute(wkAl,1));
+const wkMat=new THREE.ShaderMaterial({
+  transparent:true,depthWrite:false,
+  vertexShader:`attribute float alpha;varying float vA;void main(){vA=alpha;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1);}`,
+  fragmentShader:`varying float vA;void main(){gl_FragColor=vec4(.8,.9,1,vA*.3);}`
+});
+scene.add(new THREE.Line(wkGeo,wkMat));
+const wkHist=[];
+
+// ═══════════════════════════
+// WINGTIP STREAMERS (underwater)
+// ═══════════════════════════
+const STR_N = 120; // points per streamer
+
+function makeStreamer(color) {
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(STR_N * 3);
+  const alp = new Float32Array(STR_N);
+  const szs = new Float32Array(STR_N);
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('alpha', new THREE.BufferAttribute(alp, 1));
+  geo.setAttribute('size', new THREE.BufferAttribute(szs, 1));
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    uniforms: { uColor: { value: color } },
+    vertexShader: `
+      attribute float alpha; attribute float size;
+      varying float vA;
+      void main(){ vA=alpha; vec4 mv=modelViewMatrix*vec4(position,1.0);
+        gl_PointSize=size*(150.0/-mv.z); gl_Position=projectionMatrix*mv; }`,
+    fragmentShader: `
+      uniform vec3 uColor; varying float vA;
+      void main(){ float d=length(gl_PointCoord-0.5);
+        if(d>0.5) discard;
+        float a=vA*(1.0-d*2.0)*0.7;
+        gl_FragColor=vec4(uColor, a); }`
+  });
+  const points = new THREE.Points(geo, mat);
+  scene.add(points);
+  return { geo, pos, alp, szs, hist: [], points };
+}
+
+const streamerL = makeStreamer(new THREE.Color(0.5, 0.8, 1.0));
+const streamerR = makeStreamer(new THREE.Color(0.5, 0.8, 1.0));
+
+function updateStreamer(str, wx, wy, wz, speed) {
+  if (speed > 1.0) {
+    str.hist.unshift({ x: wx, y: wy, z: wz });
+  }
+  while (str.hist.length > STR_N) str.hist.pop();
+  for (let i = 0; i < STR_N; i++) {
+    if (i < str.hist.length) {
+      str.pos[i*3] = str.hist[i].x;
+      str.pos[i*3+1] = str.hist[i].y;
+      str.pos[i*3+2] = str.hist[i].z;
+      const t = 1.0 - i / str.hist.length;
+      str.alp[i] = t * t * Math.min(1, speed / 4);
+      str.szs[i] = lerp(0.05, 0.6, t);
+    } else {
+      str.pos[i*3+1] = -100;
+      str.alp[i] = 0;
+      str.szs[i] = 0;
+    }
+  }
+  str.geo.attributes.position.needsUpdate = true;
+  str.geo.attributes.alpha.needsUpdate = true;
+  str.geo.attributes.size.needsUpdate = true;
+  str.geo.setDrawRange(0, str.hist.length);
+}
+
+// ═══════════════════════════
+// FOIL PHYSICS STATE
+// ═══════════════════════════
+const foil={x:0,z:0,heading:0,speed:3,pitch:0,roll:0,rideH:0,prevWH:0,prevSpeed:3,energy:1.0};
+
+// Pre-allocated vectors to avoid GC in render loop
+const _tipLWorld = new THREE.Vector3();
+const _tipRWorld = new THREE.Vector3();
+
+// ═══════════════════════════
+// INPUT
+// ═══════════════════════════
+const input={left:false,right:false,up:false,down:false,pump:false};
+window.addEventListener('keydown',e=>{
+  if(e.key==='a'||e.key==='A'||e.key==='ArrowLeft')input.left=true;
+  if(e.key==='d'||e.key==='D'||e.key==='ArrowRight')input.right=true;
+  if(e.key==='w'||e.key==='W'||e.key==='ArrowUp')input.up=true;
+  if(e.key==='s'||e.key==='S'||e.key==='ArrowDown')input.down=true;
+  if(e.key===' '){input.pump=true;e.preventDefault();}
+  if(e.key==='Tab'){e.preventDefault();toggleControls();}
+});
+window.addEventListener('keyup',e=>{
+  if(e.key==='a'||e.key==='A'||e.key==='ArrowLeft')input.left=false;
+  if(e.key==='d'||e.key==='D'||e.key==='ArrowRight')input.right=false;
+  if(e.key==='w'||e.key==='W'||e.key==='ArrowUp')input.up=false;
+  if(e.key==='s'||e.key==='S'||e.key==='ArrowDown')input.down=false;
+  if(e.key===' ')input.pump=false;
+});
+
+// Touch buttons
+document.querySelectorAll('.ride-btn').forEach(btn=>{
+  const a=btn.dataset.action;
+  const on=()=>{input[a]=true;btn.classList.add('active');};
+  const off=()=>{input[a]=false;btn.classList.remove('active');};
+  btn.addEventListener('mousedown',e=>{e.preventDefault();e.stopPropagation();on();});
+  btn.addEventListener('mouseup',off);btn.addEventListener('mouseleave',off);
+  btn.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();on();},{passive:false});
+  btn.addEventListener('touchend',e=>{e.preventDefault();off();},{passive:false});
+  btn.addEventListener('touchcancel',off);
+});
+
+// ═══════════════════════════
+// CAMERA
+// ═══════════════════════════
+const cam={theta:Math.PI*.15,phi:.28,dist:18,drag:false,lx:0,ly:0,pd:0,offsetTheta:0,followSmooth:0.04,
+  free:false, panX:0, panY:0, panZ:0, panning:false};
+function toggleFreeCam(on) {
+  cam.free = on;
+  if (!on) { cam.panX = 0; cam.panY = 0; cam.panZ = 0; }
+}
+function updateCamera(){
+  if (cam.free) {
+    // Free camera: orbit around pan target, no auto-follow
+    const cx=cam.dist*Math.cos(cam.phi)*Math.sin(cam.theta);
+    const cy=cam.dist*Math.sin(cam.phi);
+    const cz=cam.dist*Math.cos(cam.phi)*Math.cos(cam.theta);
+    const tgt = new THREE.Vector3(foilGroup.position.x+cam.panX, foilGroup.position.y+1+cam.panY, foilGroup.position.z+cam.panZ);
+    camera.position.set(tgt.x+cx,Math.max(tgt.y+cy,0.5),tgt.z+cz);
+    camera.lookAt(tgt);
+    return;
+  }
+  // Normal follow camera
+  let target = foil.heading + Math.PI + cam.offsetTheta;
+  let diff = target - cam.theta;
+  while(diff > Math.PI) diff -= Math.PI*2;
+  while(diff < -Math.PI) diff += Math.PI*2;
+  cam.theta += diff * cam.followSmooth;
+
+  const cx=cam.dist*Math.cos(cam.phi)*Math.sin(cam.theta);
+  const cy=cam.dist*Math.sin(cam.phi);
+  const cz=cam.dist*Math.cos(cam.phi)*Math.cos(cam.theta);
+  const tgt=foilGroup.position.clone();tgt.y+=1;
+  camera.position.set(tgt.x+cx,Math.max(tgt.y+cy,1.5),tgt.z+cz);
+  camera.lookAt(tgt);
+}
+
+renderer.domElement.addEventListener('mousedown',e=>{
+  if(cam.free && e.button===2){cam.panning=true;cam.lx=e.clientX;cam.ly=e.clientY;return;}
+  cam.drag=true;cam.lx=e.clientX;cam.ly=e.clientY;
+});
+window.addEventListener('mouseup',()=>{cam.drag=false;cam.panning=false;});
+window.addEventListener('mousemove',e=>{
+  if(cam.panning&&cam.free){
+    const dx=e.clientX-cam.lx, dy=e.clientY-cam.ly;
+    const panScale=cam.dist*0.002;
+    const st=Math.sin(cam.theta),ct=Math.cos(cam.theta);
+    cam.panX+=(-dx*ct)*panScale;
+    cam.panZ+=(dx*st)*panScale;
+    cam.panY+=dy*panScale;
+    cam.lx=e.clientX;cam.ly=e.clientY;return;
+  }
+  if(!cam.drag)return;
+  if(cam.free){
+    cam.theta-=(e.clientX-cam.lx)*.005;
+    cam.phi=Math.max(.01,Math.min(1.56,cam.phi+(e.clientY-cam.ly)*.005));
+  } else {
+    cam.offsetTheta-=(e.clientX-cam.lx)*.005;
+    cam.phi=Math.max(.05,Math.min(1.4,cam.phi+(e.clientY-cam.ly)*.005));
+  }
+  cam.lx=e.clientX;cam.ly=e.clientY;
+});
+renderer.domElement.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const maxDist=cam.free?5000:120, minDist=cam.free?1:5;
+  cam.dist=Math.max(minDist,Math.min(maxDist,cam.dist*(1+e.deltaY*.001)));
+},{passive:false});
+renderer.domElement.addEventListener('contextmenu',e=>{if(cam.free)e.preventDefault();});
+
+renderer.domElement.addEventListener('touchstart',e=>{
+  if(e.target.closest('#ride-controls')||e.target.closest('#controls-panel'))return;
+  if(e.touches.length===1){cam.drag=true;cam.lx=e.touches[0].clientX;cam.ly=e.touches[0].clientY;}
+  else if(e.touches.length===2)cam.pd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+  else if(e.touches.length===3&&cam.free){cam.panning=true;cam.lx=e.touches[0].clientX;cam.ly=e.touches[0].clientY;}
+},{passive:true});
+renderer.domElement.addEventListener('touchmove',e=>{
+  if(e.target.closest('#ride-controls')||e.target.closest('#controls-panel'))return;
+  e.preventDefault();
+  if(cam.panning&&cam.free&&e.touches.length>=3){
+    const dx=e.touches[0].clientX-cam.lx,dy=e.touches[0].clientY-cam.ly;
+    const panScale=cam.dist*0.002;
+    const st=Math.sin(cam.theta),ct=Math.cos(cam.theta);
+    cam.panX+=(-dx*ct)*panScale;cam.panZ+=(dx*st)*panScale;cam.panY+=dy*panScale;
+    cam.lx=e.touches[0].clientX;cam.ly=e.touches[0].clientY;
+  }else if(e.touches.length===1&&cam.drag){
+    if(cam.free){
+      cam.theta-=(e.touches[0].clientX-cam.lx)*.005;
+      cam.phi=Math.max(.01,Math.min(1.56,cam.phi+(e.touches[0].clientY-cam.ly)*.005));
+    } else {
+      cam.offsetTheta-=(e.touches[0].clientX-cam.lx)*.005;
+      cam.phi=Math.max(.05,Math.min(1.4,cam.phi+(e.touches[0].clientY-cam.ly)*.005));
+    }
+    cam.lx=e.touches[0].clientX;cam.ly=e.touches[0].clientY;
+  }else if(e.touches.length===2){
+    const nd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    const maxDist=cam.free?5000:120,minDist=cam.free?1:5;
+    cam.dist=Math.max(minDist,Math.min(maxDist,cam.dist*(cam.pd/nd)));cam.pd=nd;
+  }
+},{passive:false});
+renderer.domElement.addEventListener('touchend',()=>{cam.drag=false;cam.panning=false;});
+
+// ═══════════════════════════
+// MAIN LOOP
+// ═══════════════════════════
+const clock=new THREE.Clock();
+let pumpPhase=0,sprayT=0;
+let prevSunAngle=-1,prevSunDir=-1;
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),.05);
+  const t=clock.getElapsedTime();
+  const u=oceanMat.uniforms;
+  u.uTime.value=t;
+  u.uCamPos.value.copy(camera.position);
+
+  // Ocean uniforms
+  const sa=getVal('sunAngle')*Math.PI/180,sd=getVal('sunDir')*Math.PI/180;
+  const sv=new THREE.Vector3(Math.cos(sa)*Math.sin(sd),Math.sin(sa),Math.cos(sa)*Math.cos(sd)).normalize();
+  u.uSunDir.value.copy(sv);
+  // Update sky + cloud sun direction
+  skyUniforms['sunPosition'].value.copy(sv);
+  // Regenerate env map when sun changes (for foil reflections)
+  const curSA = getVal('sunAngle'), curSD = getVal('sunDir');
+  if(curSA !== prevSunAngle || curSD !== prevSunDir || envDirty){
+    prevSunAngle = curSA; prevSunDir = curSD;
+    envDirty = false;
+    updateEnvMap();
+  }
+  cloudMat.uniforms.uSunDir.value.copy(sv);
+  cloudMat.uniforms.uTime.value = t;
+  cloudMat.uniforms.uCloudCover.value = getVal('cloudCover');
+  dirLight.position.set(sv.x*80,sv.y*80,sv.z*80);
+  // Dynamic lighting — intensity and warmth based on sun elevation
+  const sunElev = sv.y;
+  const sunBright = smoothstep(0, 0.25, sunElev);
+  cloudMat.uniforms.uCloudBright.value = 0.4 + sunBright * 0.6; // dimmer at sunset
+  dirLight.intensity = 0.2 + sunBright * 1.6;
+  const warmth = 1.0 - smoothstep(0, 0.35, sunElev);
+  dirLight.color.setRGB(1.0, lerp(0.95, 0.55, warmth), lerp(0.92, 0.3, warmth));
+  // Ambient tracks sun too
+  ambLight.intensity = 0.15 + sunBright * 0.55;
+
+  // Dynamic fog color — approximate sky horizon color from sun elevation
+  u.uFogColor.value.setRGB(
+    lerp(0.15, 0.55, sunBright) + warmth * 0.15,
+    lerp(0.12, 0.70, sunBright),
+    lerp(0.18, 0.85, sunBright)
+  );
+  u.uFogSunColor.value.setRGB(
+    lerp(0.5, 0.8, sunBright),
+    lerp(0.3, 0.75, sunBright),
+    lerp(0.15, 0.6, sunBright)
+  );
+
+  // Terrain uniforms — share fog/sun with ocean
+  silhouetteMat.uniforms.uSunDir.value.copy(sv);
+  silhouetteMat.uniforms.uFogColor.value.copy(u.uFogColor.value);
+  silhouetteMat.uniforms.uFogSunColor.value.copy(u.uFogSunColor.value);
+  cliffMat.uniforms.uSunDir.value.copy(sv);
+  cliffMat.uniforms.uCamPos.value.copy(camera.position);
+  cliffMat.uniforms.uFogColor.value.copy(u.uFogColor.value);
+  cliffMat.uniforms.uFogSunColor.value.copy(u.uFogSunColor.value);
+
+  // Panoramic photo backdrop uniforms + positioning
+  if (panoCylinder) {
+    panoMat.uniforms.uSunDir.value.copy(sv);
+    panoMat.uniforms.uCamPos.value.copy(camera.position);
+    panoMat.uniforms.uFogColor.value.copy(u.uFogColor.value);
+    panoMat.uniforms.uFogSunColor.value.copy(u.uFogSunColor.value);
+  }
+
+  // Real terrain (Gorge HD) uniforms
+  if (realTerrainMesh) {
+    realTerrainMat.uniforms.uSunDir.value.copy(sv);
+    realTerrainMat.uniforms.uCamPos.value.copy(camera.position);
+    realTerrainMat.uniforms.uFogColor.value.copy(u.uFogColor.value);
+    realTerrainMat.uniforms.uFogSunColor.value.copy(u.uFogSunColor.value);
+  }
+
+  u.uChopHeight.value=getVal('chopHeight');
+  const cdir=degToDir(getVal('chopDir'));u.uChopDir.value.set(cdir.x,cdir.y);
+  const s1=degToDir(getVal('swell1Dir'));u.uSwell1.value.set(s1.x,s1.y,getVal('swell1Period'),getVal('swell1Height'));
+  const s2=degToDir(getVal('swell2Dir'));u.uSwell2.value.set(s2.x,s2.y,getVal('swell2Period'),getVal('swell2Height'));
+  const s3=degToDir(getVal('swell3Dir'));u.uSwell3.value.set(s3.x,s3.y,getVal('swell3Period'),getVal('swell3Height'));
+  const sy=sv.y,db=smoothstep(0,.5,sy);
+  // Water colors — tropical override for Kauai preset
+  if (activeWaterStyle === 'tropical') {
+    u.uDeepColor.value.set(lerp(.01,0,db), lerp(.06,.10,db), lerp(.12,.22,db));
+    u.uShallowColor.value.set(lerp(.02,0,db), lerp(.15,.30,db), lerp(.22,.45,db));
+  } else {
+    u.uDeepColor.value.set(lerp(.01,0,db),lerp(.02,.04,db),lerp(.06,.12,db));
+    u.uShallowColor.value.set(lerp(.02,0,db),lerp(.06,.15,db),lerp(.12,.3,db));
+  }
+
+  // ── FOIL PHYSICS ──
+
+  // ── Banking turn (airplane-style) ──
+  // Input sets a target roll angle; roll smoothly interpolates toward it.
+  // The roll then drives the heading change, so the board banks first, then turns.
+  const maxRoll = 0.55; // ~31° max bank angle
+  let targetRoll = 0;
+  if(input.left)  targetRoll = -maxRoll;
+  if(input.right) targetRoll =  maxRoll;
+  // Roll responds quickly but not instantly — feels like shifting weight
+  const rollRate = 6.0 * getVal('sbStability'); // how fast the board rolls toward target
+  foil.roll = lerp(foil.roll, targetRoll, 1 - Math.exp(-rollRate * dt));
+  // Heading change is driven by roll: more roll = tighter turn, needs speed
+  // In our coordinate system sin(heading) = X movement, so increasing heading
+  // turns toward +X which is RIGHT from the camera. Therefore we negate:
+  // positive roll (left bank) must DECREASE heading to turn left visually.
+  const turnFromRoll = foil.roll * 2.2 * getVal('sbTurnSpeed') * Math.min(1, foil.speed / 4);
+  foil.heading -= turnFromRoll * dt;
+
+  let wH=getWaveHeight(foil.x,foil.z,t);
+  if (realTerrainMesh) wH += RT_WATER_Y();
+  const slope=getWaveSlope(foil.x,foil.z,t);
+  const mx=Math.sin(foil.heading),mz=Math.cos(foil.heading);
+  const slopeDot=mx*slope.dhdx+mz*slope.dhdz;
+  // Cross-slope: perpendicular component of slope relative to travel
+  const crossSlope=Math.abs(-mz*slope.dhdx+mx*slope.dhdz);
+  // Base slope force (scaled by wave energy transfer)
+  const waveE = getVal('sbWaveEnergy');
+  let slopeForce=-slopeDot*3.25*waveE;
+  // Turn bonus: carving across the wave face generates extra push
+  // Scales with actual roll angle for smooth ramp-up rather than binary on/off
+  const rollFactor = Math.abs(foil.roll) / maxRoll; // 0..1
+  if(rollFactor > 0.05){
+    slopeForce+=crossSlope*2.35*waveE*rollFactor*Math.min(1,foil.speed/5);
+  }
+
+  // Is foiling?
+  const isF = foil.speed > 3.5;
+
+  // Pitch (auto-settle, slight nose down at speed for realism)
+  const autoPitch = isF ? -0.05 : 0;
+  foil.pitch = lerp(foil.pitch, autoPitch, dt * 3 * getVal('sbStability'));
+
+  // ── Energy system ──
+  // Regenerate energy slowly over time
+  const maxEnergy = getVal('sbBatteryCap'); // battery capacity multiplier
+  const drainMul = getVal('sbBatteryDrain'); // battery drain multiplier
+  foil.energy = Math.min(maxEnergy, foil.energy + 0.06 * dt);
+
+  let pf = 0;
+  const isPump = input.up && !input.down;
+  const isPowerPump = input.up && input.down;
+  const isBoost = input.pump;
+  const pumpMul = getVal('sbPumpPower'); // pump effectiveness multiplier
+
+  // Boost (efoil motor) - steady thrust, no energy cost
+  if (isBoost) {
+    pf += 1.8;
+  }
+
+  // Pump - costs energy, burst of speed
+  if (isPump && foil.energy > 0.02) {
+    pumpPhase += dt * 9;
+    const pumpCost = 0.18 * drainMul * dt;
+    foil.energy = Math.max(0, foil.energy - pumpCost);
+    pf += 3.0 * pumpMul * Math.min(1, foil.energy * 5); // less effective when low energy
+    foil.pitch += Math.sin(pumpPhase * 2) * 0.08;
+  }
+  // Power pump (up+down) - more speed, more energy cost
+  else if (isPowerPump && foil.energy > 0.05) {
+    pumpPhase += dt * 12;
+    const powerCost = 0.35 * drainMul * dt;
+    foil.energy = Math.max(0, foil.energy - powerCost);
+    pf += 5.5 * pumpMul * Math.min(1, foil.energy * 4);
+    foil.pitch += Math.sin(pumpPhase * 2) * 0.15;
+  }
+  // Idle - settle pump phase
+  else {
+    pumpPhase *= 0.9;
+  }
+
+  // Brake / nose-up (down arrow alone) — raises nose and slows down
+  const isBrake = input.down && !input.up;
+  if (isBrake) {
+    foil.pitch = lerp(foil.pitch, 0.25, dt * 5); // nose up
+    pf -= 2.0; // drag from raised nose
+  }
+
+  // Glide reduces drag when foiling; Water Drag is a direct multiplier on all drag
+  const baseDrag = isF ? .35 : .7;
+  const drag = baseDrag * getVal('sbDrag') / getVal('sbGlide');
+  foil.speed+=(slopeForce+pf)*dt;
+  foil.speed-=drag*dt;
+  foil.speed=Math.max(0,Math.min(foil.speed, getVal('sbTopSpeed')));
+
+  const tgtRH=isF?.6+foil.pitch*.5:0;
+  foil.rideH=lerp(foil.rideH,tgtRH,dt*3);
+  if(foil.speed<2.5)foil.rideH=lerp(foil.rideH,0,dt*5);
+
+  foil.x+=mx*foil.speed*dt;foil.z+=mz*foil.speed*dt;
+
+  // Land collision (Gorge HD) — stall if foil hits shore
+  if (realTerrainMesh && realTerrainHeightData) {
+    const terrH = getRealTerrainHeight(foil.x, foil.z);
+    if (terrH !== null && terrH > RT_WATER_Y() + 3) {
+      // On land — push back and kill speed
+      foil.x -= mx * foil.speed * dt;
+      foil.z -= mz * foil.speed * dt;
+      foil.speed *= 0.1; // stall
+    }
+  }
+
+  // Move ocean mesh to follow the foil so you never ride off the edge.
+  // Snap to grid-aligned positions to avoid visible popping.
+  {
+    const SNAP = OCEAN_SIZE * 0.25;
+    oceanMesh.position.x = Math.round(foil.x / SNAP) * SNAP;
+    oceanMesh.position.z = Math.round(foil.z / SNAP) * SNAP;
+    oceanMesh.position.y = realTerrainMesh ? RT_WATER_Y() : 0;
+  }
+
+  // Terrain ring follows player with larger SNAP grid for parallax
+  // (skip when using real terrain — it stays fixed in world space)
+  if (!realTerrainMesh) {
+    const TSNAP = 400;
+    terrainGroup.position.x = Math.round(foil.x / TSNAP) * TSNAP;
+    terrainGroup.position.z = Math.round(foil.z / TSNAP) * TSNAP;
+  }
+
+  const bY=wH+foil.rideH;
+  foilGroup.position.set(foil.x,bY,foil.z);
+  foilGroup.rotation.set(0, foil.heading, 0);
+  // With YXZ Euler order on modelGroup:
+  //   Y = -PI/2 (fixed: aligns board's X-axis to world +Z travel direction)
+  //   After Y rotation: local X runs along board length, local Z across board width
+  //   X = roll  (bank left/right, along board's length axis)
+  //   Z = pitch (nose up/down, across board's width axis)
+  const cs=-mz*slope.dhdx+mx*slope.dhdz;
+  modelGroup.rotation.x = foil.roll + Math.atan(cs) * 0.3;
+  modelGroup.rotation.z = foil.pitch - Math.atan(slopeDot) * 0.4;
+
+  // Spray
+  sprayT+=dt;
+  if(foil.speed>3&&sprayT>.03){
+    sprayT=0;
+    const si=Math.floor(Math.min(8,(foil.speed-3)*.8));
+    emitSpray(foil.x-mx*.9,bY,foil.z-mz*.9,-mx*foil.speed*.3,1+foil.speed*.1,-mz*foil.speed*.3,si);
+  }
+  updateSpray(dt);
+
+  // Wake
+  if(foil.speed>1.5)wkHist.unshift({x:foil.x-mx,y:bY-foil.rideH+.05,z:foil.z-mz});
+  while(wkHist.length>WK_N)wkHist.pop();
+  for(let i=0;i<WK_N;i++){
+    if(i<wkHist.length){wkPos[i*3]=wkHist[i].x;wkPos[i*3+1]=wkHist[i].y;wkPos[i*3+2]=wkHist[i].z;wkAl[i]=1-i/wkHist.length;}
+    else{wkPos[i*3+1]=-100;wkAl[i]=0;}
+  }
+  wkGeo.attributes.position.needsUpdate=true;wkGeo.attributes.alpha.needsUpdate=true;
+  wkGeo.setDrawRange(0,wkHist.length);
+
+  // ── Wingtip streamers ──
+  foilGroup.updateMatrixWorld(true);
+  tipL.getWorldPosition(_tipLWorld);
+  tipR.getWorldPosition(_tipRWorld);
+  updateStreamer(streamerL, _tipLWorld.x, _tipLWorld.y, _tipLWorld.z, foil.speed);
+  updateStreamer(streamerR, _tipRWorld.x, _tipRWorld.y, _tipRWorld.z, foil.speed);
+
+  // HUD
+  const curKts = foil.speed * 1.94384;
+  document.getElementById('hud-speed').textContent = curKts.toFixed(1);
+
+  // Acceleration indicator
+  const accelEl = document.getElementById('hud-accel');
+  const speedDelta = foil.speed - foil.prevSpeed;
+  const threshold = 0.005;
+  if (speedDelta > threshold) {
+    accelEl.textContent = '▲';
+    accelEl.style.color = '#5ee8a0';
+    accelEl.style.opacity = Math.min(1, Math.abs(speedDelta) * 20);
+  } else if (speedDelta < -threshold) {
+    accelEl.textContent = '▼';
+    accelEl.style.color = '#ff6b6b';
+    accelEl.style.opacity = Math.min(1, Math.abs(speedDelta) * 20);
+  } else {
+    accelEl.style.opacity = '0.3';
+    accelEl.textContent = '—';
+    accelEl.style.color = '#6a94c0';
+  }
+
+  // Status
+  const st = document.getElementById('hud-status');
+  if (foil.speed <= 0.3) {
+    st.textContent = '⚠ STALLED';
+    st.style.color = '#ff5555';
+  } else if (foil.speed < 2.5) {
+    st.textContent = 'Hull Speed';
+    st.style.color = '#c09060';
+  } else if (isF) {
+    st.textContent = '🏄 Foiling!';
+    st.style.color = '#80e0c0';
+  } else {
+    st.textContent = 'Accelerating...';
+    st.style.color = '#a0b8d0';
+  }
+
+  foil.prevSpeed = foil.speed;
+
+  // Energy bar (normalized to battery capacity)
+  const ePct = Math.round((foil.energy / getVal('sbBatteryCap')) * 100);
+  const eBar = document.getElementById('hud-energy-bar');
+  const eTxt = document.getElementById('hud-energy-text');
+  eBar.style.width = Math.min(100, ePct) + '%';
+  eTxt.textContent = ePct + '%';
+  if (foil.energy / getVal('sbBatteryCap') > 0.5) {
+    eBar.style.background = 'linear-gradient(90deg,#4ae88a,#5ef0a0)';
+    eTxt.style.color = '#6a94c0';
+  } else if (foil.energy / getVal('sbBatteryCap') > 0.2) {
+    eBar.style.background = 'linear-gradient(90deg,#e8c44a,#f0d060)';
+    eTxt.style.color = '#c0a050';
+  } else {
+    eBar.style.background = 'linear-gradient(90deg,#e85050,#f06060)';
+    eTxt.style.color = '#e06060';
+  }
+
+  // Wave power meter — dynamic normalization based on current conditions
+  // Estimate max possible slope force from swell heights & periods
+  const s1h = getVal('swell1Height'), s1p = getVal('swell1Period');
+  const s2h = getVal('swell2Height'), s2p = getVal('swell2Period');
+  const s3h = getVal('swell3Height'), s3p = getVal('swell3Period');
+  const chH = getVal('chopHeight');
+  // Max slope ≈ height * 2π / wavelength, wavelength = 1.56 * period²
+  function maxSlope(h, p) { return h > 0.01 ? h * 6.2832 / (1.56 * p * p) : 0; }
+  const maxSlopeSum = (maxSlope(s1h,s1p) + maxSlope(s1h*0.22,s1p*0.7)
+    + maxSlope(s2h,s2p) + maxSlope(s2h*0.2,s2p*0.65)
+    + maxSlope(s3h,s3p)
+    + maxSlope(chH*0.5,3) + maxSlope(chH*0.35,2.2)) * 3.25; // matches slopeForce multiplier
+  const dynamicMax = Math.max(0.3, maxSlopeSum * 0.85); // slight headroom so it can hit max
+
+  const swBar = document.getElementById('hud-swell-bar');
+  const normSwell = Math.max(-1, Math.min(1, slopeForce / dynamicMax));
+  const absSwell = Math.abs(normSwell);
+  const pct = absSwell * 50;
+  if (normSwell >= 0) {
+    swBar.style.left = '50%';
+    swBar.style.width = pct + '%';
+    swBar.style.background = absSwell > 0.7 ? 'linear-gradient(90deg,#2ee87a,#60ffc0)' : 'linear-gradient(90deg,#3ad080,#5ef0a0)';
+  } else {
+    swBar.style.left = (50 - pct) + '%';
+    swBar.style.width = pct + '%';
+    swBar.style.background = absSwell > 0.7 ? 'linear-gradient(90deg,#ff3030,#e85050)' : 'linear-gradient(90deg,#f05555,#e83a3a)';
+  }
+
+  // "In the Pocket!" message
+  const pocketEl = document.getElementById('hud-pocket');
+  if (normSwell > 0.8 && foil.speed > 3) {
+    pocketEl.classList.add('show');
+  } else {
+    pocketEl.classList.remove('show');
+  }
+
+  // Audio feedback
+  updateAudio(slopeForce, normSwell, foil.speed);
+
+  foil.prevWH=wH;
+
+  // Camera: slowly return offset to behind-player when not dragging (skip in free cam)
+  if(!cam.drag && !cam.free) cam.offsetTheta *= 0.97;
+  cam.followSmooth = Math.abs(foil.roll) > 0.1 ? 0.08 : 0.04;
+  updateCamera();
+  // Center sky, clouds, and distant silhouettes on camera
+  sky.position.copy(camera.position);
+  cloudMesh.position.copy(camera.position);
+  silhouetteMesh.position.x = camera.position.x;
+  silhouetteMesh.position.z = camera.position.z;
+  // Photo backdrop follows camera — stays at fixed direction, constant distance
+  if (panoCylinder) {
+    panoCylinder.position.x = camera.position.x + Math.sin(PANO_ANGLE) * PANO_DIST;
+    panoCylinder.position.z = camera.position.z + Math.cos(PANO_ANGLE) * PANO_DIST;
+  }
+  renderer.render(scene,camera);
+}
+animate();
+
+window.addEventListener('resize',()=>{
+  camera.aspect=window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth,window.innerHeight);
+});
+</script>
+</body>
+</html>

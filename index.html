@@ -350,9 +350,10 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.74</div>
+<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.1.82</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
+<canvas id="fps-graph" width="120" height="35" style="display:none;position:fixed;top:36px;left:10px;z-index:90;border-radius:3px;background:rgba(0,0,0,0.5);pointer-events:none;"></canvas>
 
 <!-- Controls panel toggle — Tab key only, button hidden -->
 <button id="controls-toggle" onclick="toggleControls()" style="display:none;">⚙</button>
@@ -408,6 +409,7 @@
     <div class="control-row"><span class="control-label">Pump Power</span><input type="range" id="sbPumpPower" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbPumpPower-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Turn Speed</span><input type="range" id="sbTurnSpeed" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbTurnSpeed-val">1.00×</span></div>
     <div class="control-row"><span class="control-label">Top Speed</span><input type="range" id="sbTopSpeed" min="9" max="46" value="25" step="1" oninput="updateVal(this)"><span class="control-value" id="sbTopSpeed-val">25 mph</span></div>
+    <div class="control-row"><span class="control-label">Pocket Speed</span><input type="range" id="sbPocketSpeed" min="9" max="46" value="21" step="1" oninput="updateVal(this)"><span class="control-value" id="sbPocketSpeed-val">21 mph</span></div>
     <div class="control-row"><span class="control-label">Stall Speed</span><input type="range" id="sbStallSpeed" min="0" max="12" value="6" step="0.5" oninput="updateVal(this)"><span class="control-value" id="sbStallSpeed-val">6.0 mph</span></div>
     <div class="control-row"><span class="control-label">Wind Speed</span><input type="range" id="sbWindSpeed" min="0" max="46" value="14" step="1" oninput="updateVal(this)"><span class="control-value" id="sbWindSpeed-val">14 mph</span></div>
     <div class="control-row"><span class="control-label">Wind Dir</span><input type="range" id="sbWindDir" min="0" max="360" value="270" step="1" oninput="updateVal(this)"><span class="control-value" id="sbWindDir-val">270°</span></div>
@@ -420,7 +422,10 @@
     <div class="control-row"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="sbWaveChart" onchange="document.getElementById('wave-chart').style.display=this.checked?'block':'none'" style="width:14px;height:14px;accent-color:#4af;"><span class="control-label" style="flex:1;">Wave Chart</span></label></div>
     <div class="control-row"><span class="control-label">Render Style</span><select id="sbRenderMode" onchange="setRenderMode(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="0">Normal</option><option value="1">Woodcut</option><option value="2">DEM</option><option value="3">Painterly</option><option value="4">Tron</option><option value="5">Sumi-e</option><option value="6">Pixel Art</option><option value="7">X-Ray</option><option value="8">Plastic</option><option value="9">Lava</option><option value="10">Fur</option><option value="11">Watercolor</option><option value="12">Pocket Highlights</option></select></div>
     <div class="control-row"><span class="control-label">Quality</span><select id="sbQuality" onchange="setQuality(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="low">Low</option><option value="med">Medium</option><option value="high">High</option><option value="ultra">Ultra</option><option value="max">Max</option><option value="auto" selected>Auto</option></select></div>
-    <div class="control-row"><span class="control-label">Mesh Resolution</span><input type="range" id="sbMeshRes" min="64" max="1024" step="64" value="256" oninput="setMeshResolution(+this.value)" style="flex:1;accent-color:#4af;"><span id="meshResLabel" style="min-width:38px;text-align:right;font-size:11px;color:#c8d6e5;">256</span></div>
+    <div class="control-row"><span class="control-label">Shader</span><div style="display:flex;gap:4px;flex:1;"><button class="preset-btn" id="sbShaderPerf" onclick="setShaderMode('performance')" style="flex:1;font-size:10px;padding:3px 6px;">Perf</button><button class="preset-btn active-preset" id="sbShaderFull" onclick="setShaderMode('full')" style="flex:1;font-size:10px;padding:3px 6px;">Full</button></div></div>
+    <div class="control-row"><span class="control-label">Render Scale</span><input type="range" id="sbRenderScale" min="25" max="100" step="5" value="100" oninput="setRenderScale(+this.value/100)" style="flex:1;accent-color:#4af;"><span id="renderScaleLabel" style="min-width:38px;text-align:right;font-size:11px;color:#c8d6e5;">100%</span></div>
+    <div class="control-row"><span class="control-label">Ocean Size</span><input type="range" id="sbOceanSize" min="200" max="1200" step="100" value="600" oninput="setOceanSize(+this.value)" style="flex:1;accent-color:#4af;"><span id="oceanSizeLabel" style="min-width:38px;text-align:right;font-size:11px;color:#c8d6e5;">600</span></div>
+    <div class="control-row"><span class="control-label">Surface Detail</span><input type="range" id="sbSurfaceDetail" min="0" max="1" step="0.05" value="1" oninput="updateVal(this)"><span class="control-value" id="sbSurfaceDetail-val">1.00×</span></div>
   </div>
   <div class="section">
     <div class="section-title">🏝 Background</div>
@@ -464,7 +469,10 @@
     <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:rgba(255,255,255,0.2);"></div>
     <div id="hud-swell-bar" style="position:absolute;top:0;height:100%;border-radius:4px;transition:left 0.1s,width 0.1s,background 0.15s;width:0;left:50%;background:#4ae88a;"></div>
   </div>
-  <div id="hud-fps" style="font-size:11px;color:#90b8e0;margin-top:6px;">-- fps</div>
+  <div style="margin-top:6px;">
+    <div id="hud-fps" style="font-size:11px;color:#90b8e0;">-- fps</div>
+    <canvas id="hud-fps-graph" width="100" height="30" style="margin-top:3px;border-radius:3px;background:rgba(0,0,0,0.3);display:block;"></canvas>
+  </div>
 </div>
 
 <div id="hud-pocket">In the Pocket!</div>

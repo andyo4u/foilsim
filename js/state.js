@@ -172,6 +172,8 @@ export const state = {
   streamerBudget  : 80,
   fbmOctaves      : 4,         // FBM noise octave count (3–6), set by quality preset
   detailLevel     : 1,         // vertex FBM detail (0=off, 1=partial, 2=full)
+  renderScale     : 1.0,       // 0.25–1.0, controls internal render resolution
+  shaderMode      : 'full',    // 'full' | 'performance'
 
   // ── Units ─────────────────────────────────────────
   units: 'mph',       // 'mph' | 'kph' | 'kts'

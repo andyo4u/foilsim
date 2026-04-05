@@ -133,6 +133,17 @@ renderer.setClearColor(new THREE.Color(0.55, 0.70, 0.85)); // match ocean uFogCo
 document.body.appendChild(renderer.domElement);
 state.renderer = renderer;
 
+function updateRendererSize() {
+  const scale = state.renderScale;
+  const w = Math.floor(window.innerWidth * scale);
+  const h = Math.floor(window.innerHeight * scale);
+  renderer.setSize(w, h, false);
+  renderer.domElement.style.width  = window.innerWidth + 'px';
+  renderer.domElement.style.height = window.innerHeight + 'px';
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+}
+
 const scene = new THREE.Scene();
 state.scene = scene;
 
@@ -289,11 +300,11 @@ if (isMobile) {
 // ═══════════════════════════
 
 const QUALITY_PRESETS = {
-  low:   { oceanSegments: 128, oceanSize: 400, pixelRatioCap: 1,   sprayBudget: 50,  wakeBudget: 30, streamerBudget: 40,  fbmOctaves: 3, detailLevel: 0 },
-  med:   { oceanSegments: 256, oceanSize: 600, pixelRatioCap: 1.5, sprayBudget: 100, wakeBudget: 50, streamerBudget: 80,  fbmOctaves: 4, detailLevel: 1 },
-  high:  { oceanSegments: 384, oceanSize: 800, pixelRatioCap: 2,   sprayBudget: 150, wakeBudget: 65, streamerBudget: 100, fbmOctaves: 5, detailLevel: 2 },
-  ultra: { oceanSegments: 512, oceanSize: 800, pixelRatioCap: 2,   sprayBudget: 200, wakeBudget: 80, streamerBudget: 120, fbmOctaves: 5, detailLevel: 2 },
-  max:   { oceanSegments: 1000, oceanSize: 1200, pixelRatioCap: 2,   sprayBudget: 200, wakeBudget: 80, streamerBudget: 120, fbmOctaves: 6, detailLevel: 2 },
+  low:   { oceanSegments: 128,  oceanSize: 400,  pixelRatioCap: 1,   renderScale: 0.50, shaderMode: 'performance', sprayBudget: 50,  wakeBudget: 30, streamerBudget: 40,  fbmOctaves: 3, detailLevel: 0 },
+  med:   { oceanSegments: 192,  oceanSize: 600,  pixelRatioCap: 1,   renderScale: 0.75, shaderMode: 'performance', sprayBudget: 100, wakeBudget: 50, streamerBudget: 80,  fbmOctaves: 4, detailLevel: 1 },
+  high:  { oceanSegments: 384,  oceanSize: 800,  pixelRatioCap: 2,   renderScale: 1.0,  shaderMode: 'full',        sprayBudget: 150, wakeBudget: 65, streamerBudget: 100, fbmOctaves: 5, detailLevel: 2 },
+  ultra: { oceanSegments: 512,  oceanSize: 800,  pixelRatioCap: 2,   renderScale: 1.0,  shaderMode: 'full',        sprayBudget: 200, wakeBudget: 80, streamerBudget: 120, fbmOctaves: 5, detailLevel: 2 },
+  max:   { oceanSegments: 1000, oceanSize: 1200, pixelRatioCap: 2,   renderScale: 1.0,  shaderMode: 'full',        sprayBudget: 200, wakeBudget: 80, streamerBudget: 120, fbmOctaves: 6, detailLevel: 2 },
 };
 
 const QUALITY_LEVELS = ['low', 'med', 'high', 'ultra', 'max'];
@@ -319,14 +330,32 @@ function setQuality(level) {
   state.oceanSegments  = preset.oceanSegments;
   state.oceanSize      = preset.oceanSize;
   state.pixelRatioCap  = preset.pixelRatioCap;
+  state.renderScale    = preset.renderScale;
   state.sprayBudget    = preset.sprayBudget;
   state.wakeBudget     = preset.wakeBudget;
   state.streamerBudget = preset.streamerBudget;
   state.fbmOctaves     = preset.fbmOctaves;
   state.detailLevel    = preset.detailLevel;
 
+  // Apply shader mode (without disabling auto — only manual overrides do that)
+  state.shaderMode = preset.shaderMode;
+  if (state.oceanMat) {
+    state.oceanMat.uniforms.uPerfMode.value = (preset.shaderMode === 'performance') ? 1.0 : 0.0;
+  }
+  const perfBtn = document.getElementById('sbShaderPerf');
+  const fullBtn = document.getElementById('sbShaderFull');
+  if (perfBtn) perfBtn.classList.toggle('active-preset', preset.shaderMode === 'performance');
+  if (fullBtn) fullBtn.classList.toggle('active-preset', preset.shaderMode === 'full');
+
   // Apply pixel ratio
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.pixelRatioCap));
+
+  // Apply render scale
+  updateRendererSize();
+  const rsSlider = document.getElementById('sbRenderScale');
+  const rsLabel  = document.getElementById('renderScaleLabel');
+  if (rsSlider) rsSlider.value = Math.round(state.renderScale * 100);
+  if (rsLabel)  rsLabel.textContent = Math.round(state.renderScale * 100) + '%';
 
   // Rebuild ocean geometry if size or segments changed
   if (needsRebuild) {
@@ -340,30 +369,67 @@ function setQuality(level) {
   const sel = document.getElementById('sbQuality');
   if (sel && sel.value !== level && sel.value !== 'auto') sel.value = level;
 
-  // Sync mesh resolution slider with quality preset
-  const meshSlider = document.getElementById('sbMeshRes');
-  const meshLabel  = document.getElementById('meshResLabel');
-  if (meshSlider) meshSlider.value = preset.oceanSegments;
-  if (meshLabel)  meshLabel.textContent = preset.oceanSegments;
+  // Sync ocean size slider
+  const osSlider = document.getElementById('sbOceanSize');
+  const osLabel  = document.getElementById('oceanSizeLabel');
+  if (osSlider) osSlider.value = preset.oceanSize;
+  if (osLabel)  osLabel.textContent = preset.oceanSize;
 }
 
-// Manual mesh resolution override — independent of quality presets
-function setMeshResolution(segments) {
-  segments = Math.max(64, Math.min(1024, segments));
-  const label = document.getElementById('meshResLabel');
-  if (label) label.textContent = segments;
-  if (state.oceanSegments === segments) return;
-  state.oceanSegments = segments;
-  rebuildOceanGeometry();
-  // Disable auto-quality so it doesn't override the manual setting
+// ── Fine-tune overrides (disable auto-quality when used manually) ──
+
+function setShaderMode(mode) {
+  state.shaderMode = mode;
+  if (state.oceanMat) {
+    state.oceanMat.uniforms.uPerfMode.value = (mode === 'performance') ? 1.0 : 0.0;
+  }
+  if (mode === 'performance') {
+    renderer.setPixelRatio(1);
+  } else {
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.pixelRatioCap));
+  }
+  const perfBtn = document.getElementById('sbShaderPerf');
+  const fullBtn = document.getElementById('sbShaderFull');
+  if (perfBtn) perfBtn.classList.toggle('active-preset', mode === 'performance');
+  if (fullBtn) fullBtn.classList.toggle('active-preset', mode === 'full');
   state.autoQuality = false;
-  const sel = document.getElementById('sbQuality');
-  if (sel) sel.value = 'low'; // reflect that we're in manual mode
+}
+
+function setRenderScale(val) {
+  state.renderScale = Math.max(0.25, Math.min(1.0, val));
+  updateRendererSize();
+  const label = document.getElementById('renderScaleLabel');
+  if (label) label.textContent = Math.round(state.renderScale * 100) + '%';
+  state.autoQuality = false;
+}
+
+function setOceanSize(val) {
+  val = Math.max(200, Math.min(1200, val));
+  const label = document.getElementById('oceanSizeLabel');
+  if (label) label.textContent = val;
+  if (state.oceanSize === val) return;
+  state.oceanSize = val;
+  rebuildOceanGeometry();
+  state.autoQuality = false;
 }
 
 // Start with Auto quality — begin from low on mobile, med on desktop, then scale up
-setQuality(isMobile ? 'low' : 'med');
-setQuality('auto');
+// Start at medium with performance shader tuned for slower PCs
+setQuality('med');
+state.oceanSize = 500;
+state.renderScale = 0.90;
+rebuildOceanGeometry();
+setShaderMode('performance');
+// Sync UI controls
+const _osSlider = document.getElementById('sbOceanSize');
+const _osLabel = document.getElementById('oceanSizeLabel');
+if (_osSlider) _osSlider.value = 500;
+if (_osLabel) _osLabel.textContent = '500';
+const _rsSlider = document.getElementById('sbRenderScale');
+const _rsLabel = document.getElementById('renderScaleLabel');
+if (_rsSlider) _rsSlider.value = 90;
+if (_rsLabel) _rsLabel.textContent = '90%';
+updateRendererSize();
 
 // ═══════════════════════════
 // WINDOW.* BRIDGE — expose functions for inline HTML event handlers
@@ -405,7 +471,9 @@ window.copySettingsJSON  = copySettingsJSON;
 window.toggleFreeCam     = toggleFreeCam;
 window.setRenderMode     = setRenderMode;
 window.setQuality        = setQuality;
-window.setMeshResolution = setMeshResolution;
+window.setShaderMode     = setShaderMode;
+window.setRenderScale    = setRenderScale;
+window.setOceanSize      = setOceanSize;
 window.openSettings    = openSettings;
 window.closeSettings   = closeSettings;
 window.setUnits        = setUnits;
@@ -526,13 +594,76 @@ let fpsFrames = 0, fpsLastTime = performance.now();
 const fpsLabel = document.getElementById('fps-label');
 const hudFps = document.getElementById('hud-fps');
 
+// FPS graph history (120 samples × 500ms = 60 seconds)
+const fpsHistory = [];
+const FPS_HISTORY_MAX = 120;
+const fpsGraphCanvas = document.getElementById('fps-graph');
+const fpsGraphCtx = fpsGraphCanvas ? fpsGraphCanvas.getContext('2d') : null;
+const hudFpsGraphCanvas = document.getElementById('hud-fps-graph');
+const hudFpsGraphCtx = hudFpsGraphCanvas ? hudFpsGraphCanvas.getContext('2d') : null;
+
+function drawFpsGraph(ctx, w, h) {
+  if (!ctx || fpsHistory.length < 2) return;
+  ctx.clearRect(0, 0, w, h);
+
+  const maxFps = Math.max(65, ...fpsHistory);
+  const minFps = Math.min(...fpsHistory);
+  const count = fpsHistory.length;
+  const stepX = w / (FPS_HISTORY_MAX - 1);
+
+  // Fill area under curve
+  ctx.beginPath();
+  const startX = w - (count - 1) * stepX;
+  ctx.moveTo(startX, h);
+  for (let i = 0; i < count; i++) {
+    const x = startX + i * stepX;
+    const y = h - ((fpsHistory[i] - 0) / maxFps) * (h - 2);
+    if (i === 0) ctx.lineTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.lineTo(startX + (count - 1) * stepX, h);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(74, 232, 138, 0.15)';
+  ctx.fill();
+
+  // Draw line
+  ctx.beginPath();
+  for (let i = 0; i < count; i++) {
+    const x = startX + i * stepX;
+    const y = h - ((fpsHistory[i] - 0) / maxFps) * (h - 2);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  const lastFps = fpsHistory[count - 1];
+  ctx.strokeStyle = lastFps < 30 ? '#ff4444' : lastFps < 50 ? '#ffaa33' : '#4ae88a';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // 60 fps reference line
+  const y60 = h - (60 / maxFps) * (h - 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 0.5;
+  ctx.setLineDash([2, 3]);
+  ctx.beginPath();
+  ctx.moveTo(0, y60);
+  ctx.lineTo(w, y60);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Min/max labels
+  ctx.font = '7px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillText(Math.round(minFps), 2, h - 2);
+  ctx.fillText(Math.round(maxFps), 2, 7);
+}
+
 // Auto-quality FPS tracking
 let autoQFrames = [];
-const AUTO_Q_WINDOW    = 6;   // 500ms samples → 3 seconds
-const AUTO_Q_DOWN_FPS  = 45;  // step down if avg below this
-const AUTO_Q_UP_FPS    = 55;  // step up if avg above this
-const AUTO_Q_UP_HOLD   = 6;   // consecutive above-thresh samples before stepping up (3s)
-const AUTO_Q_INTERVAL  = 8000; // minimum ms between quality changes
+const AUTO_Q_WINDOW    = 8;    // 500ms samples → 4 seconds of data
+const AUTO_Q_DOWN_FPS  = 35;   // step down if avg below this (was 45 — less trigger-happy)
+const AUTO_Q_UP_FPS    = 52;   // step up if avg comfortably above this
+const AUTO_Q_UP_HOLD   = 8;    // consecutive above-thresh samples before stepping up (~4s)
+const AUTO_Q_INTERVAL  = 5000; // minimum ms between quality changes (was 8s — faster settling)
 let autoQUpCount = 0;
 let autoQLastChange = performance.now() - AUTO_Q_INTERVAL; // allow first check immediately
 
@@ -575,6 +706,12 @@ function animate() {
     hudFps.textContent = fps + ' fps';
     fpsFrames = 0; fpsLastTime = fpsNow;
 
+    // Record history and draw graphs
+    fpsHistory.push(fps);
+    if (fpsHistory.length > FPS_HISTORY_MAX) fpsHistory.shift();
+    if (fpsGraphCanvas) drawFpsGraph(fpsGraphCtx, fpsGraphCanvas.width, fpsGraphCanvas.height);
+    if (hudFpsGraphCanvas) drawFpsGraph(hudFpsGraphCtx, hudFpsGraphCanvas.width, hudFpsGraphCanvas.height);
+
     // Auto-quality adjustment
     if (state.autoQuality) {
       autoQFrames.push(fps);
@@ -616,6 +753,7 @@ function animate() {
   u.uCamPos.value.copy(camera.position);
   u.uFbmOctaves.value = state.fbmOctaves;
   u.uDetailLevel.value = state.detailLevel != null ? state.detailLevel : 2;
+  u.uSurfaceDetail.value = getVal('sbSurfaceDetail') != null ? getVal('sbSurfaceDetail') : 1.0;
 
   // Sun direction
   const sa = getVal('sunAngle') * Math.PI / 180, sd = getVal('sunDir') * Math.PI / 180;
@@ -736,6 +874,18 @@ function animate() {
   const swellSlopeDot = mx * swellSlope.dhdx + mz * swellSlope.dhdz;
   const swellCrossSlope = Math.abs(-mz * swellSlope.dhdx + mx * swellSlope.dhdz);
 
+  // Pocket strength — compute early so physics can use it for speed cap
+  const s1h_phys = getVal('swell1Height');
+  const swellH_phys = getSwellHeight(foil.x, foil.z, t);
+  const swellSlopeLen = Math.sqrt(swellSlope.dhdx * swellSlope.dhdx + swellSlope.dhdz * swellSlope.dhdz);
+  const nxz_phys = swellSlopeLen > 0.001 ? [-swellSlope.dhdx / swellSlopeLen, -swellSlope.dhdz / swellSlopeLen] : [0, 0];
+  const s1dir_phys = degToDir(getVal('swell1Dir'));
+  const hFactor_phys = smoothstep(-s1h_phys * 0.1, s1h_phys * 0.35, swellH_phys);
+  const crestFade_phys = 1 - smoothstep(s1h_phys * 0.4, s1h_phys * 0.85, swellH_phys);
+  const faceDot_phys = nxz_phys[0] * s1dir_phys.x + nxz_phys[1] * s1dir_phys.y;
+  const faceFactor_phys = smoothstep(0.08, 0.35, faceDot_phys);
+  const pocketStrength = hFactor_phys * crestFade_phys * faceFactor_phys;
+
   const waveE = getVal('sbWaveEnergy');
   let slopeForce = -swellSlopeDot * 3.25 * waveE;
   const rollFactor = Math.abs(foil.roll) / maxRoll;
@@ -822,8 +972,20 @@ function animate() {
   foil.speed += (slopeForce + pf + windForce) * dt;
   foil.speed -= drag * dt;
   const speedCapMs = convertSpeedToMs(getVal('sbTopSpeed'));
-  const speedCap = speedCapMs; // power-ups disabled; was: state.powerUp.boostActive ? speedCapMs * 1.5 : speedCapMs
-  foil.speed = Math.max(0, Math.min(foil.speed, speedCap));
+  // Pocket top speed: pumping or turning in the pocket allows higher speed.
+  // When leaving the pocket, speed decays gradually back to normal top speed.
+  const pocketCapMs = convertSpeedToMs(getVal('sbPocketSpeed'));
+  const inPocket = pocketStrength > 0.4;
+  const isPumpingOrTurning = isPump || isPowerPump || isBoost || Math.abs(foil.roll) > 0.05;
+  if (inPocket && isPumpingOrTurning && pocketCapMs > speedCapMs) {
+    // In the pocket — allow up to pocket speed
+    foil.speed = Math.max(0, Math.min(foil.speed, pocketCapMs));
+  } else if (foil.speed > speedCapMs) {
+    // Above normal cap but out of pocket — decay gently back down
+    foil.speed = Math.max(speedCapMs, foil.speed - (foil.speed - speedCapMs) * 1.5 * dt);
+  } else {
+    foil.speed = Math.max(0, Math.min(foil.speed, speedCapMs));
+  }
 
   // Ride height scales with speed: barely lifts off at stall (~6cm), rises to ~60cm at top speed.
   // Wing tip only breaches the surface at ~77%+ of top speed with full roll — "fast and turning."
@@ -1047,18 +1209,7 @@ function animate() {
     + maxSlope(s3h, s3p)) * 3.25;
   const dynamicMax = Math.max(0.05, maxSlopeSum * 0.85);
 
-  // Pocket strength (mirrors shader pocket detection at rider position)
-  // Uses swell height + face orientation to match the Pocket Highlights render mode
-  const swellH = getSwellHeight(foil.x, foil.z, t);
-  const swSlope = getSwellSlope(foil.x, foil.z, t);
-  const slopeLen = Math.sqrt(swSlope.dhdx * swSlope.dhdx + swSlope.dhdz * swSlope.dhdz);
-  const nxz = slopeLen > 0.001 ? [-swSlope.dhdx / slopeLen, -swSlope.dhdz / slopeLen] : [0, 0];
-  const s1dir = degToDir(getVal('swell1Dir'));
-  const hFactor = smoothstep(-s1h * 0.1, s1h * 0.35, swellH);
-  const crestFade = 1 - smoothstep(s1h * 0.4, s1h * 0.85, swellH);
-  const faceDot = -(nxz[0] * s1dir.x + nxz[1] * s1dir.y);
-  const faceFactor = smoothstep(0.08, 0.35, faceDot);
-  const pocketStrength = hFactor * crestFade * faceFactor;
+  // pocketStrength already computed in physics section above
 
   const swBar = document.getElementById('hud-swell-bar');
   // Blend slopeForce with pocket strength for a bar that reflects both
@@ -1089,8 +1240,8 @@ function animate() {
   // Audio
   updateAudio(slopeForce, normSwell, foil.speed);
 
-  // Wave chart
-  updateWaveChart(wH, slopeDot, slopeForce);
+  // Wave chart — pass net energy flow and pocket strength
+  updateWaveChart(wH, slopeDot, slopeForce, pocketStrength);
 
   foil.prevWH = wH;
 
@@ -1284,8 +1435,6 @@ animate();
 // ═══════════════════════════
 
 window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  updateRendererSize();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.pixelRatioCap));
 });

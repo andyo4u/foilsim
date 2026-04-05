@@ -123,6 +123,8 @@ function initOcean() {
       uEnergyBoostActive:{value:0},
       uFbmOctaves:{value:5},
       uDetailLevel:{value:2},
+      uPerfMode:{value:0},
+      uSurfaceDetail:{value:1.0},
     },
     vertexShader: `
     precision highp float;
@@ -176,7 +178,7 @@ function initOcean() {
     uniform sampler2D uRiverMask;uniform float uUseRiverMask;uniform vec4 uRiverBounds;
     uniform vec3 uPowerUpPos,uPowerUpColor;uniform float uPowerUpActive;
     uniform vec3 uEnergyBoostPos,uEnergyBoostColor;uniform float uEnergyBoostActive;
-    uniform float uFbmOctaves;uniform float uDetailLevel;
+    uniform float uFbmOctaves;uniform float uDetailLevel;uniform float uPerfMode;uniform float uSurfaceDetail;
     varying vec3 vWorldPos,vNormal;varying float vFoam,vHeight;
     vec2 hash2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
     float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);return mix(mix(dot(hash2(i),f),dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)),dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
@@ -201,6 +203,7 @@ function initOcean() {
     }
     // Detail normal perturbation — 2-octave 3D gradient noise, fades with distance
     vec3 detailNormal(vec3 worldPos, vec3 N, float dist) {
+      if (uSurfaceDetail < 0.01) return N;
       float fade = 1.0 - smoothstep(20.0, 200.0, dist);
       if (fade < 0.01) return N;
       float e = 0.15;
@@ -217,7 +220,20 @@ function initOcean() {
         n0 += n0b; nx += nxb; nz += nzb;
       }
       vec3 perturbation = normalize(vec3(-(nx - n0) / e, 1.0, -(nz - n0) / e));
-      return normalize(mix(N, perturbation, fade * 0.35));
+      return normalize(mix(N, perturbation, fade * 0.35 * uSurfaceDetail));
+    }
+    // Performance detail normal — 1 octave, 2D noise, tighter fade
+    vec3 detailNormalPerf(vec3 worldPos, vec3 N, float dist) {
+      if (uSurfaceDetail < 0.01) return N;
+      float fade = 1.0 - smoothstep(15.0, 80.0, dist);
+      if (fade < 0.01) return N;
+      float e = 0.2;
+      vec2 p = worldPos.xz * 0.8 + vec2(uTime * 0.3, uTime * 0.15);
+      float n0 = noise(p);
+      float nx = noise(p + vec2(e, 0.0));
+      float nz = noise(p + vec2(0.0, e));
+      vec3 perturbation = normalize(vec3(-(nx - n0) / e, 1.0, -(nz - n0) / e));
+      return normalize(mix(N, perturbation, fade * 0.3 * uSurfaceDetail));
     }
     // Analytical atmospheric scattering (Rayleigh + Mie) for sky reflection & fog
     vec3 atmosphericScattering(vec3 dir, vec3 sunDir) {
@@ -1165,8 +1181,91 @@ function initOcean() {
 
         gl_FragColor = vec4(col, alpha);
 
+      } else if (uPerfMode > 0.5) {
+        // ═══ PERFORMANCE PBR PATH — optimized for slow GPUs ═══
+        vec3 N=normalize(vNormal),V=normalize(uCamPos-vWorldPos),L=normalize(uSunDir);
+        float cd=length(uCamPos-vWorldPos);
+
+        // Performance detail normals (1 octave, 2D noise, short fade)
+        if (uDetailLevel > 0.5) {
+          N = detailNormalPerf(vWorldPos, N, cd);
+        }
+        N=normalize(mix(N,vec3(0.0,1.0,0.0),smoothstep(uOceanHalf*0.15,uOceanHalf*0.85,cd)*0.80));
+
+        vec3 H=normalize(L+V);
+        vec3 R=reflect(-V,N);
+        float NdotL=dot(N,L);
+        float NdH=max(dot(N,H),0.);
+        float cosTheta=max(dot(N,V),0.);
+
+        float F0=0.02;
+        float fresnel=F0+(1.0-F0)*pow(1.0-cosTheta,5.0);
+
+        // 3-color height-based water body (same as full)
+        float heightFactor=(vHeight+5.0)/10.0;
+        vec3 wc=mix(uDeepColor,mix(uDeepColor,uShallowColor,0.5),clamp(heightFactor,0.0,1.0));
+        wc=mix(wc,uShallowColor,clamp(heightFactor*1.5,0.0,1.0));
+        float diffuse=max(NdotL*0.5+0.5,0.0);
+        wc*=diffuse*0.5+0.5;
+
+        // SSS — forward only (no back-scatter)
+        float sss=pow(clamp(dot(V,-L),0.0,1.0),3.0)*max(N.y+0.3,0.0);
+        vec3 sssC=vec3(0.02,0.3,0.35)*sss*0.5;
+
+        // GGX specular
+        float a2=0.0025;
+        float denom=NdH*NdH*(a2-1.0)+1.0;
+        float D=a2/(3.14159*denom*denom+0.0001);
+        vec3 sunColor=vec3(1.4,1.2,0.9);
+        vec3 sunS=sunColor*D*fresnel*max(NdotL,0.0)*2.0;
+
+        // Glitter — single layer, 2D noise
+        if (uDetailLevel > 0.5) {
+          float glitterFade=(1.0-smoothstep(20.0,150.0,cd))*uSurfaceDetail;
+          if (glitterFade>0.01) {
+            vec2 gp=vWorldPos.xz*6.0+vec2(uTime*0.7,uTime*0.3);
+            float gn=noise(gp);
+            vec3 glitterN=normalize(N+vec3(gn*0.35,0.0,noise(gp*1.3+vec2(50.))*0.35));
+            float gNdotH=max(dot(glitterN,H),0.0);
+            float glitterSpec=pow(gNdotH,400.0)*3.0+pow(gNdotH,100.0)*0.8;
+            sunS+=sunColor*glitterSpec*glitterFade*max(NdotL,0.0);
+          }
+        }
+
+        vec3 skyR=atmosphericScattering(R,L);
+        vec3 col=mix(wc+sssC,skyR+sunS,fresnel);
+
+        // Foam — early exit, 1 octave 2D noise
+        if (vFoam > 0.05 || heightFactor > 0.5) {
+          float foamTex=noise(vWorldPos.xz*0.45+uTime*0.12)*0.6+0.5;
+          float foam=smoothstep(0.1,0.5,vFoam)*foamTex;
+          float peakFoam=smoothstep(0.6,1.0,heightFactor)*0.3*foamTex;
+          foam=max(foam,peakFoam);
+          col=mix(col,uFoamColor*(diffuse*0.4+0.6),clamp(foam,0.0,0.8));
+        }
+
+        // Pocket highlight (tutorial)
+        if(uShowPocket>0.01){
+          float pocketLo=smoothstep(uSwell1.w*0.30,uSwell1.w*0.65,vHeight);
+          float pocketHi=1.0-smoothstep(uSwell1.w*0.80,uSwell1.w*1.0,vHeight);
+          float faceFactor=smoothstep(-0.05,0.2,-dot(N.xz,uSwell1.xy));
+          float pocket=pocketLo*pocketHi*faceFactor;
+          float pulse=0.75+0.25*sin(uTime*2.5);
+          col=mix(col,vec3(0.1,1.0,0.7),pocket*pulse*0.75*uShowPocket);
+        }
+
+        // Atmospheric distance fog
+        float fogHalf=uOceanHalf*0.42;
+        float fogFactor=smoothstep(0.0,fogHalf,cd);
+        fogFactor=fogFactor*fogFactor;
+        vec3 viewDir=normalize(vWorldPos-uCamPos);
+        vec3 skyFog=atmosphericScattering(viewDir,L);
+        vec3 fogColor=mix(skyFog,vec3(0.15,0.35,0.45),0.4)*1.2;
+        col=mix(col,fogColor,clamp(fogFactor,0.0,1.0));
+        gl_FragColor=vec4(col, alpha);
+
       } else {
-        // ═══ NORMAL / REALISTIC PBR PATH (Phase 1+2+3) ═══
+        // ═══ NORMAL / REALISTIC PBR PATH (Full Quality) ═══
         vec3 N=normalize(vNormal),V=normalize(uCamPos-vWorldPos),L=normalize(uSunDir);
         float cd=length(uCamPos-vWorldPos);
 
@@ -1214,7 +1313,7 @@ function initOcean() {
 
         // ── Sun glitter (micro-facet sparkles, distance-faded) ──
         if (uDetailLevel > 0.5) {
-          float glitterFade = 1.0 - smoothstep(30.0, 250.0, cd);
+          float glitterFade = (1.0 - smoothstep(30.0, 250.0, cd)) * uSurfaceDetail;
           if (glitterFade > 0.01) {
             vec2 gp1 = vWorldPos.xz * 4.0 + vec2(uTime * 0.7, uTime * 0.3);
             vec2 gp2 = vWorldPos.xz * 8.5 + vec2(-uTime * 0.5, uTime * 0.8);
@@ -1451,8 +1550,8 @@ function setRenderMode(val) {
 // WAVE CHART — scrolling height & slope strip
 // ═══════════════════════════
 
-function updateWaveChart(waveH, slopeVal, energyVal) {
-  waveChartData.push({ h: waveH, s: slopeVal, e: energyVal });
+function updateWaveChart(waveH, slopeVal, energyVal, pocketVal) {
+  waveChartData.push({ h: waveH, s: slopeVal, e: energyVal, p: pocketVal || 0 });
   if (waveChartData.length > CHART_MAX_SAMPLES) waveChartData.shift();
 
   // Resize canvas to screen width if needed
@@ -1473,13 +1572,26 @@ function updateWaveChart(waveH, slopeVal, energyVal) {
   }
   const hRange = Math.max(hMax - hMin, 0.5);
   const sRange = Math.max(sMax - sMin, 0.1);
-  // Threshold for "near neutral" — 10% of the peak energy magnitude
-  const neutralThresh = Math.max(eAbsMax * 0.10, 0.05);
+  const neutralThresh = Math.max(eAbsMax * 0.15, 0.08);
+  const pocketThresh = 0.4; // pocket strength threshold for yellow highlight
 
   const n = waveChartData.length;
   const xStep = cw / CHART_MAX_SAMPLES;
 
-  // Draw wave height — color encodes energy: green=accel, red=decel, cyan=neutral
+  // Draw pocket zones as subtle yellow background fill
+  for (let i = 1; i < n; i++) {
+    const pv = waveChartData[i].p;
+    if (pv > pocketThresh) {
+      const x0 = (CHART_MAX_SAMPLES - n + i - 1) * xStep;
+      const x1 = (CHART_MAX_SAMPLES - n + i) * xStep;
+      const alpha = Math.min(0.25, (pv - pocketThresh) / (1 - pocketThresh) * 0.25);
+      ctx.fillStyle = `rgba(255,220,40,${alpha})`;
+      ctx.fillRect(x0, 0, x1 - x0 + 1, ch);
+    }
+  }
+
+  // Draw wave height — color encodes energy:
+  //   yellow = in the pocket (max lift), green = accel, red = decel, cyan = neutral
   ctx.lineWidth = 2;
   for (let i = 1; i < n; i++) {
     const x0 = (CHART_MAX_SAMPLES - n + i - 1) * xStep;
@@ -1487,11 +1599,22 @@ function updateWaveChart(waveH, slopeVal, energyVal) {
     const y0 = ch - 8 - ((waveChartData[i-1].h - hMin) / hRange) * (ch - 16);
     const y1 = ch - 8 - ((waveChartData[i].h - hMin) / hRange) * (ch - 16);
     const ev = waveChartData[i].e;
-    ctx.strokeStyle = ev > neutralThresh ? '#44ff88' : ev < -neutralThresh ? '#ff3333' : '#00e5ff';
+    const pv = waveChartData[i].p;
+    let color;
+    if (pv > pocketThresh && ev > neutralThresh) {
+      color = '#ffdd22'; // yellow — in the pocket with positive energy
+    } else if (ev > neutralThresh) {
+      color = '#44ff88'; // green — accelerating
+    } else if (ev < -neutralThresh) {
+      color = '#ff3333'; // red — decelerating
+    } else {
+      color = '#00e5ff'; // cyan — neutral
+    }
+    ctx.strokeStyle = color;
     ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
   }
 
-  // Draw slope (yellow-orange)
+  // Draw slope (orange)
   ctx.strokeStyle = '#ffaa00';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
@@ -1504,12 +1627,14 @@ function updateWaveChart(waveH, slopeVal, energyVal) {
 
   // Labels
   ctx.font = '10px DM Sans, sans-serif';
+  ctx.fillStyle = '#ffdd22';
+  ctx.fillText('Pocket', 6, 12);
   ctx.fillStyle = '#44ff88';
-  ctx.fillText('Accel', 6, 12);
+  ctx.fillText('Accel', 44, 12);
   ctx.fillStyle = '#00e5ff';
-  ctx.fillText('Neutral', 38, 12);
+  ctx.fillText('Neutral', 76, 12);
   ctx.fillStyle = '#ff3333';
-  ctx.fillText('Decel', 82, 12);
+  ctx.fillText('Decel', 118, 12);
   ctx.fillStyle = '#ffaa00';
   ctx.fillText('Slope', 6, 24);
 }

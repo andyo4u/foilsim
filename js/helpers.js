@@ -15,7 +15,7 @@ export function updateVal(el) {
   const id = el.id, v = parseFloat(el.value);
   state.cachedParams[id] = v; // update cache on slider change
   const span = document.getElementById(id + '-val');
-  if (id === 'sbTopSpeed' || id === 'sbWindSpeed') span.textContent = v + ' ' + state.units;
+  if (id === 'sbTopSpeed' || id === 'sbPocketSpeed' || id === 'sbWindSpeed') span.textContent = v + ' ' + state.units;
   else if (id === 'sbStallSpeed') span.textContent = v.toFixed(1) + ' ' + state.units;
   else if (id === 'sbWindDir') span.textContent = v + '\u00B0';
   else if (id.startsWith('sb')) span.textContent = v.toFixed(2) + '\u00D7';
@@ -39,9 +39,9 @@ export function cacheAllSliders() {
    'swell1Height','swell1Period','swell1Dir','swell1Speed',
    'swell2Height','swell2Period','swell2Dir','swell2Speed',
    'swell3Height','swell3Period','swell3Dir','swell3Speed',
-   'sbGlide','sbPumpPower','sbTurnSpeed','sbTopSpeed','sbStallSpeed',
+   'sbGlide','sbPumpPower','sbTurnSpeed','sbTopSpeed','sbPocketSpeed','sbStallSpeed',
    'sbWindSpeed','sbWindDir',
-   'sbBatteryCap','sbBatteryDrain','sbWaveEnergy','sbStability','sbDrag'].forEach(id => {
+   'sbBatteryCap','sbBatteryDrain','sbWaveEnergy','sbStability','sbDrag','sbSurfaceDetail'].forEach(id => {
     state.cachedParams[id] = parseFloat(document.getElementById(id).value);
   });
 }
@@ -89,7 +89,7 @@ export function setUnits(newUnit) {
   const R = ranges[newUnit];
 
   const sliderMap = {
-    sbTopSpeed: R.topSpeed, sbStallSpeed: R.stallSpeed,
+    sbTopSpeed: R.topSpeed, sbPocketSpeed: R.topSpeed, sbStallSpeed: R.stallSpeed,
     sbWindSpeed: R.windSpeed,
     swell1Speed: R.swellSpeed, swell2Speed: R.swellSpeed, swell3Speed: R.swellSpeed,
   };
@@ -142,7 +142,7 @@ export const presets = {
     swell1Height:2.8, swell1Period:5, swell1Dir:297, swell1Speed:15,
     swell2Height:0.7, swell2Period:4.5, swell2Dir:347, swell2Speed:16,
     swell3Height:0.57, swell3Period:6, swell3Dir:268, swell3Speed:25,
-    sbGlide:0.8, sbPumpPower:2.35, sbTurnSpeed:1, sbTopSpeed:18, sbStallSpeed:6,
+    sbGlide:0.8, sbPumpPower:2.35, sbTurnSpeed:1, sbTopSpeed:18, sbPocketSpeed:21, sbStallSpeed:6,
     sbWindSpeed:20, sbWindDir:270,
     sbBatteryCap:1.5, sbBatteryDrain:1, sbWaveEnergy:1, sbStability:1, sbDrag:1
   },
@@ -152,7 +152,7 @@ export const presets = {
     swell1Height:2.8, swell1Period:5, swell1Dir:297, swell1Speed:15,
     swell2Height:0.7, swell2Period:4.5, swell2Dir:347, swell2Speed:16,
     swell3Height:0.57, swell3Period:6, swell3Dir:268, swell3Speed:25,
-    sbGlide:0.8, sbPumpPower:2.35, sbTurnSpeed:1, sbTopSpeed:18, sbStallSpeed:6,
+    sbGlide:0.8, sbPumpPower:2.35, sbTurnSpeed:1, sbTopSpeed:18, sbPocketSpeed:21, sbStallSpeed:6,
     sbWindSpeed:20, sbWindDir:270,
     sbBatteryCap:1.5, sbBatteryDrain:1, sbWaveEnergy:1, sbStability:1, sbDrag:1
   }
@@ -186,7 +186,7 @@ export function getAllSettings() {
     'swell1Height','swell1Period','swell1Dir','swell1Speed',
     'swell2Height','swell2Period','swell2Dir','swell2Speed',
     'swell3Height','swell3Period','swell3Dir','swell3Speed'];
-  const sandboxIds = ['sbGlide','sbPumpPower','sbTurnSpeed','sbTopSpeed','sbStallSpeed',
+  const sandboxIds = ['sbGlide','sbPumpPower','sbTurnSpeed','sbTopSpeed','sbPocketSpeed','sbStallSpeed',
     'sbWindSpeed','sbWindDir',
     'sbBatteryCap','sbBatteryDrain','sbWaveEnergy','sbStability','sbDrag'];
 

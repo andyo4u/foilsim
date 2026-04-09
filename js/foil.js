@@ -619,6 +619,33 @@ export function initFoil() {
   modelGroup.add(foilAsset);
   state.foilAsset = foilAsset;
 
+  // ── Surfer character (loaded async from GLB) ────────────
+  // Tuned in surfer-viewer.html: scale 1.25, position (0.13, 0.88, 0.10), Y rot -19°
+  if (typeof THREE.GLTFLoader === 'function') {
+    const loader = new THREE.GLTFLoader();
+    loader.load('assets/surfer.glb', (gltf) => {
+      const surfer = gltf.scene;
+      surfer.traverse(o => {
+        if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+      });
+      // Auto-center horizontally and drop feet to local y=0 (matches viewer setup)
+      const box = new THREE.Box3().setFromObject(surfer);
+      const center = box.getCenter(new THREE.Vector3());
+      surfer.position.set(-center.x, -box.min.y, -center.z);
+
+      // Wrap in container so we can transform without disturbing the auto-fit
+      const surferContainer = new THREE.Group();
+      surferContainer.add(surfer);
+      surferContainer.scale.setScalar(1.25);
+      surferContainer.position.set(0.13, 0.88, 0.10);
+      surferContainer.rotation.y = -19 * Math.PI / 180;
+      foilAsset.add(surferContainer);
+      state.surferContainer = surferContainer;
+    }, undefined, (err) => {
+      console.warn('Surfer GLB failed to load:', err);
+    });
+  }
+
   // Wing tip markers (invisible) – used to track world positions for streamers
   // Front wing is at X=0.25, Z span = 1.1*0.8/2 = 0.44, Y=0 in foilAsset
   const tipL = new THREE.Object3D(); tipL.position.set(0.25, 0, 0.44);  foilAsset.add(tipL);

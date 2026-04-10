@@ -456,6 +456,7 @@ function exitToMenu() {
     document.getElementById('exit-btn').style.display = 'none';
     document.getElementById('hud-timer').style.display = 'none';
     document.getElementById('hud-boost').style.display = 'none';
+    document.getElementById('hud').style.display = 'none';
     document.getElementById('menu-overlay').classList.remove('hidden');
     state.gamePhase = 'menu';
   }
@@ -542,12 +543,15 @@ function startRide(locationPreset) {
   document.getElementById('hud-boost').style.display = 'none';
   document.getElementById('info-bar').style.opacity = '';
   document.getElementById('exit-btn').style.display = 'flex';
+  document.getElementById('hud').style.display = 'block';
 
   state.gamePhase = 'riding';
+  console.log('[startRide] HUD shown, gamePhase=riding');
 }
 
 function endRide() {
   state.gamePhase = 'score';
+  document.getElementById('hud').style.display = 'none';
 
   // Fade out music over 2s
   fadeOutMusic(2000);
@@ -599,6 +603,7 @@ let foilMusicTriggered = false;
 let fpsFrames = 0, fpsLastTime = performance.now();
 const fpsLabel = document.getElementById('fps-label');
 const hudFps = document.getElementById('hud-fps');
+let fpsAvgSum = 0, fpsAvgCount = 0; // running average
 
 // FPS graph history (120 samples × 500ms = 60 seconds)
 const fpsHistory = [];
@@ -709,7 +714,9 @@ function animate() {
   if (fpsNow - fpsLastTime >= 500) {
     const fps = Math.round(fpsFrames / ((fpsNow - fpsLastTime) / 1000));
     fpsLabel.textContent = fps + ' fps';
-    hudFps.textContent = fps + ' fps';
+    fpsAvgSum += fps; fpsAvgCount++;
+    const avgFps = Math.round(fpsAvgSum / fpsAvgCount);
+    hudFps.textContent = fps + ' fps (avg ' + avgFps + ')';
     fpsFrames = 0; fpsLastTime = fpsNow;
 
     // Record history and draw graphs
@@ -754,6 +761,21 @@ function animate() {
 
   const dt = Math.min(clock.getDelta(), .05);
   const t = clock.getElapsedTime();
+
+  // Skip heavy rendering on menu/score screens — show splash faster
+  if (state.gamePhase === 'menu' || state.gamePhase === 'score') {
+    renderer.render(scene, camera);
+    // Dismiss loading screen after first render
+    if (_readyFrames < 2) {
+      _readyFrames++;
+      if (_readyFrames === 2) {
+        document.getElementById('loading-screen').classList.add('hidden');
+        document.getElementById('menu-overlay').classList.remove('hidden');
+      }
+    }
+    return;
+  }
+
   const u = state.oceanMat.uniforms;
   u.uTime.value = t;
   u.uCamPos.value.copy(camera.position);
@@ -840,14 +862,9 @@ function animate() {
   u.uSwellSpeed.value.set(convertSpeedToMs(getVal('swell1Speed')), convertSpeedToMs(getVal('swell2Speed')), convertSpeedToMs(getVal('swell3Speed')));
   const sy = sv.y, db = smoothstep(0, .5, sy);
 
-  // Water colors — tropical override for Kauai preset
-  if (state.activeWaterStyle === 'tropical') {
-    u.uDeepColor.value.set(lerp(.01, 0, db), lerp(.06, .10, db), lerp(.12, .22, db));
-    u.uShallowColor.value.set(lerp(.02, 0, db), lerp(.15, .30, db), lerp(.22, .45, db));
-  } else {
-    u.uDeepColor.value.set(lerp(.01, 0, db), lerp(.02, .04, db), lerp(.06, .12, db));
-    u.uShallowColor.value.set(lerp(.02, 0, db), lerp(.06, .15, db), lerp(.12, .3, db));
-  }
+  // Water colors
+  u.uDeepColor.value.set(lerp(.01, 0, db), lerp(.02, .04, db), lerp(.06, .12, db));
+  u.uShallowColor.value.set(lerp(.02, 0, db), lerp(.06, .15, db), lerp(.12, .3, db));
 
   const cam = state.cam;
 
@@ -1456,15 +1473,6 @@ function animate() {
   }
 
   renderer.render(scene, camera);
-
-  // Dismiss loading screen after second render (shaders compiled, scene visible)
-  if (_readyFrames < 2) {
-    _readyFrames++;
-    if (_readyFrames === 2) {
-      document.getElementById('loading-screen').classList.add('hidden');
-      document.getElementById('menu-overlay').classList.remove('hidden');
-    }
-  }
 }
 
 animate();

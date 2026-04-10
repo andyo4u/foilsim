@@ -62,7 +62,11 @@ function minifyHTML(html) {
 
 console.log('Cleaning dist/...');
 if (fs.existsSync(DIST)) {
-  fs.rmSync(DIST, { recursive: true });
+  try {
+    fs.rmSync(DIST, { recursive: true, force: true, maxRetries: 3, retryDelay: 500 });
+  } catch (e) {
+    console.warn('Could not fully clean dist/, overwriting in place');
+  }
 }
 mkdirp(DIST);
 
@@ -91,11 +95,24 @@ if (result.errors.length > 0) {
   process.exit(1);
 }
 
+// Post-process: strip GLSL comments from shader strings inside the bundle
+// esbuild can't touch these since they're inside template literals / strings
+let bundle = fs.readFileSync(path.join(DIST, 'js/app.min.js'), 'utf8');
+const beforeStrip = bundle.length;
+// Strip // comments inside shader strings (lines that are mostly whitespace + //)
+bundle = bundle.replace(/\\n\s*\/\/[^\n\\]*/g, '\\n');
+// Strip standalone comment lines inside backtick strings
+bundle = bundle.replace(/\n\s*\/\/[^\n`]*/g, '\n');
+// Collapse multiple \\n sequences
+bundle = bundle.replace(/(\\n\s*){2,}/g, '\\n');
+fs.writeFileSync(path.join(DIST, 'js/app.min.js'), bundle);
+
 const srcSize = fs.readdirSync(path.join(SRC, 'js'))
   .filter(f => f.endsWith('.js'))
   .reduce((sum, f) => sum + fs.statSync(path.join(SRC, 'js', f)).size, 0);
 const bundleSize = fs.statSync(path.join(DIST, 'js/app.min.js')).size;
 console.log(`  ${(srcSize/1024).toFixed(0)}KB → ${(bundleSize/1024).toFixed(0)}KB (${Math.round(100 - bundleSize/srcSize*100)}% smaller)`);
+console.log(`  Shader comments stripped: ${((beforeStrip - bundle.length)/1024).toFixed(1)}KB removed`);
 
 // ── 2. Minify and rewrite index.html ──
 
@@ -143,11 +160,7 @@ if (fs.existsSync(path.join(SRC, 'favicon.ico'))) {
   console.log('  favicon.ico copied');
 }
 
-// Kauai panorama
-if (fs.existsSync(path.join(SRC, 'kauai.jpg'))) {
-  copyFile(path.join(SRC, 'kauai.jpg'), path.join(DIST, 'kauai.jpg'));
-  console.log('  kauai.jpg copied');
-}
+// (Kauai panorama removed — no panorama presets active)
 
 // ── Done ──
 

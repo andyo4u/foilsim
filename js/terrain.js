@@ -551,23 +551,6 @@ export const bgPresets = {
       { angle: 3.45,   dist: 720,  height: 75,  width: 260, depth: 55, seed: 61.4 },
     ]
   },
-  'kauai': {
-    label: 'Kauai',
-    maxHeight: 80,
-    usePanorama: true,
-    waterStyle: 'tropical',
-    cliffs: [
-      // Small volcanic outcrops on the coastline side (around angle pi, matching photo center)
-      // These sit in front of the photo but don't block it -- low and scattered
-      { angle: 2.7,    dist: 480,  height: 55,  width: 200, depth: 50, seed: 70.1 },
-      { angle: 3.0,    dist: 520,  height: 70,  width: 240, depth: 55, seed: 71.4 },
-      { angle: 3.3,    dist: 460,  height: 45,  width: 180, depth: 45, seed: 72.7 },
-      { angle: 3.6,    dist: 500,  height: 60,  width: 210, depth: 48, seed: 73.2 },
-      // A couple of reef rocks on the open ocean side
-      { angle: 0.3,    dist: 700,  height: 25,  width: 120, depth: 35, seed: 74.5 },
-      { angle: 5.8,    dist: 750,  height: 20,  width: 100, depth: 30, seed: 75.8 },
-    ]
-  },
   'open-ocean': {
     label: 'Open Ocean',
     maxHeight: 120,
@@ -760,34 +743,7 @@ function createPanoMat() {
 }
 
 function loadPanoTexture() {
-  const loader = new THREE.TextureLoader();
-  loader.load('kauai.jpg', function(tex) {
-    tex.minFilter = THREE.LinearMipmapLinearFilter;
-    tex.magFilter = THREE.LinearFilter;
-    tex.anisotropy = state.renderer.capabilities.getMaxAnisotropy();
-    panoTexture = tex;
-    state.panoTexture = tex;
-    panoReady = true;
-    console.log('Kauai panorama loaded from file');
-    if (state.activeBgPreset === 'kauai') buildPanoBackdrop();
-  }, undefined, function() {
-    console.warn('kauai.jpg file load failed, trying base64 fallback');
-    if (typeof KAUAI_B64 !== 'undefined') {
-      const img = new Image();
-      img.onload = function() {
-        panoTexture = new THREE.Texture(img);
-        panoTexture.needsUpdate = true;
-        panoTexture.minFilter = THREE.LinearMipmapLinearFilter;
-        panoTexture.magFilter = THREE.LinearFilter;
-        panoTexture.anisotropy = state.renderer.capabilities.getMaxAnisotropy();
-        state.panoTexture = panoTexture;
-        panoReady = true;
-        console.log('Kauai panorama loaded from base64');
-        if (state.activeBgPreset === 'kauai') buildPanoBackdrop();
-      };
-      img.src = 'data:image/jpeg;base64,' + KAUAI_B64;
-    }
-  });
+  // Panorama system available for future use — no default panorama loaded
 }
 
 function buildPanoBackdrop() {

@@ -80,6 +80,7 @@
     position: fixed; top: 16px; left: 16px; z-index: 50;
     color: #d8e8ff; font-size: 13px; pointer-events: none;
     text-shadow: 0 1px 6px rgba(0,0,0,0.8), 0 0 12px rgba(0,0,0,0.4); line-height: 1.6;
+    display: none;
   }
   #hud .speed { font-size: 28px; font-weight: 600; color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.3), 0 1px 6px rgba(0,0,0,0.8); }
   #hud .unit { font-size: 13px; color: #a0ccf0; font-weight: 400; margin-left: 2px; }
@@ -350,7 +351,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.2.00</div>
+<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.2.04</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 <canvas id="fps-graph" width="120" height="35" style="display:none;position:fixed;top:36px;left:10px;z-index:90;border-radius:3px;background:rgba(0,0,0,0.5);pointer-events:none;"></canvas>
@@ -420,6 +421,7 @@
     <div class="control-row"><span class="control-label">Foil Stability</span><input type="range" id="sbStability" min="0.2" max="3.0" value="1.0" step="0.05" oninput="updateVal(this)"><span class="control-value" id="sbStability-val">1.00×</span></div>
     <div class="control-row" style="margin-top:6px;"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="sbFreeCam" onchange="toggleFreeCam(this.checked)" style="width:14px;height:14px;accent-color:#4af;"><span class="control-label" style="flex:1;">Free Camera</span></label></div>
     <div class="control-row"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="sbWaveChart" onchange="document.getElementById('wave-chart').style.display=this.checked?'block':'none'" style="width:14px;height:14px;accent-color:#4af;"><span class="control-label" style="flex:1;">Wave Chart</span></label></div>
+    <div class="control-row"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="sbFpsChart" onchange="document.getElementById('hud-fps-graph').style.display=this.checked?'block':'none'" style="width:14px;height:14px;accent-color:#4af;"><span class="control-label" style="flex:1;">FPS Chart</span></label></div>
     <div class="control-row"><span class="control-label">Render Style</span><select id="sbRenderMode" onchange="setRenderMode(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="0">Normal</option><option value="1">Woodcut</option><option value="2">DEM</option><option value="3">Painterly</option><option value="4">Tron</option><option value="5">Sumi-e</option><option value="6">Pixel Art</option><option value="7">X-Ray</option><option value="8">Plastic</option><option value="9">Lava</option><option value="10">Fur</option><option value="11">Watercolor</option><option value="12">Pocket Highlights</option></select></div>
     <div class="control-row"><span class="control-label">Quality</span><select id="sbQuality" onchange="setQuality(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="low">Low</option><option value="med">Medium</option><option value="high">High</option><option value="ultra">Ultra</option><option value="max">Max</option><option value="auto" selected>Auto</option></select></div>
     <div class="control-row"><span class="control-label">Shader</span><div style="display:flex;gap:4px;flex:1;"><button class="preset-btn" id="sbShaderPerf" onclick="setShaderMode('performance')" style="flex:1;font-size:10px;padding:3px 6px;">Perf</button><button class="preset-btn active-preset" id="sbShaderFull" onclick="setShaderMode('full')" style="flex:1;font-size:10px;padding:3px 6px;">Full</button></div></div>
@@ -434,11 +436,9 @@
       <button class="preset-btn bg-preset-btn" data-bg="big-sur" onclick="rebuildTerrain('big-sur')">Big Sur</button>
       <button class="preset-btn bg-preset-btn" data-bg="sheltered-bay" onclick="rebuildTerrain('sheltered-bay')">Bay</button>
       <button class="preset-btn bg-preset-btn" data-bg="columbia-gorge" onclick="rebuildTerrain('columbia-gorge')">Gorge</button>
-      <button class="preset-btn bg-preset-btn" data-bg="kauai" onclick="rebuildTerrain('kauai')">Kauai</button>
-      <button class="preset-btn bg-preset-btn" data-bg="open-ocean" onclick="rebuildTerrain('open-ocean')">Open</button>
+<button class="preset-btn bg-preset-btn" data-bg="open-ocean" onclick="rebuildTerrain('open-ocean')">Open</button>
       <button class="preset-btn bg-preset-btn active-preset" data-bg="gorge-real" onclick="rebuildTerrain('gorge-real')" style="border-color:rgba(80,220,130,0.35);color:#70d8a0;">Gorge HD</button>
       <button class="preset-btn bg-preset-btn" data-bg="rufus-real" onclick="rebuildTerrain('rufus-real')" style="border-color:rgba(255,140,60,0.35);color:#ff9040;">Rufus HD</button>
-      <button class="preset-btn bg-preset-btn" data-bg="maliko-real" onclick="rebuildTerrain('maliko-real')" style="border-color:rgba(255,180,60,0.35);color:#ffb840;">Maliko HD</button>
     </div>
   </div>
   <div class="section">
@@ -471,7 +471,7 @@
   </div>
   <div style="margin-top:6px;">
     <div id="hud-fps" style="font-size:11px;color:#90b8e0;">-- fps</div>
-    <canvas id="hud-fps-graph" width="100" height="30" style="margin-top:3px;border-radius:3px;background:rgba(0,0,0,0.3);display:block;"></canvas>
+    <canvas id="hud-fps-graph" width="100" height="30" style="margin-top:3px;border-radius:3px;background:rgba(0,0,0,0.3);display:none;"></canvas>
   </div>
 </div>
 
@@ -503,27 +503,21 @@
 
 <!-- Menu overlay -->
 <div id="menu-overlay" class="game-overlay hidden">
-  <h1>FOILBRAIN</h1>
+  <h1>FOIL-BRAIN</h1>
   <div class="subtitle">Hydrofoil Simulator</div>
   <div style="display:flex;gap:10px;margin-bottom:10px;">
-    <button class="game-btn" style="padding:10px 32px;font-size:14px;" onclick="startRide('tutorial')">Tutorial</button>
+    <button class="game-btn" style="padding:10px 32px;font-size:14px;" onclick="startRide('tutorial')">Tutorial <span style="font-size:11px;opacity:0.7;">· Arcade Mode</span></button>
     <button class="game-btn" style="padding:10px 28px;font-size:14px;background:rgba(100,160,255,0.15);box-shadow:none;border:1px solid rgba(100,160,255,0.3);" onclick="openSettings()">⚙ Settings</button>
   </div>
   <div style="display:flex;gap:10px;margin-bottom:24px;">
-    <button class="game-btn" disabled style="padding:8px 20px;font-size:12px;opacity:0.38;cursor:not-allowed;background:rgba(100,160,255,0.07);box-shadow:none;border:1px solid rgba(100,160,255,0.18);">Advanced Tutorial <span style="font-size:10px;opacity:0.7;">· Coming Soon</span></button>
     <button class="game-btn" disabled style="padding:8px 20px;font-size:12px;opacity:0.38;cursor:not-allowed;background:rgba(100,160,255,0.07);box-shadow:none;border:1px solid rgba(100,160,255,0.18);">Foil Designer <span style="font-size:10px;opacity:0.7;">· Coming Soon</span></button>
   </div>
-  <div class="location-grid" style="grid-template-columns:repeat(3,1fr);width:min(480px,95vw);margin-bottom:28px;">
-    <div class="location-card" onclick="startRide('gorge-real')">
-      <div class="loc-name">Swell City, USA</div>
-      <div class="loc-tag" style="color:rgba(80,220,130,0.7);">HD Terrain</div>
-    </div>
+  <div class="location-grid" style="grid-template-columns:repeat(2,1fr);width:min(360px,95vw);margin-bottom:28px;">
     <div class="location-card" onclick="startRide('rufus-real')">
       <div class="loc-name">Rufus Glass Factory</div>
-      <div class="loc-tag" style="color:rgba(255,140,60,0.7);">HD Terrain</div>
     </div>
     <div class="location-card locked">
-      <div class="loc-name">Maliko</div>
+      <div class="loc-name">Swell City</div>
       <div class="loc-tag">Coming Soon</div>
     </div>
   </div>
@@ -551,10 +545,10 @@
 
 <!-- About overlay -->
 <div id="about-overlay" class="game-overlay hidden">
-  <h1 style="font-size:36px;letter-spacing:4px;">FOILBRAIN</h1>
+  <h1 style="font-size:36px;letter-spacing:4px;">FOIL-BRAIN</h1>
   <div class="subtitle" style="margin-bottom:24px;">Hydrofoil Simulator</div>
   <div class="about-body">
-    <p>FoilBrain is a real-time physics simulator for eFoil and hydrofoil riding, built entirely in the browser with Three.js. Three Gerstner ocean swells combine with wind chop to generate authentic open-ocean wave conditions — the same math used in film VFX and marine simulation.</p>
+    <p>Foil-Brain is a real-time physics simulator for eFoil and hydrofoil riding, built entirely in the browser with Three.js. Three Gerstner ocean swells combine with wind chop to generate authentic open-ocean wave conditions — the same math used in film VFX and marine simulation.</p>
     <p>Your goal: find <em>the pocket</em> — the fast-moving face of the wave where gravity-driven slope acceleration keeps your board flying. Pump to build speed, manage your battery, and stay airborne.</p>
     <p>Wave height, period, direction, and board physics are all fully adjustable. Terrain is rendered from real elevation and satellite data, starting with <strong>Swell City</strong> on the Columbia River Gorge. More locations coming soon.</p>
   </div>
@@ -585,21 +579,21 @@
     <div class="settings-section">
       <div class="settings-title">FOIL</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;">
-        <button class="settings-foil-btn" data-foil="grom" onclick="applyFoilPreset('grom')">
+        <button class="settings-foil-btn active" data-foil="grom" onclick="applyFoilPreset('grom')">
           <div class="settings-foil-name">Grom</div>
           <div class="settings-foil-desc">Beginner</div>
         </button>
-        <button class="settings-foil-btn active" data-foil="lift" onclick="applyFoilPreset('lift')">
-          <div class="settings-foil-name">Lift HA</div>
-          <div class="settings-foil-desc">All-round</div>
+        <button class="settings-foil-btn" data-foil="lift" onclick="applyFoilPreset('lift')" style="opacity:0.4;cursor:not-allowed;" disabled>
+          <div class="settings-foil-name">Performance</div>
+          <div class="settings-foil-desc">Coming Soon</div>
         </button>
-        <button class="settings-foil-btn" data-foil="armstrong" onclick="applyFoilPreset('armstrong')">
-          <div class="settings-foil-name">Armstrong</div>
-          <div class="settings-foil-desc">Performance</div>
+        <button class="settings-foil-btn" data-foil="armstrong" onclick="applyFoilPreset('armstrong')" style="opacity:0.4;cursor:not-allowed;" disabled>
+          <div class="settings-foil-name">High Aspect</div>
+          <div class="settings-foil-desc">Coming Soon</div>
         </button>
-        <button class="settings-foil-btn" data-foil="race" onclick="applyFoilPreset('race')">
-          <div class="settings-foil-name">Race HA</div>
-          <div class="settings-foil-desc">Expert</div>
+        <button class="settings-foil-btn" data-foil="race" onclick="applyFoilPreset('race')" style="opacity:0.4;cursor:not-allowed;" disabled>
+          <div class="settings-foil-name">Race</div>
+          <div class="settings-foil-desc">Coming Soon</div>
         </button>
       </div>
     </div>
@@ -656,7 +650,7 @@
 
 <!-- Loading screen — visible on page load, dismissed after first GL frames render -->
 <div id="loading-screen" class="game-overlay" style="z-index:500;background:rgb(4,10,22);transition:opacity 0.7s ease;">
-  <h1 style="font-weight:300;letter-spacing:6px;margin-bottom:4px;">FOILBRAIN</h1>
+  <h1 style="font-weight:300;letter-spacing:6px;margin-bottom:4px;">FOIL-BRAIN</h1>
   <div style="font-size:13px;color:rgba(180,210,255,0.55);letter-spacing:3px;margin-bottom:52px;">Hydrofoil Simulator</div>
   <div style="width:36px;height:36px;border-radius:50%;border:2px solid rgba(100,160,255,0.12);border-top-color:rgba(100,160,255,0.8);animation:foil-spin 0.85s linear infinite;"></div>
 </div>

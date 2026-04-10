@@ -288,5 +288,6 @@ export function endTutorial() {
   document.getElementById('menu-overlay').classList.remove('hidden');
   document.getElementById('hud-timer').style.display = 'none';
   document.getElementById('hud-boost').style.display = 'none';
+  document.getElementById('hud').style.display = 'none';
   state.gamePhase = 'menu';
 }

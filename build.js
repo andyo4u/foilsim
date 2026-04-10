@@ -84,8 +84,9 @@ const result = esbuild.buildSync({
   // since they're not imported via `import ... from 'three'`
   outfile: path.join(DIST, 'js/app.min.js'),
   target: ['es2020'],
-  // Drop console.log in production (keep warn/error)
   drop: ['debugger'],
+  // Strip console.log in production (keep warn/error)
+  pure: ['console.log'],
   legalComments: 'none',
   sourcemap: false,
 });
@@ -160,7 +161,11 @@ if (fs.existsSync(path.join(SRC, 'favicon.ico'))) {
   console.log('  favicon.ico copied');
 }
 
-// (Kauai panorama removed — no panorama presets active)
+// Music
+if (fs.existsSync(path.join(SRC, 'music'))) {
+  copyDir(path.join(SRC, 'music'), path.join(DIST, 'music'));
+  console.log('  music/ copied');
+}
 
 // ── Done ──
 

@@ -282,6 +282,12 @@ async function _loadRandomTrack() {
     musicAudio.loop = true;
     musicAudio.volume = 0.65;
     musicWaitingForFoil = true;
+    // If foil is already flying (rider started above stall), play immediately
+    if (state.foil.speed > 2.5 && state.gamePhase === 'riding') {
+      musicAudio.play().catch(() => {});
+      musicWaitingForFoil = false;
+      state.audioSettings.musicPlaying = true;
+    }
     state.audioSettings.musicFileName = file.replace(/\.[^.]+$/, '');
     state.audioSettings.musicPlaying = false;
 

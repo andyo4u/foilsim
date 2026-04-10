@@ -1572,7 +1572,7 @@ function updateWaveChart(waveH, slopeVal, energyVal, pocketVal) {
   }
   const hRange = Math.max(hMax - hMin, 0.5);
   const sRange = Math.max(sMax - sMin, 0.1);
-  const neutralThresh = Math.max(eAbsMax * 0.15, 0.08);
+  const neutralThresh = 0.12; // fixed threshold for normalized [-1,1] energy signal
   const pocketThresh = 0.4; // pocket strength threshold for yellow highlight
 
   const n = waveChartData.length;

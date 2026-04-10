@@ -587,6 +587,12 @@ window.endTutorial = endTutorial;
 const clock = new THREE.Clock();
 let pumpPhase = 0, sprayT = 0;
 let prevSunAngle = -1, prevSunDir = -1;
+
+// Surfer animation — smoothed procedural values
+let surferLeanZ = 0;    // counter-lean for roll (radians)
+let surferLeanX = 0;    // forward/back lean for accel/brake (radians)
+let surferCrouch = 0;   // knee bend 0-1 (scales Y)
+let surferHeadY = 0;    // head turn into turns (radians)
 let foilMusicTriggered = false;
 
 // FPS counter
@@ -1119,6 +1125,37 @@ function animate() {
   state.modelGroup.rotation.x = foil.roll + Math.atan(cs) * 0.3;
   state.modelGroup.rotation.z = foil.pitch - Math.atan(slopeDot) * 0.4;
 
+  // ── Surfer procedural animation ─────────────────────────
+  if (state.surferContainer) {
+    const sc = state.surferContainer;
+    const smoothRate = 1 - Math.exp(-4 * dt); // ~4Hz smoothing
+
+    // 1. Counter-lean with roll — surfer leans opposite to board tilt
+    const targetLeanZ = -foil.roll * 0.6;
+    surferLeanZ = lerp(surferLeanZ, targetLeanZ, smoothRate);
+
+    // 2. Forward lean when accelerating, back lean when braking
+    const accel = (foil.speed - (foil.prevSpeed || 0)) / Math.max(dt, 0.001);
+    const targetLeanX = -Math.max(-0.15, Math.min(0.15, accel * 0.03));
+    surferLeanX = lerp(surferLeanX, targetLeanX, smoothRate);
+
+    // 3. Knee bend — crouch during pumps + absorb chop
+    const pumpCrouch = (isPump || isPowerPump) ? 0.06 : 0;
+    const chopCrouch = Math.min(0.04, Math.abs(slopeDot) * 0.08);
+    const targetCrouch = pumpCrouch + chopCrouch;
+    surferCrouch = lerp(surferCrouch, targetCrouch, smoothRate);
+
+    // 4. Head turn — look into turns
+    const targetHeadY = -foil.roll * 0.4;
+    surferHeadY = lerp(surferHeadY, targetHeadY, smoothRate * 0.7);
+
+    // Apply — rotations are additive on top of rest pose (-19° Y)
+    const restY = -19 * Math.PI / 180;
+    sc.rotation.set(surferLeanX, restY + surferHeadY, surferLeanZ);
+    // Knee bend via slight Y scale reduction (crouch compresses)
+    sc.scale.set(1.25, 1.25 * (1 - surferCrouch), 1.25);
+  }
+
   // Spray
   sprayT += dt;
   if (foil.speed > 3 && sprayT > .03) {
@@ -1212,10 +1249,12 @@ function animate() {
   // pocketStrength already computed in physics section above
 
   const swBar = document.getElementById('hud-swell-bar');
-  // Blend slopeForce with pocket strength for a bar that reflects both
-  // rider heading alignment AND position on the wave face
+  // Combine slopeForce with pocket strength: in the pocket pushes toward max
   const rawNorm = slopeForce / dynamicMax;
-  const blended = rawNorm * (0.5 + 0.5 * pocketStrength);
+  // When in pocket with positive slope, boost toward 1.0
+  // When out of pocket, show raw slope force
+  const pocketBoost = pocketStrength * Math.max(0, rawNorm);
+  const blended = rawNorm + pocketBoost * (1.0 - Math.abs(rawNorm));
   const normSwell = Math.max(-1, Math.min(1, blended));
   const absSwell = Math.abs(normSwell);
   const pct = absSwell * 50;
@@ -1241,7 +1280,7 @@ function animate() {
   updateAudio(slopeForce, normSwell, foil.speed);
 
   // Wave chart — pass net energy flow and pocket strength
-  updateWaveChart(wH, slopeDot, slopeForce, pocketStrength);
+  updateWaveChart(wH, slopeDot, normSwell, pocketStrength);
 
   foil.prevWH = wH;
 

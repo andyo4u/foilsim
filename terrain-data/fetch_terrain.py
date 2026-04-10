@@ -1,6 +1,7 @@
 """
 Fetch heightmap + satellite imagery for any location.
 Downloads from USGS 3DEP (elevation) and ESRI World Imagery (satellite).
+Saves a JSON metadata file with geo bounds for coordinate conversion.
 
 Usage:
   python fetch_terrain.py <name> <lat> <lon> [width_km] [height_km]
@@ -13,12 +14,14 @@ Examples:
 Output:
   <name>_heightmap_1024.png  (grayscale elevation)
   <name>_satellite_2048.jpg  (color satellite)
-  Prints elevMin, elevMax, worldW, worldD for use in terrainConfigs.
+  <name>_meta.json           (geo bounds, center, dimensions)
+  Prints terrainConfigs entry for terrain.js.
 """
 
 import sys
 import math
 import io
+import json
 import requests
 import numpy as np
 from PIL import Image
@@ -39,12 +42,12 @@ def fetch_terrain(name, center_lat, center_lon, width_km=14.4, height_km=11.0):
     world_d = (north - south) * 111000
 
     print(f"Location: {name}")
-    print(f"Center: {center_lat:.4f}N, {center_lon:.4f}E")
-    print(f"Bbox: W={west:.4f} S={south:.4f} E={east:.4f} N={north:.4f}")
+    print(f"Center: {center_lat:.6f}N, {center_lon:.6f}E")
+    print(f"Bbox: W={west:.6f} S={south:.6f} E={east:.6f} N={north:.6f}")
     print(f"World size: {world_w:.0f}m E-W x {world_d:.0f}m N-S")
 
     # ── 1. Elevation from USGS 3DEP ──
-    print("\n[1/2] Downloading elevation data from USGS 3DEP...")
+    print("\n[1/3] Downloading elevation data from USGS 3DEP...")
     dem_url = (
         "https://elevation.nationalmap.gov/arcgis/rest/services/"
         "3DEPElevation/ImageServer/exportImage"
@@ -84,7 +87,7 @@ def fetch_terrain(name, center_lat, center_lon, width_km=14.4, height_km=11.0):
             print(f"  Saved {hm_path}")
 
     # ── 2. Satellite from ESRI World Imagery ──
-    print("\n[2/2] Downloading satellite imagery from ESRI...")
+    print("\n[2/3] Downloading satellite imagery from ESRI...")
     sat_url = (
         "https://services.arcgisonline.com/arcgis/rest/services/"
         "World_Imagery/MapServer/export"
@@ -105,6 +108,23 @@ def fetch_terrain(name, center_lat, center_lon, width_km=14.4, height_km=11.0):
     Image.open(io.BytesIO(resp.content)).save(sat_path, quality=90)
     print(f"  Saved {sat_path}")
 
+    # ── 3. Save metadata JSON ──
+    meta = {
+        'name': name,
+        'center': { 'lat': center_lat, 'lon': center_lon },
+        'bbox': { 'west': west, 'south': south, 'east': east, 'north': north },
+        'widthKm': width_km,
+        'heightKm': height_km,
+        'worldW': round(world_w),
+        'worldD': round(world_d),
+        'elevMin': round(elev_min, 1),
+        'elevMax': round(elev_max, 1),
+    }
+    meta_path = f'{name}_meta.json'
+    with open(meta_path, 'w') as f:
+        json.dump(meta, f, indent=2)
+    print(f"\n[3/3] Saved {meta_path}")
+
     # ── Summary ──
     print(f"\nDone! Add to terrainConfigs in terrain.js:")
     print(f"  {name}: {{")
@@ -115,6 +135,8 @@ def fetch_terrain(name, center_lat, center_lon, width_km=14.4, height_km=11.0):
     print(f"    elevMax: {elev_max:.1f},")
     print(f"    worldW: {world_w:.0f},")
     print(f"    worldD: {world_d:.0f},")
+    print(f"    geoCenter: {{ lat: {center_lat:.6f}, lon: {center_lon:.6f} }},")
+    print(f"    geoBbox: {{ west: {west:.6f}, east: {east:.6f}, south: {south:.6f}, north: {north:.6f} }},")
     print(f"    waterY: 3.0,")
     print(f"    waterThresh: 12,")
     print(f"    useRiverMask: true,")
@@ -122,10 +144,7 @@ def fetch_terrain(name, center_lat, center_lon, width_km=14.4, height_km=11.0):
     print(f"    startPos: null")
     print(f"  }}")
 
-    return {
-        'elevMin': elev_min, 'elevMax': elev_max,
-        'worldW': world_w, 'worldD': world_d,
-    }
+    return meta
 
 
 if __name__ == '__main__':

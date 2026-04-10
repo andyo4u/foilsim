@@ -620,6 +620,10 @@ export function initFoil() {
   state.foilAsset = foilAsset;
 
   // ── Surfer character (loaded async from GLB) ────────────
+  // Pipeline: Gemini created surfer character picture in T-pose →
+  //           tripo3d.ai generated 3D model from the image, exported OBJ (FBX failed) →
+  //           imported to mixamo.com for auto-rigging, exported FBX →
+  //           converted to GLB for Three.js
   // Tuned in surfer-viewer.html: scale 1.25, position (0.13, 0.88, 0.10), Y rot -19°
   if (typeof THREE.GLTFLoader === 'function') {
     const loader = new THREE.GLTFLoader();

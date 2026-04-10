@@ -405,13 +405,16 @@ export const terrainConfigs = {
     satellite: 'terrain-data/rufus_satellite_2048.jpg',
     elevMin: 49.2,
     elevMax: 955.0,
-    worldW: 14346,   // meters east-west
-    worldD: 10989,   // meters north-south
+    worldW: 14400,   // meters east-west
+    worldD: 11000,   // meters north-south
+    geoCenter: { lat: 45.685, lon: -120.758 },
+    geoBbox: { west: -120.850849, east: -120.665151, south: 45.635450, north: 45.734550 },
     waterY: 3.0,     // river level in scene coords
     waterThresh: 12,  // heightmap pixel <= this = water
     useRiverMask: true,
     preset: 'rufus',
-    startPos: null     // auto-detect from heightmap
+    geoStart: { lat: 45.696657, lon: -120.755017 },  // target lat/lon
+    startPos: null  // auto-detect water near center
   },
   maliko: {
     label: 'Maliko Run, Maui',
@@ -634,6 +637,15 @@ export function rebuildTerrain(presetName) {
         const startPos = findRiverStartPosition();
         state.foil.x = startPos.x; state.foil.z = startPos.z; state.foil.heading = startPos.heading;
         state.foil.speed = 3;
+        // Debug: verify rider is in water after placement
+        const hCheck = getRealTerrainHeight(state.foil.x, state.foil.z);
+        const wY = state.activeTerrainCfg.waterY || 0;
+        console.log(`[onTerrainReady] ${state.activeTerrainCfg.label}: rider at (${state.foil.x.toFixed(0)}, ${state.foil.z.toFixed(0)}), terrain h=${hCheck !== null ? hCheck.toFixed(1) : 'null'}m, waterY=${wY}, ${hCheck !== null && hCheck <= wY + 2 ? 'IN WATER' : 'ON LAND'}`);
+        // Check position after 2 seconds to see if something moves the rider
+        setTimeout(() => {
+          const h2 = getRealTerrainHeight(state.foil.x, state.foil.z);
+          console.log(`[2s later] rider at (${state.foil.x.toFixed(0)}, ${state.foil.z.toFixed(0)}), terrain h=${h2 !== null ? h2.toFixed(1) : 'null'}m, ${h2 !== null && h2 <= wY + 2 ? 'IN WATER' : 'ON LAND'}`);
+        }, 2000);
         applyPreset(state.activeTerrainCfg.preset || 'clean');
         if (state.activeTerrainCfg.useRiverMask && state.realTerrainRiverMask) {
           state.oceanMat.uniforms.uRiverMask.value = state.realTerrainRiverMask;
@@ -1108,17 +1120,66 @@ function buildRealTerrain(onReady) {
   }
 }
 
+// Convert lat/lon to world coordinates using terrain geoBbox
+export function geoToWorld(lat, lon) {
+  const cfg = state.activeTerrainCfg;
+  if (!cfg || !cfg.geoBbox) return { x: 0, z: 0 };
+  const b = cfg.geoBbox;
+  const u = (lon - b.west) / (b.east - b.west);     // 0=west, 1=east
+  const v = (b.north - lat) / (b.north - b.south);   // 0=north (top of image), 1=south (bottom)
+  const x = (u - 0.5) * cfg.worldW;
+  const z = (v - 0.5) * cfg.worldD;                  // v=0 (north/top) → Z=-D/2, v=1 (south/bottom) → Z=+D/2
+  console.log(`geoToWorld(${lat}, ${lon}) → u=${u.toFixed(4)} v=${v.toFixed(4)} → world(${x.toFixed(0)}, ${z.toFixed(0)})`);
+  return { x, z };
+}
+
 // Find a good starting position in the water
 export function findRiverStartPosition() {
   // Use explicit start position if configured
-  if (state.activeTerrainCfg.startPos) return state.activeTerrainCfg.startPos;
+  if (state.activeTerrainCfg.startPos) {
+    const sp = state.activeTerrainCfg.startPos;
+    console.log(`Using explicit startPos: (${sp.x}, ${sp.z}), heading: ${sp.heading.toFixed(2)}`);
+    return sp;
+  }
+
+  // Resolve from geoStart lat/lon if available
+  if (state.activeTerrainCfg.geoStart && state.activeTerrainCfg.geoBbox) {
+    const gs = state.activeTerrainCfg.geoStart;
+    const pos = geoToWorld(gs.lat, gs.lon);
+    const wY = state.activeTerrainCfg.waterY || 0;
+
+    // If geo position lands on terrain, search nearby for water
+    const h = getRealTerrainHeight(pos.x, pos.z);
+    if (h === null || h > wY + 2) {
+      console.log(`geoStart landed on terrain (h=${h !== null ? h.toFixed(1) : 'null'}m), searching for water...`);
+      // Scan in Z (north-south) in 50m steps up to 2km each direction
+      for (let dz = -50; Math.abs(dz) <= 2000; dz = dz > 0 ? -(dz + 50) : -dz + 50) {
+        const hTest = getRealTerrainHeight(pos.x, pos.z + dz);
+        if (hTest !== null && hTest <= wY + 2) {
+          pos.z += dz;
+          console.log(`  → Snapped to water at z offset ${dz}: h=${hTest.toFixed(1)}m, final pos (${pos.x.toFixed(0)}, ${pos.z.toFixed(0)})`);
+          break;
+        }
+      }
+    } else {
+      console.log(`geoStart in water: (${pos.x.toFixed(0)}, ${pos.z.toFixed(0)}), h=${h.toFixed(1)}m`);
+    }
+    return { x: pos.x, z: pos.z, heading: Math.PI / 2 };
+  }
 
   if (!state.realTerrainHeightData) return { x: 0, z: 0, heading: 0 };
   const d = state.realTerrainHeightData;
   const WATER_THRESH = state.activeTerrainCfg.waterThresh || 12;
 
-  // Scan at ~20% from the west edge (pixel column ~205 of 1024)
-  const targetCol = Math.floor(d.width * 0.20);
+  // If geoStart is configured, scan at the target column instead of 20%
+  let startColPct = 0.20;
+  if (state.activeTerrainCfg.geoStart && state.activeTerrainCfg.geoBbox) {
+    const gs = state.activeTerrainCfg.geoStart;
+    const b = state.activeTerrainCfg.geoBbox;
+    startColPct = (gs.lon - b.west) / (b.east - b.west);
+    console.log(`Auto-detect: scanning at column ${(startColPct*100).toFixed(1)}% for geoStart lon ${gs.lon}`);
+  }
+  const targetCol = Math.floor(d.width * startColPct);
 
   // Find all water pixels in this column
   let waterRows = [];
@@ -1145,7 +1206,7 @@ export function findRiverStartPosition() {
         const u = col / (d.width - 1);
         const v = midRow / (d.height - 1);
         const worldX = (u - 0.5) * RT_WORLD_W();
-        const worldZ = -(v - 0.5) * RT_WORLD_D(); // flip Z
+        const worldZ = (v - 0.5) * RT_WORLD_D(); // v=0 (top/south) → Z=-D/2, v=1 (bottom/north) → Z=+D/2
         console.log(`River start found at col ${colPct*100}%: pixel(${col},${midRow}) -> world(${worldX.toFixed(0)}, ${worldZ.toFixed(0)})`);
         return { x: worldX, z: worldZ, heading: Math.PI/2 }; // heading PI/2 = east (+X, downriver)
       }
@@ -1185,7 +1246,7 @@ export function getRealTerrainHeight(worldX, worldZ) {
   const localX = worldX - state.realTerrainMesh.position.x;
   const localZ = worldZ - state.realTerrainMesh.position.z;
   const u = (localX / RT_WORLD_W()) + 0.5;
-  const v = 1.0 - ((localZ / RT_WORLD_D()) + 0.5); // flip Z to match heightmap rows
+  const v = (localZ / RT_WORLD_D()) + 0.5; // Z=-D/2 → v=0 (top of image), Z=+D/2 → v=1 (bottom)
   if (u < 0 || u > 1 || v < 0 || v > 1) return null;
   const px = Math.floor(u * (d.width - 1));
   const py = Math.floor(v * (d.height - 1));

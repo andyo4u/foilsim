@@ -1,2 +1,9 @@
 # Large DEM source files (download on demand, not in repo)
 terrain-data/*.tif
+
+# Credentials
+.env
+
+# Build output
+dist/
+node_modules/

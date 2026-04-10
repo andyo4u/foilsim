@@ -129,9 +129,9 @@ console.log('  terrain-data/ copied');
 
 // 3D models
 copyDir(path.join(SRC, 'assets'), path.join(DIST, 'assets'));
-// Remove source/duplicate files from dist assets (keep only production files)
+// Remove source/duplicate/large dev files from dist assets
 for (const f of fs.readdirSync(path.join(DIST, 'assets'))) {
-  if (f.endsWith('.zip') || f.includes('cartoon character') || f.includes(' ')) {
+  if (f.endsWith('.zip') || f.endsWith('.fbx') || f.includes('cartoon character') || f.includes(' ')) {
     fs.unlinkSync(path.join(DIST, 'assets', f));
   }
 }

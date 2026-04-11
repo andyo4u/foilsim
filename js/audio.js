@@ -225,7 +225,15 @@ export function loadLocalMusic(file) {
 export function onFoilStart() {
   if (!musicWaitingForFoil || !musicAudio) return;
   musicWaitingForFoil = false;
-  musicAudio.play().catch(() => {});
+  musicAudio.currentTime = 0;
+  musicAudio.volume = 0.65;
+  const p = musicAudio.play();
+  if (p) p.catch(() => {
+    // Retry on next user interaction if autoplay blocked
+    const retry = () => { musicAudio.play().catch(() => {}); };
+    window.addEventListener('click', retry, { once: true });
+    window.addEventListener('keydown', retry, { once: true });
+  });
   state.audioSettings.musicPlaying = true;
   const el = document.getElementById('settings-music-status');
   if (el) el.textContent = 'Now playing · ' + state.audioSettings.musicFileName;
@@ -280,14 +288,14 @@ async function _loadRandomTrack() {
     musicAudio = new Audio(url);
     musicAudio._url = null;  // server URL — nothing to revoke
     musicAudio.loop = true;
-    musicAudio.volume = 0.65;
+    musicAudio.volume = 0;
+    // Unlock autoplay by playing silently, then pause and restore volume
+    musicAudio.play().then(() => {
+      musicAudio.pause();
+      musicAudio.currentTime = 0;
+      musicAudio.volume = 0.65;
+    }).catch(() => { musicAudio.volume = 0.65; });
     musicWaitingForFoil = true;
-    // If foil is already flying (rider started above stall), play immediately
-    if (state.foil.speed > 2.5 && state.gamePhase === 'riding') {
-      musicAudio.play().catch(() => {});
-      musicWaitingForFoil = false;
-      state.audioSettings.musicPlaying = true;
-    }
     state.audioSettings.musicFileName = file.replace(/\.[^.]+$/, '');
     state.audioSettings.musicPlaying = false;
 
@@ -311,7 +319,24 @@ async function _loadRandomTrack() {
 }
 
 export async function loadRandomTrackIfNeeded() {
-  if (musicAudio || _autoMusicArmed) return;  // user already loaded a track, or already armed
-  _autoMusicArmed = true;
+  if (musicAudio) return;
   await _loadRandomTrack();
+}
+
+// Play a specific track by filename (called from settings UI)
+export function playTrack(filename) {
+  if (musicAudio) { musicAudio.pause(); if (musicAudio._url) URL.revokeObjectURL(musicAudio._url); }
+  const url = 'music/' + filename;
+  musicAudio = new Audio(url);
+  musicAudio._url = null;
+  musicAudio.loop = true;
+  musicAudio.volume = 0.65;
+  musicAudio.play().catch(() => {});
+  musicWaitingForFoil = false;
+  state.audioSettings.musicPlaying = true;
+  state.audioSettings.musicFileName = filename.replace(/\.[^.]+$/, '');
+  const el = document.getElementById('settings-music-status');
+  if (el) el.textContent = 'Now playing · ' + state.audioSettings.musicFileName;
+  const btn = document.getElementById('settings-music-stop');
+  if (btn) btn.style.display = 'inline-block';
 }

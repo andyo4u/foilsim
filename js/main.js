@@ -112,12 +112,13 @@ import { state } from './state.js';
 import { updateVal, toggleControls, getVal, cacheAllSliders, applyPreset, showToast,
          copySettings, copySettingsJSON, lerp, smoothstep, degToDir,
          convertSpeedToMs, convertSpeedFromMs, formatSpeed, formatDistance, setUnits } from './helpers.js';
-import { initAudio, updateAudio, toggleAmbient, loadLocalMusic, stopMusic, fadeOutMusic, onFoilStart, loadRandomTrackIfNeeded } from './audio.js';
+import { initAudio, updateAudio, toggleAmbient, loadLocalMusic, stopMusic, fadeOutMusic, onFoilStart, loadRandomTrackIfNeeded, playTrack } from './audio.js';
 import { initOcean, updateEnvMap, getWaveHeight, getWaveSlope, getSwellHeight,
          getSwellSlope, setRenderMode, updateWaveChart, rebuildOceanGeometry } from './ocean.js';
 import { initFoil, emitSpray, updateSpray, updateWake, updateStreamer, toggleFreeCam, updateCamera, applyFoilPreset } from './foil.js';
 import { initTerrain, rebuildTerrain, restartLevel, getRealTerrainHeight,
          RT_WATER_Y, RT_WORLD_W, RT_WORLD_D, terrainConfigs } from './terrain.js';
+import { submitScore, fetchTopScores, renderLeaderboard, getUsername, setUsername } from './leaderboard.js';
 import { onTutorialStart, updateTutorial, endTutorial } from './tutorial.js';
 
 // ═══════════════════════════
@@ -482,6 +483,48 @@ window.applyFoilPreset = applyFoilPreset;
 window.toggleAmbient   = toggleAmbient;
 window.loadLocalMusic  = loadLocalMusic;
 window.stopMusic       = stopMusic;
+window.playTrack       = playTrack;
+window.showLeaderboard = function() {
+  document.getElementById('leaderboard-overlay').classList.remove('hidden');
+  const el = document.getElementById('lb-content');
+  if (el) el.innerHTML = '<div style="color:#5ea8d8;text-align:center;padding:20px;">Loading...</div>';
+  fetchTopScores(10).then(scores => { if (el) renderLeaderboard(scores, el); });
+};
+window.updateUsername = function(val) { setUsername(val); };
+window.closeLeaderboard = function() {
+  document.getElementById('leaderboard-overlay').classList.add('hidden');
+  // If coming from a ride (score phase), go back to menu
+  if (state.gamePhase === 'score') {
+    document.getElementById('menu-overlay').classList.remove('hidden');
+    state.gamePhase = 'menu';
+  }
+};
+window.submitRideScore = function() {
+  const btn = document.getElementById('score-submit-btn');
+  const statusEl = document.getElementById('score-submit-status');
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
+  if (statusEl) statusEl.textContent = '';
+  // Save username from input before submitting
+  const nameInput = document.getElementById('score-username');
+  if (nameInput) setUsername(nameInput.value);
+  const submittedScore = state.score.total;
+  const submittedName = getUsername();
+  submitScore(state.score).then(ok => {
+    if (!ok) {
+      if (statusEl) statusEl.textContent = 'Could not submit score';
+      if (btn) { btn.disabled = false; btn.textContent = 'Submit Score'; }
+      return;
+    }
+    // Switch to leaderboard overlay
+    document.getElementById('score-overlay').classList.add('hidden');
+    document.getElementById('leaderboard-overlay').classList.remove('hidden');
+    const el = document.getElementById('lb-content');
+    if (el) el.innerHTML = '<div style="color:#5ea8d8;text-align:center;padding:20px;">Loading...</div>';
+    fetchTopScores(10).then(scores => {
+      if (el) renderLeaderboard(scores, el, submittedName, submittedScore);
+    });
+  });
+};
 window.exitToMenu      = exitToMenu;
 
 // ═══════════════════════════
@@ -493,6 +536,8 @@ function startRide(locationPreset) {
   state.rideTimer = 120;
   state.rideStarted = false; // timer doesn't tick until first pump
   foilMusicTriggered = false;
+  hasEverFoiled = false;
+  stallTimer = 0;
   state.score.distance = 0;
   state.score.topSpeed = 0;
   state.score.topSpeedMs = 0;
@@ -546,7 +591,6 @@ function startRide(locationPreset) {
   document.getElementById('hud').style.display = 'block';
 
   state.gamePhase = 'riding';
-  console.log('[startRide] HUD shown, gamePhase=riding');
 }
 
 function endRide() {
@@ -558,6 +602,7 @@ function endRide() {
 
   // Compute final score
   const s = state.score;
+  s.rideTimer = 120 - state.rideTimer; // elapsed time in seconds
   s.total = Math.round(s.distance + 2 * s.pocketTime + 10 * (s.topSpeedMs * 2.23694));
 
   // Populate score overlay
@@ -566,11 +611,23 @@ function endRide() {
   document.getElementById('score-pocket').textContent = s.pocketTime.toFixed(1) + 's';
   document.getElementById('score-total').textContent = s.total;
 
+  // Pre-fill username from localStorage
+  const usernameInput = document.getElementById('score-username');
+  if (usernameInput) usernameInput.value = getUsername();
+
   // Show score overlay, hide timer and exit
   document.getElementById('score-overlay').classList.remove('hidden');
   document.getElementById('hud-timer').style.display = 'none';
   document.getElementById('hud-boost').style.display = 'none';
   document.getElementById('exit-btn').style.display = 'none';
+
+  // Reset submit button and hide leaderboard until submitted
+  const submitBtn = document.getElementById('score-submit-btn');
+  if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit Score'; submitBtn.style.display = ''; }
+  const statusEl = document.getElementById('score-submit-status');
+  if (statusEl) statusEl.textContent = '';
+  const lbEl = document.getElementById('score-leaderboard');
+  if (lbEl) lbEl.innerHTML = '';
 }
 
 function rideAgain() {
@@ -598,6 +655,8 @@ let surferLeanX = 0;    // forward/back lean for accel/brake (radians)
 let surferCrouch = 0;   // knee bend 0-1 (scales Y)
 let surferHeadY = 0;    // head turn into turns (radians)
 let foilMusicTriggered = false;
+let hasEverFoiled = false;    // true once rider exceeds stall speed
+let stallTimer = 0;           // seconds below stall speed after having foiled
 
 // FPS counter
 let fpsFrames = 0, fpsLastTime = performance.now();
@@ -715,6 +774,7 @@ function animate() {
     const fps = Math.round(fpsFrames / ((fpsNow - fpsLastTime) / 1000));
     fpsLabel.textContent = fps + ' fps';
     fpsAvgSum += fps; fpsAvgCount++;
+    state._fpsAvgSum = fpsAvgSum; state._fpsAvgCount = fpsAvgCount;
     const avgFps = Math.round(fpsAvgSum / fpsAvgCount);
     hudFps.textContent = fps + ' fps (avg ' + avgFps + ')';
     fpsFrames = 0; fpsLastTime = fpsNow;
@@ -863,8 +923,8 @@ function animate() {
   const sy = sv.y, db = smoothstep(0, .5, sy);
 
   // Water colors
-  u.uDeepColor.value.set(lerp(.01, 0, db), lerp(.02, .04, db), lerp(.06, .12, db));
-  u.uShallowColor.value.set(lerp(.02, 0, db), lerp(.06, .15, db), lerp(.12, .3, db));
+  u.uDeepColor.value.set(lerp(.02, .01, db), lerp(.05, .08, db), lerp(.10, .18, db));
+  u.uShallowColor.value.set(lerp(.04, .02, db), lerp(.12, .22, db), lerp(.20, .38, db));
 
   const cam = state.cam;
 
@@ -919,7 +979,18 @@ function animate() {
   // Foiling state
   const stallMs = convertSpeedToMs(getVal('sbStallSpeed'));
   const isF = foil.speed > stallMs;
-  if (isF && !foilMusicTriggered) { foilMusicTriggered = true; onFoilStart(); }
+  if (isF) hasEverFoiled = true;
+  // Start music at 5 mph (gives time for async playlist to load)
+  const musicSpeedMs = 5 / 2.23694; // 5 mph in m/s
+  if (foil.speed > musicSpeedMs && !foilMusicTriggered) { foilMusicTriggered = true; onFoilStart(); }
+
+  // Stall out: if rider foiled then stalls for 5 seconds, end the ride
+  if (hasEverFoiled && !isF) {
+    stallTimer += dt;
+    if (stallTimer >= 5) { endRide(); return; }
+  } else {
+    stallTimer = 0;
+  }
 
   // Tutorial phase machine (only active when tutorial location is selected)
   updateTutorial(dt, foil.speed, stallMs);

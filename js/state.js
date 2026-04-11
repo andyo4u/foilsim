@@ -179,7 +179,7 @@ export const state = {
   units: 'mph',       // 'mph' | 'kph' | 'kts'
 
   // ── Foil preset ───────────────────────────────────
-  foilPreset: 'lift',
+  foilPreset: 'grom',
   foilPresets: {
     grom:      { name:'Grom',        desc:'Beginner · stable, wide margin',      topSpeedMs:9.26,  stallSpeedMs:1.54, glide:1.1, pump:0.8,  drag:0.9,  stability:1.5, color:0x4488ff },
     lift:      { name:'Lift HA',     desc:'All-round · balanced',                topSpeedMs:11.32, stallSpeedMs:2.57, glide:0.8, pump:1.0,  drag:1.0,  stability:1.0, color:0xf0f0f0 },
@@ -188,5 +188,5 @@ export const state = {
   },
 
   // ── Audio settings ────────────────────────────────
-  audioSettings: { ambientOn:true, musicPlaying:false, musicFileName:'' },
+  audioSettings: { ambientOn:false, musicPlaying:false, musicFileName:'' },
 };

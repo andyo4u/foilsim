@@ -351,7 +351,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.2.05</div>
+<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.2.21</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 <canvas id="fps-graph" width="120" height="35" style="display:none;position:fixed;top:36px;left:10px;z-index:90;border-radius:3px;background:rgba(0,0,0,0.5);pointer-events:none;"></canvas>
@@ -523,6 +523,8 @@
   </div>
   <div id="menu-version" style="margin-top:8px;font-size:11px;color:rgba(255,255,255,0.75);letter-spacing:1px;font-weight:500;"></div>
   <div class="menu-footer">
+    <button onclick="showLeaderboard()">🏆 Leaderboard</button>
+    <span class="sep">·</span>
     <button onclick="document.getElementById('about-overlay').classList.remove('hidden')">ⓘ About</button>
     <span class="sep">·</span>
     <a href="https://docs.google.com/forms/d/e/1FAIpQLSfpHm03fe2uqrfpB896EXzCWRtpbtSMuymm_SmQtjS0wyqJmQ/viewform" target="_blank" rel="noopener">✉ Send Feedback</a>
@@ -539,8 +541,26 @@
     <div class="stat-row"><span class="stat-label">Pocket Time</span><span class="stat-value" id="score-pocket">0.0s</span></div>
     <div class="stat-row stat-total"><span class="stat-label">Total Score</span><span class="stat-value" id="score-total">0</span></div>
   </div>
+  <div style="margin:16px 0 8px;display:flex;align-items:center;gap:8px;justify-content:center;">
+    <span style="color:#5ea8d8;font-size:12px;">Name:</span>
+    <input type="text" id="score-username" maxlength="24" placeholder="Anonymous"
+      style="background:rgba(20,30,50,0.8);border:1px solid rgba(100,180,255,0.25);border-radius:6px;
+             color:#fff;padding:6px 10px;font-size:13px;width:160px;font-family:'DM Sans',sans-serif;
+             outline:none;" onchange="updateUsername(this.value)">
+  </div>
+  <button class="game-btn" id="score-submit-btn" onclick="submitRideScore()" style="padding:8px 24px;font-size:13px;margin-bottom:8px;">Submit Score</button>
+  <div id="score-submit-status" style="font-size:11px;color:#5ef0a0;margin-bottom:8px;"></div>
+  <div id="score-leaderboard" style="width:min(500px,90vw);max-height:240px;overflow-y:auto;margin-bottom:16px;"></div>
   <button class="game-btn" onclick="rideAgain()">Main Menu</button>
   <div id="score-version" style="margin-top:8px;font-size:10px;color:rgba(140,180,230,0.3);letter-spacing:1px;"></div>
+</div>
+
+<!-- Leaderboard overlay -->
+<div id="leaderboard-overlay" class="game-overlay hidden">
+  <h1 style="font-size:32px;letter-spacing:3px;">LEADERBOARD</h1>
+  <div class="subtitle" style="margin-bottom:20px;">Top Riders</div>
+  <div id="lb-content" style="width:min(520px,92vw);max-height:50vh;overflow-y:auto;"></div>
+  <button class="game-btn" style="margin-top:16px;padding:10px 32px;font-size:14px;background:rgba(100,160,255,0.15);box-shadow:none;border:1px solid rgba(100,160,255,0.3);" onclick="closeLeaderboard()">Back</button>
 </div>
 
 <!-- About overlay -->
@@ -548,9 +568,10 @@
   <h1 style="font-size:36px;letter-spacing:4px;">FOIL-BRAIN</h1>
   <div class="subtitle" style="margin-bottom:24px;">Hydrofoil Simulator</div>
   <div class="about-body">
-    <p>Foil-Brain is a real-time physics simulator for eFoil and hydrofoil riding, built entirely in the browser with Three.js. Three Gerstner ocean swells combine with wind chop to generate authentic open-ocean wave conditions — the same math used in film VFX and marine simulation.</p>
-    <p>Your goal: find <em>the pocket</em> — the fast-moving face of the wave where gravity-driven slope acceleration keeps your board flying. Pump to build speed, manage your battery, and stay airborne.</p>
-    <p>Wave height, period, direction, and board physics are all fully adjustable. Terrain is rendered from real elevation and satellite data, starting with <strong>Swell City</strong> on the Columbia River Gorge. More locations coming soon.</p>
+    <p>Foil-Brain is a real-time physics simulator for hydrofoil riding. AI could destroy us all, but we might as well have fun in the meantime.</p>
+    <p>Built in the browser with Three.js, dynamic Gerstner waves, fractional Brownian motion, Schlick Fresnel approximation, subsurface scattering, GGX microfacet specular, etc.</p>
+    <p>Your goal: find <em>the pocket</em> — the fast-moving face of the wave where gravity-driven slope acceleration keeps your board flying. Pump to build speed, manage your energy, and stay airborne.</p>
+    <p>Feedback welcome, this is a work in progress.<br>—Andy</p>
   </div>
   <button class="game-btn" style="padding:10px 32px;font-size:14px;background:rgba(100,160,255,0.15);box-shadow:none;border:1px solid rgba(100,160,255,0.3);" onclick="document.getElementById('about-overlay').classList.add('hidden')">Back</button>
   <div class="menu-footer" style="margin-top:16px;">
@@ -609,18 +630,16 @@
     <!-- AUDIO -->
     <div class="settings-section">
       <div class="settings-title">AUDIO</div>
-      <div class="settings-row">
-        <span class="settings-label">Ambient sounds</span>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-          <input type="checkbox" id="settings-ambient-toggle" checked
-            style="width:15px;height:15px;accent-color:#4a9eff;"
-            onchange="toggleAmbient(this.checked)">
-          <span style="color:#a0c4f0;font-size:11px;">ON</span>
-        </label>
-      </div>
       <div class="settings-row" style="opacity:0.4;">
+        <span class="settings-label">Ambient sounds</span>
+        <span style="color:#7eb8ff;font-size:11px;">Coming Soon</span>
+      </div>
+      <div class="settings-row">
         <span class="settings-label">Music tracks</span>
-        <span style="color:#7eb8ff;font-size:11px;">coming soon</span>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <button class="settings-unit-btn" style="font-size:10px;padding:4px 8px;" onclick="playTrack('alanajordan-surf-rock-04-269644.mp3',this)">Surf Rock — Alana Jordan</button>
+          <button class="settings-unit-btn" style="font-size:10px;padding:4px 8px;" onclick="playTrack('alexguz-surf-rock-155127.mp3',this)">Surf Rock — Alex Guz</button>
+        </div>
       </div>
       <div>
         <div class="settings-label" style="margin-bottom:6px;">Local MP3</div>

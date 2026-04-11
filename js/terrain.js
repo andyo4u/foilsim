@@ -619,16 +619,7 @@ export function rebuildTerrain(presetName) {
       Promise.resolve().then(() => {
         const startPos = findRiverStartPosition();
         state.foil.x = startPos.x; state.foil.z = startPos.z; state.foil.heading = startPos.heading;
-        state.foil.speed = 3;
-        // Debug: verify rider is in water after placement
-        const hCheck = getRealTerrainHeight(state.foil.x, state.foil.z);
-        const wY = state.activeTerrainCfg.waterY || 0;
-        console.log(`[onTerrainReady] ${state.activeTerrainCfg.label}: rider at (${state.foil.x.toFixed(0)}, ${state.foil.z.toFixed(0)}), terrain h=${hCheck !== null ? hCheck.toFixed(1) : 'null'}m, waterY=${wY}, ${hCheck !== null && hCheck <= wY + 2 ? 'IN WATER' : 'ON LAND'}`);
-        // Check position after 2 seconds to see if something moves the rider
-        setTimeout(() => {
-          const h2 = getRealTerrainHeight(state.foil.x, state.foil.z);
-          console.log(`[2s later] rider at (${state.foil.x.toFixed(0)}, ${state.foil.z.toFixed(0)}), terrain h=${h2 !== null ? h2.toFixed(1) : 'null'}m, ${h2 !== null && h2 <= wY + 2 ? 'IN WATER' : 'ON LAND'}`);
-        }, 2000);
+        state.foil.speed = 0;
         applyPreset(state.activeTerrainCfg.preset || 'clean');
         if (state.activeTerrainCfg.useRiverMask && state.realTerrainRiverMask) {
           state.oceanMat.uniforms.uRiverMask.value = state.realTerrainRiverMask;
@@ -1092,11 +1083,7 @@ export function geoToWorld(lat, lon) {
 // Find a good starting position in the water
 export function findRiverStartPosition() {
   // Use explicit start position if configured
-  if (state.activeTerrainCfg.startPos) {
-    const sp = state.activeTerrainCfg.startPos;
-    console.log(`Using explicit startPos: (${sp.x}, ${sp.z}), heading: ${sp.heading.toFixed(2)}`);
-    return sp;
-  }
+  if (state.activeTerrainCfg.startPos) return state.activeTerrainCfg.startPos;
 
   // Resolve from geoStart lat/lon if available
   if (state.activeTerrainCfg.geoStart && state.activeTerrainCfg.geoBbox) {
@@ -1107,18 +1094,10 @@ export function findRiverStartPosition() {
     // If geo position lands on terrain, search nearby for water
     const h = getRealTerrainHeight(pos.x, pos.z);
     if (h === null || h > wY + 2) {
-      console.log(`geoStart landed on terrain (h=${h !== null ? h.toFixed(1) : 'null'}m), searching for water...`);
-      // Scan in Z (north-south) in 50m steps up to 2km each direction
       for (let dz = -50; Math.abs(dz) <= 2000; dz = dz > 0 ? -(dz + 50) : -dz + 50) {
         const hTest = getRealTerrainHeight(pos.x, pos.z + dz);
-        if (hTest !== null && hTest <= wY + 2) {
-          pos.z += dz;
-          console.log(`  → Snapped to water at z offset ${dz}: h=${hTest.toFixed(1)}m, final pos (${pos.x.toFixed(0)}, ${pos.z.toFixed(0)})`);
-          break;
-        }
+        if (hTest !== null && hTest <= wY + 2) { pos.z += dz; break; }
       }
-    } else {
-      console.log(`geoStart in water: (${pos.x.toFixed(0)}, ${pos.z.toFixed(0)}), h=${h.toFixed(1)}m`);
     }
     return { x: pos.x, z: pos.z, heading: Math.PI / 2 };
   }
@@ -1223,7 +1202,7 @@ export function restartLevel() {
   if (restartBtnEl) restartBtnEl.style.display = 'none';
   const startPos = findRiverStartPosition();
   state.foil.x = startPos.x; state.foil.z = startPos.z; state.foil.heading = startPos.heading;
-  state.foil.speed = 3; state.foil.rideH = 0; state.foil.pitch = 0; state.foil.roll = 0;
+  state.foil.speed = 0; state.foil.rideH = 0; state.foil.pitch = 0; state.foil.roll = 0;
   state.foil.energy = 1;
 }
 
@@ -1270,9 +1249,6 @@ export function initTerrain() {
   // Store bgPresets in state so helpers.js can access it
   state.bgPresets = bgPresets;
 
-  // Preload gorge assets at page start (non-blocking)
-  loadTerrainAssets('gorge', function() {});
-
-  // Build initial terrain
-  rebuildTerrain('gorge-real');
+  // Start with open ocean — no terrain data to load at startup
+  rebuildTerrain('open-ocean');
 }

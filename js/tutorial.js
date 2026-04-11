@@ -114,7 +114,7 @@ export function onTutorialStart() {
   savedOffsetTheta = 0;
   targetPocketGlow = 0;
   if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 0;
-  showMessage('Pump to get on foil');
+  showMessage('Pump to get on foil (arrow keys/buttons)');
   const btn = getDoneBtn();
   if (btn) btn.style.display = 'none';
 }
@@ -168,7 +168,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
       phase = 'pocket';
       phaseTimer = 0;
       targetPocketGlow = 1;
-      showMessage('Ride in the pocket for max lift');
+      showMessage('Ride in the pocket for max lift (watch wave energy meter)');
     }
     return;
   }
@@ -209,7 +209,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
       targetPocketGlow = 0;
       phase = 'lean-back';
       phaseTimer = 0;
-      showMessage('Lean back to increase drag');
+      showMessage('Lean back to increase drag for quicker turns');
     }
     return;
   }
@@ -286,6 +286,7 @@ export function endTutorial() {
   if (btn) btn.style.display = 'none';
   fadeOutMusic(1500);
   document.getElementById('exit-btn').style.display = 'none';
+  document.getElementById('sandbox-btn').style.display = 'none';
   document.getElementById('menu-overlay').classList.remove('hidden');
   document.getElementById('hud-timer').style.display = 'none';
   document.getElementById('hud-boost').style.display = 'none';

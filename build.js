@@ -161,10 +161,14 @@ if (fs.existsSync(path.join(SRC, 'favicon.ico'))) {
   console.log('  favicon.ico copied');
 }
 
-// Music
+// Music (exclude originals/)
 if (fs.existsSync(path.join(SRC, 'music'))) {
-  copyDir(path.join(SRC, 'music'), path.join(DIST, 'music'));
-  console.log('  music/ copied');
+  mkdirp(path.join(DIST, 'music'));
+  for (const f of fs.readdirSync(path.join(SRC, 'music'))) {
+    const s = path.join(SRC, 'music', f);
+    if (fs.statSync(s).isFile()) fs.copyFileSync(s, path.join(DIST, 'music', f));
+  }
+  console.log('  music/ copied (originals excluded)');
 }
 
 // ── Done ──

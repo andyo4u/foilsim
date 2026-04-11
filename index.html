@@ -160,6 +160,16 @@
     transition: background 0.2s;
   }
   #exit-btn:hover { background: rgba(20,40,70,0.9); color: #fff; }
+  #sandbox-btn {
+    display: none; position: fixed; top: 60px; right: 10px; z-index: 100;
+    width: 44px; height: 44px; border-radius: 12px;
+    background: rgba(8,18,38,0.85); backdrop-filter: blur(12px);
+    border: 1px solid rgba(100,160,255,0.2);
+    color: #7eb8ff; font-size: 16px; font-weight: 600; cursor: pointer;
+    align-items: center; justify-content: center;
+    transition: background 0.2s;
+  }
+  #sandbox-btn:hover { background: rgba(20,40,70,0.9); color: #fff; }
 
   /* Shallow water warning overlay */
   #shallow-warning {
@@ -203,12 +213,15 @@
 
   .game-overlay h1 {
     font-size: 56px; font-weight: 300; color: #fff;
-    letter-spacing: 6px; margin-bottom: 4px;
-    text-shadow: 0 0 40px rgba(80,180,255,0.3);
+    letter-spacing: 8px; margin-bottom: 2px;
+    text-shadow: 0 0 60px rgba(80,180,255,0.25), 0 0 120px rgba(60,140,255,0.1);
+    background: linear-gradient(180deg, #ffffff 30%, #8ec8ff 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
   .game-overlay .subtitle {
-    font-size: 14px; color: rgba(160,200,240,0.6);
-    letter-spacing: 2px; margin-bottom: 36px;
+    font-size: 13px; color: rgba(160,200,240,0.5);
+    letter-spacing: 3px; margin-bottom: 40px; text-transform: uppercase;
   }
 
   .location-grid {
@@ -216,26 +229,34 @@
     gap: 12px; margin-bottom: 32px; width: 340px;
   }
   .location-card {
-    padding: 18px 14px; border-radius: 12px;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(100,160,255,0.15);
+    padding: 22px 16px; border-radius: 14px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(100,160,255,0.12);
     text-align: center; cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.25s ease;
+    position: relative; overflow: hidden;
+  }
+  .location-card::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 120%, rgba(60,140,255,0.08) 0%, transparent 70%);
+    pointer-events: none;
   }
   .location-card:hover:not(.locked) {
-    background: rgba(100,160,255,0.12);
-    border-color: rgba(100,180,255,0.4);
+    background: rgba(100,160,255,0.1);
+    border-color: rgba(100,180,255,0.35);
     transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(60,140,255,0.15);
   }
   .location-card.locked {
-    opacity: 0.4; cursor: default;
+    opacity: 0.35; cursor: default;
   }
   .location-card .loc-name {
-    font-size: 14px; font-weight: 500; color: #c0d8ff; margin-bottom: 4px;
+    font-size: 14px; font-weight: 600; color: #c8deff; margin-bottom: 4px;
+    letter-spacing: 0.5px;
   }
   .location-card .loc-tag {
-    font-size: 10px; color: rgba(140,180,230,0.5);
-    text-transform: uppercase; letter-spacing: 1px;
+    font-size: 10px; color: rgba(140,180,230,0.45);
+    text-transform: uppercase; letter-spacing: 1.5px;
   }
 
   .game-btn {
@@ -323,6 +344,13 @@
     .touch-pad.right-pad { right: 8px; width: 180px; height: 110px; }
     .touch-zone { font-size: 28px; }
     #hud .speed { font-size: 22px; }
+    .game-overlay { padding: 0 16px; }
+    .game-overlay h1 { font-size: 38px; letter-spacing: 5px; }
+    .game-overlay .subtitle { font-size: 11px; margin-bottom: 28px; }
+    .location-grid { width: min(320px, 90vw) !important; }
+    .location-card { padding: 16px 12px; }
+    .menu-footer { gap: 14px; }
+    .menu-footer a, .menu-footer button { font-size: 12px; }
   }
 
   /* ── Settings overlay ──────────────────────────── */
@@ -351,7 +379,7 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.2.22</div>
+<div id="version-label" style="position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.2.23</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 <canvas id="fps-graph" width="120" height="35" style="display:none;position:fixed;top:36px;left:10px;z-index:90;border-radius:3px;background:rgba(0,0,0,0.5);pointer-events:none;"></canvas>
@@ -479,6 +507,7 @@
 <div id="hud-tutorial"></div>
 <button id="tutorial-done-btn" onclick="endTutorial()" style="display:none;position:fixed;bottom:32px;left:50%;transform:translateX(-50%);z-index:65;padding:10px 32px;font-size:14px;font-family:'DM Sans',sans-serif;font-weight:600;color:#fff;background:rgba(100,160,255,0.2);border:1px solid rgba(100,160,255,0.4);border-radius:10px;cursor:pointer;letter-spacing:1px;">Back</button>
 <button id="exit-btn" onclick="exitToMenu()" title="Back to Menu">✕</button>
+<button id="sandbox-btn" onclick="toggleControls()" title="Sandbox">S</button>
 <div id="shallow-warning">Shallow Water!</div>
 <button id="restart-btn" onclick="restartLevel()">↻ Restart</button>
 
@@ -504,29 +533,34 @@
 
 <!-- Menu overlay -->
 <div id="menu-overlay" class="game-overlay hidden">
+  <div style="flex:1;"></div>
   <h1>FOIL-BRAIN</h1>
   <div class="subtitle">Hydrofoil Simulator</div>
-  <div style="display:flex;gap:10px;margin-bottom:10px;">
-    <button class="game-btn" style="padding:10px 32px;font-size:14px;" onclick="startRide('tutorial')">Tutorial <span style="font-size:11px;opacity:0.7;">· Arcade Mode</span></button>
-    <button class="game-btn" style="padding:10px 28px;font-size:14px;background:rgba(100,160,255,0.15);box-shadow:none;border:1px solid rgba(100,160,255,0.3);" onclick="openSettings()">⚙ Settings</button>
+  <div style="display:flex;gap:12px;margin-bottom:24px;">
+    <button class="game-btn" style="padding:12px 36px;font-size:14px;" onclick="startRide('tutorial')">Tutorial <span style="font-size:11px;opacity:0.6;">· Learn to Ride</span></button>
+    <button class="game-btn" style="padding:12px 24px;font-size:14px;background:rgba(100,160,255,0.1);box-shadow:none;border:1px solid rgba(100,160,255,0.25);" onclick="openSettings()">⚙</button>
   </div>
-  <div class="location-grid" style="grid-template-columns:repeat(2,1fr);width:min(360px,95vw);margin-bottom:28px;">
+  <div style="width:60px;height:1px;background:linear-gradient(90deg,transparent,rgba(100,160,255,0.3),transparent);margin-bottom:24px;"></div>
+  <div style="font-size:10px;color:rgba(140,180,230,0.4);text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;">Choose Location</div>
+  <div class="location-grid" style="grid-template-columns:repeat(2,1fr);width:min(360px,92vw);margin-bottom:32px;">
     <div class="location-card" onclick="startRide('rufus-real')">
       <div class="loc-name">Rufus Glass Factory</div>
+      <div class="loc-tag">Columbia River Gorge</div>
     </div>
     <div class="location-card locked">
       <div class="loc-name">Swell City</div>
       <div class="loc-tag">Coming Soon</div>
     </div>
   </div>
-  <div class="menu-footer" style="margin-top:0;margin-bottom:0;">
+  <div class="menu-footer">
     <button onclick="showLeaderboard()">Leaderboard</button>
     <span class="sep">·</span>
     <button onclick="document.getElementById('about-overlay').classList.remove('hidden')">About</button>
     <span class="sep">·</span>
-    <a href="https://docs.google.com/forms/d/e/1FAIpQLSfpHm03fe2uqrfpB896EXzCWRtpbtSMuymm_SmQtjS0wyqJmQ/viewform" target="_blank" rel="noopener">Send Feedback</a>
+    <a href="https://docs.google.com/forms/d/e/1FAIpQLSfpHm03fe2uqrfpB896EXzCWRtpbtSMuymm_SmQtjS0wyqJmQ/viewform" target="_blank" rel="noopener">Feedback</a>
   </div>
-  <div id="menu-version" style="margin-top:auto;padding-bottom:24px;font-size:11px;color:rgba(255,255,255,0.45);letter-spacing:1px;font-weight:500;"></div>
+  <div style="flex:1;"></div>
+  <div id="menu-version" style="padding-bottom:24px;font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:1px;font-weight:400;"></div>
 </div>
 
 <!-- Score overlay -->

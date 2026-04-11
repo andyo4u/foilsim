@@ -77,8 +77,8 @@ import { lerp, toggleControls, convertSpeedFromMs, updateVal, cacheAllSliders } 
 
 /* ── Constants ────────────────────────────────────────────── */
 
-const SPRAY_N = 200;
-const WK_N    = 80;
+const SPRAY_N = 300;
+const WK_N    = 200;
 const STR_N   = 120;
 
 /* ── Materials (module-level, created once in initFoil) ──── */
@@ -305,8 +305,8 @@ function makeStreamer(color) {
   return { geo, pos, alp, szs, hist: [], points };
 }
 
-export function updateStreamer(str, wx, wy, wz, speed) {
-  if (speed > 1.0) {
+export function updateStreamer(str, wx, wy, wz, ef) {
+  if (ef > 0) {
     str.hist.unshift({ x: wx, y: wy, z: wz });
   }
   while (str.hist.length > state.streamerBudget) str.hist.pop();
@@ -317,8 +317,8 @@ export function updateStreamer(str, wx, wy, wz, speed) {
       str.pos[i * 3 + 1] = str.hist[i].y;
       str.pos[i * 3 + 2] = str.hist[i].z;
       const t = 1.0 - i / str.hist.length;
-      str.alp[i] = t * t * Math.min(1, speed / 4);
-      str.szs[i] = lerp(0.05, 0.6, t);
+      str.alp[i] = t * t * Math.min(1, ef);
+      str.szs[i] = lerp(0.1, 0.9, t);
     } else {
       str.pos[i * 3 + 1] = -100;
       str.alp[i] = 0;

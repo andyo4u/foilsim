@@ -112,7 +112,7 @@ import { state } from './state.js';
 import { updateVal, toggleControls, getVal, cacheAllSliders, applyPreset, showToast,
          copySettings, copySettingsJSON, lerp, smoothstep, degToDir,
          convertSpeedToMs, convertSpeedFromMs, formatSpeed, formatDistance, setUnits } from './helpers.js';
-import { initAudio, updateAudio, toggleAmbient, loadLocalMusic, stopMusic, fadeOutMusic, onFoilStart, loadRandomTrackIfNeeded, playTrack } from './audio.js';
+import { initAudio, updateAudio, toggleAmbient, loadLocalMusic, stopMusic, fadeOutMusic, fadeOutMusicPreview, onFoilStart, loadRandomTrackIfNeeded, playTrack } from './audio.js';
 import { initOcean, updateEnvMap, getWaveHeight, getWaveSlope, getSwellHeight,
          getSwellSlope, setRenderMode, updateWaveChart, rebuildOceanGeometry } from './ocean.js';
 import { initFoil, emitSpray, updateSpray, updateWake, updateStreamer, toggleFreeCam, updateCamera, applyFoilPreset } from './foil.js';
@@ -279,6 +279,11 @@ initTerrain();
   window.addEventListener(evt, initAudio, { once: true });
 });
 
+// Sandbox button — only for dev IP
+fetch('https://api.ipify.org?format=json').then(r => r.json()).then(d => {
+  state.isSandbox = d.ip === '47.7.16.31';
+}).catch(() => { state.isSandbox = false; });
+
 // Mobile detection — enable touch pads, gear button
 const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 state.isMobile = isMobile;
@@ -301,11 +306,11 @@ if (isMobile) {
 // ═══════════════════════════
 
 const QUALITY_PRESETS = {
-  low:   { oceanSegments: 128,  oceanSize: 400,  pixelRatioCap: 1,   renderScale: 0.50, shaderMode: 'performance', sprayBudget: 50,  wakeBudget: 30, streamerBudget: 40,  fbmOctaves: 3, detailLevel: 0 },
-  med:   { oceanSegments: 192,  oceanSize: 600,  pixelRatioCap: 1,   renderScale: 0.75, shaderMode: 'performance', sprayBudget: 100, wakeBudget: 50, streamerBudget: 80,  fbmOctaves: 4, detailLevel: 1 },
-  high:  { oceanSegments: 384,  oceanSize: 800,  pixelRatioCap: 2,   renderScale: 1.0,  shaderMode: 'full',        sprayBudget: 150, wakeBudget: 65, streamerBudget: 100, fbmOctaves: 5, detailLevel: 2 },
-  ultra: { oceanSegments: 512,  oceanSize: 800,  pixelRatioCap: 2,   renderScale: 1.0,  shaderMode: 'full',        sprayBudget: 200, wakeBudget: 80, streamerBudget: 120, fbmOctaves: 5, detailLevel: 2 },
-  max:   { oceanSegments: 1000, oceanSize: 1200, pixelRatioCap: 2,   renderScale: 1.0,  shaderMode: 'full',        sprayBudget: 200, wakeBudget: 80, streamerBudget: 120, fbmOctaves: 6, detailLevel: 2 },
+  low:   { oceanSegments: 128,  oceanSize: 400,  pixelRatioCap: 1,   renderScale: 0.50, shaderMode: 'performance', sprayBudget: 50,  wakeBudget: 60,  streamerBudget: 40,  fbmOctaves: 3, detailLevel: 0 },
+  med:   { oceanSegments: 192,  oceanSize: 600,  pixelRatioCap: 1,   renderScale: 0.75, shaderMode: 'performance', sprayBudget: 100, wakeBudget: 100, streamerBudget: 80,  fbmOctaves: 4, detailLevel: 1 },
+  high:  { oceanSegments: 384,  oceanSize: 800,  pixelRatioCap: 2,   renderScale: 1.0,  shaderMode: 'full',        sprayBudget: 150, wakeBudget: 150, streamerBudget: 100, fbmOctaves: 5, detailLevel: 2 },
+  ultra: { oceanSegments: 512,  oceanSize: 800,  pixelRatioCap: 2,   renderScale: 1.0,  shaderMode: 'full',        sprayBudget: 200, wakeBudget: 200, streamerBudget: 120, fbmOctaves: 5, detailLevel: 2 },
+  max:   { oceanSegments: 1000, oceanSize: 1200, pixelRatioCap: 2,   renderScale: 1.0,  shaderMode: 'full',        sprayBudget: 200, wakeBudget: 200, streamerBudget: 120, fbmOctaves: 6, detailLevel: 2 },
 };
 
 const QUALITY_LEVELS = ['low', 'med', 'high', 'ultra', 'max'];
@@ -447,6 +452,7 @@ function openSettings() {
 }
 function closeSettings() {
   document.getElementById('settings-overlay').style.display = 'none';
+  fadeOutMusicPreview();
 }
 
 function exitToMenu() {
@@ -455,6 +461,7 @@ function exitToMenu() {
     endTutorial();   // handles its own phase cleanup + shows menu
   } else {
     document.getElementById('exit-btn').style.display = 'none';
+    document.getElementById('sandbox-btn').style.display = 'none';
     document.getElementById('hud-timer').style.display = 'none';
     document.getElementById('hud-boost').style.display = 'none';
     document.getElementById('hud').style.display = 'none';
@@ -588,6 +595,7 @@ function startRide(locationPreset) {
   document.getElementById('hud-boost').style.display = 'none';
   document.getElementById('info-bar').style.opacity = '';
   document.getElementById('exit-btn').style.display = 'flex';
+  document.getElementById('sandbox-btn').style.display = state.isSandbox ? 'flex' : 'none';
   document.getElementById('hud').style.display = 'block';
 
   state.gamePhase = 'riding';
@@ -620,6 +628,7 @@ function endRide() {
   document.getElementById('hud-timer').style.display = 'none';
   document.getElementById('hud-boost').style.display = 'none';
   document.getElementById('exit-btn').style.display = 'none';
+  document.getElementById('sandbox-btn').style.display = 'none';
 
   // Reset submit button and hide leaderboard until submitted
   const submitBtn = document.getElementById('score-submit-btn');
@@ -634,6 +643,7 @@ function rideAgain() {
   document.getElementById('score-overlay').classList.add('hidden');
   document.getElementById('menu-overlay').classList.remove('hidden');
   document.getElementById('exit-btn').style.display = 'none';
+  document.getElementById('sandbox-btn').style.display = 'none';
   state.gamePhase = 'menu';
 }
 
@@ -1091,10 +1101,10 @@ function animate() {
     foil.speed = Math.max(0, Math.min(foil.speed, speedCapMs));
   }
 
-  // Ride height scales with speed: barely lifts off at stall (~6cm), rises to ~60cm at top speed.
-  // Wing tip only breaches the surface at ~77%+ of top speed with full roll — "fast and turning."
+  // Ride height scales with speed: barely lifts off at stall (~6cm), rises to ~44cm at top speed.
+  // Board sits ~halfway up 0.85m mast — realistic eFoil height.
   const speedFrac = Math.max(0, Math.min(1, (foil.speed - stallMs) / Math.max(1, speedCapMs - stallMs)));
-  const tgtRH = isF ? 0.06 + 0.54 * Math.pow(speedFrac, 1.2) + foil.pitch * 0.4 : -0.04;
+  const tgtRH = isF ? 0.06 + 0.38 * Math.pow(speedFrac, 1.2) + foil.pitch * 0.4 : -0.04;
   foil.rideH = lerp(foil.rideH, tgtRH, dt * (isF ? 3 : 6));
 
   foil.x += mx * foil.speed * dt;
@@ -1254,12 +1264,21 @@ function animate() {
     sc.scale.set(1.25, 1.25 * (1 - surferCrouch), 1.25);
   }
 
-  // Spray
+  // Spray & effects — kick in near top speed, intensify above it (pocket)
+  // ef: 0 below 90% top speed, ramps 0→1 from 90%→100%, >1 above top speed
+  const efThresh = speedCapMs * 0.9;
+  const ef = Math.max(0, (foil.speed - efThresh) / (speedCapMs * 0.1));
   sprayT += dt;
-  if (foil.speed > 3 && sprayT > .03) {
+  if (ef > 0 && sprayT > .015) {
     sprayT = 0;
-    const si = Math.floor(Math.min(8, (foil.speed - 3) * .8));
-    emitSpray(foil.x - mx * .9, bY, foil.z - mz * .9, -mx * foil.speed * .3, 1 + foil.speed * .1, -mz * foil.speed * .3, si);
+    // Board spray — mist kicked up from board edges
+    const si = Math.floor(Math.min(14, ef * 6));
+    emitSpray(foil.x - mx * .9, bY, foil.z - mz * .9, -mx * foil.speed * .3, 1.5 + foil.speed * .15, -mz * foil.speed * .3, si);
+    // Rooster tail — spray at waterline, only above top speed (pocket riding)
+    if (ef > 1) {
+      const ri = Math.floor(Math.min(10, (ef - 1) * 8));
+      emitSpray(foil.x - mx * 1.2, wH + 0.05, foil.z - mz * 1.2, -mx * foil.speed * .5, 0.5 + foil.speed * .2, -mz * foil.speed * .5, ri);
+    }
   }
   updateSpray(dt);
 
@@ -1268,12 +1287,12 @@ function animate() {
   while (state.wkHist.length > state.wakeBudget) state.wkHist.pop();
   updateWake();
 
-  // Wingtip streamers
+  // Wingtip streamers — visible near top speed, intensify above
   state.foilGroup.updateMatrixWorld(true);
   state.tipL.getWorldPosition(state._tipLWorld);
   state.tipR.getWorldPosition(state._tipRWorld);
-  updateStreamer(state.streamerL, state._tipLWorld.x, state._tipLWorld.y, state._tipLWorld.z, foil.speed);
-  updateStreamer(state.streamerR, state._tipRWorld.x, state._tipRWorld.y, state._tipRWorld.z, foil.speed);
+  updateStreamer(state.streamerL, state._tipLWorld.x, state._tipLWorld.y, state._tipLWorld.z, ef);
+  updateStreamer(state.streamerR, state._tipRWorld.x, state._tipRWorld.y, state._tipRWorld.z, ef);
 
   // HUD
   document.getElementById('hud-speed').textContent = convertSpeedFromMs(foil.speed).toFixed(1);
@@ -1294,25 +1313,6 @@ function animate() {
     accelEl.style.opacity = '0.3';
     accelEl.textContent = '—';
     accelEl.style.color = '#6a94c0';
-  }
-
-  // Status
-  const st = document.getElementById('hud-status');
-  if (foil.energy / getVal('sbBatteryCap') <= 0.10) {
-    st.textContent = '⛽ Gassed';
-    st.style.color = '#ff6040';
-  } else if (foil.speed <= 0.3) {
-    st.textContent = '⚠ STALLED';
-    st.style.color = '#ff5555';
-  } else if (foil.speed < 2.5) {
-    st.textContent = 'Hull Speed';
-    st.style.color = '#c09060';
-  } else if (isF) {
-    st.textContent = '🏄 Foiling!';
-    st.style.color = '#80e0c0';
-  } else {
-    st.textContent = 'Accelerating...';
-    st.style.color = '#a0b8d0';
   }
 
   foil.prevSpeed = foil.speed;
@@ -1366,12 +1366,36 @@ function animate() {
     swBar.style.background = absSwell > 0.7 ? 'linear-gradient(90deg,#ff3030,#e85050)' : 'linear-gradient(90deg,#f05555,#e83a3a)';
   }
 
-  // "In the Pocket!" message
-  const pocketEl = document.getElementById('hud-pocket');
-  if (normSwell > 0.8 && foil.speed > 3) {
-    pocketEl.classList.add('show');
+  // Pocket detection — wave energy at 75% or higher
+  const inPocketNow = normSwell >= 0.5 && foil.speed > 3;
+
+  // Debug: log wave energy every 10s
+  state._waveLogTimer = (state._waveLogTimer || 0) + dt;
+  if (state._waveLogTimer >= 10) {
+    state._waveLogTimer = 0;
+    console.log(`Wave energy: ${(normSwell * 100).toFixed(1)}% | pocket: ${inPocketNow} | speed: ${foil.speed.toFixed(1)} m/s`);
+  }
+
+  // HUD status
+  const st = document.getElementById('hud-status');
+  if (foil.energy / getVal('sbBatteryCap') <= 0.10) {
+    st.textContent = '⛽ Gassed';
+    st.style.color = '#ff6040';
+  } else if (foil.speed <= 0.3) {
+    st.textContent = '⚠ STALLED';
+    st.style.color = '#ff5555';
+  } else if (foil.speed < 2.5) {
+    st.textContent = 'Hull Speed';
+    st.style.color = '#c09060';
+  } else if (isF && inPocketNow) {
+    st.textContent = '🏄 In the Pocket!';
+    st.style.color = '#5ef0a0';
+  } else if (isF) {
+    st.textContent = '🏄 Foiling!';
+    st.style.color = '#80e0c0';
   } else {
-    pocketEl.classList.remove('show');
+    st.textContent = 'Accelerating...';
+    st.style.color = '#a0b8d0';
   }
 
   // Audio
@@ -1525,7 +1549,7 @@ function animate() {
   if (foil.speed > state.score.topSpeedMs) state.score.topSpeedMs = foil.speed;
 
   // Pocket time tracking
-  if (normSwell > 0.8 && foil.speed > 3) state.score.pocketTime += dt;
+  if (inPocketNow) state.score.pocketTime += dt;
 
   // Info bar fade after 10 seconds of riding
   state.infoBarFadeTimer += dt;

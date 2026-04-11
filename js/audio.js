@@ -200,12 +200,13 @@ export function loadLocalMusic(file) {
   musicAudio._url = url;
   musicAudio.loop = true;
   musicAudio.volume = 0.65;
-  musicWaitingForFoil = true;  // play deferred until first foil liftoff
-  state.audioSettings.musicPlaying = false;
+  musicAudio.play().catch(() => {});
+  musicWaitingForFoil = false;
+  state.audioSettings.musicPlaying = true;
   // Show filename immediately; ID3 read will update it asynchronously
   state.audioSettings.musicFileName = file.name.replace(/\.[^.]+$/, '');
   const el = document.getElementById('settings-music-status');
-  if (el) el.textContent = 'Ready — plays when foiling';
+  if (el) el.textContent = 'Now playing · ' + state.audioSettings.musicFileName;
   const btn = document.getElementById('settings-music-stop');
   if (btn) btn.style.display = 'inline-block';
 
@@ -217,7 +218,7 @@ export function loadLocalMusic(file) {
       const parts = [tags.artist, tags.title].filter(Boolean);
       state.audioSettings.musicFileName = parts.join(' — ');
     }
-    if (el) el.textContent = 'Ready · ' + state.audioSettings.musicFileName;
+    if (el) el.textContent = 'Now playing · ' + state.audioSettings.musicFileName;
   };
   reader.readAsArrayBuffer(file.slice(0, 65536));
 }
@@ -227,6 +228,15 @@ export function onFoilStart() {
   musicWaitingForFoil = false;
   musicAudio.currentTime = 0;
   musicAudio.volume = 0.65;
+  // Slow built-in tracks so they finish ~3s after the 2:00 ride ends
+  const rideDuration = 123;
+  if (!musicAudio._url && musicAudio.duration && isFinite(musicAudio.duration)) {
+    musicAudio.playbackRate = musicAudio.duration / rideDuration;
+  } else {
+    musicAudio.playbackRate = 1;
+  }
+  // Built-in tracks: play once; local MP3s: loop
+  musicAudio.loop = !!musicAudio._url;
   const p = musicAudio.play();
   if (p) p.catch(() => {
     // Retry on next user interaction if autoplay blocked
@@ -251,6 +261,23 @@ export function stopMusic() {
   if (el) el.textContent = '';
   const btn = document.getElementById('settings-music-stop');
   if (btn) btn.style.display = 'none';
+}
+
+// Fade out music preview (settings close) but keep track loaded for foil start
+export function fadeOutMusicPreview(duration = 1500) {
+  if (!musicAudio) return;
+  musicWaitingForFoil = true;
+  state.audioSettings.musicPlaying = false;
+  const audio = musicAudio;
+  const startVol = audio.volume;
+  const startTime = performance.now();
+  function fade() {
+    const t = Math.min((performance.now() - startTime) / duration, 1);
+    audio.volume = startVol * (1 - t);
+    if (t < 1) { requestAnimationFrame(fade); }
+    else { audio.pause(); audio.volume = 0.65; }
+  }
+  requestAnimationFrame(fade);
 }
 
 export function fadeOutMusic(duration = 2000) {

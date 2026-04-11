@@ -338,21 +338,12 @@ export function updateStreamer(str, wx, wy, wz, speed) {
 function setupInput() {
   const input = state.input;
 
-  // Triple-tap back/brake (S or ArrowDown) to toggle sandbox controls
-  let backTapTimes = [];
   window.addEventListener('keydown', e => {
     if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft')  input.left  = true;
     if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') input.right = true;
     if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp')    input.up    = true;
     if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown')  input.down  = true;
     if (e.key === ' ') { input.pump = true; e.preventDefault(); }
-    if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') {
-      const now = performance.now();
-      backTapTimes.push(now);
-      // Keep only taps within last 800ms
-      backTapTimes = backTapTimes.filter(t => now - t < 800);
-      if (backTapTimes.length >= 3) { toggleControls(); backTapTimes = []; }
-    }
   });
 
   window.addEventListener('keyup', e => {

@@ -60,8 +60,8 @@ export async function submitScore(scoreData) {
   const row = {
     username: username,
     score: total,
-    distance: Math.round(scoreData.distance),
-    top_speed: Math.round(scoreData.topSpeedMs * 100) / 100,
+    distance: Math.round(scoreData.distance / 1609.34 * 1000) / 1000,  // miles, 3 decimals
+    top_speed: Math.round(scoreData.topSpeedMs * 2.23694 * 100) / 100, // mph, 2 decimals
     pocket_time: Math.round(scoreData.pocketTime * 10) / 10,
     session_time: sessionTime,
     music_track: musicName || null,
@@ -93,7 +93,7 @@ export async function submitScore(scoreData) {
 export async function fetchTopScores(limit = 10) {
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/${TABLE}?select=username,score,distance,top_speed,pocket_time,location,created_at&order=score.desc&limit=${limit}`,
+      `${SUPABASE_URL}/rest/v1/${TABLE}?select=username,score,distance,city,created_at&order=score.desc&limit=${limit}`,
       { headers: supabaseHeaders() }
     );
     if (!res.ok) return [];
@@ -136,27 +136,29 @@ export function renderLeaderboard(scores, container, highlightName, highlightSco
   html += '<th style="padding:6px 4px;text-align:left;">Name</th>';
   html += '<th style="padding:6px 4px;text-align:right;">Score</th>';
   html += '<th style="padding:6px 4px;text-align:right;">Distance</th>';
-  html += '<th style="padding:6px 4px;text-align:right;">Top Speed</th>';
-  html += '<th style="padding:6px 4px;text-align:right;">Pocket</th>';
+  html += '<th style="padding:6px 4px;text-align:left;">City</th>';
   html += '</tr>';
+
+  // Distance conversion from stored miles to user units
+  const distUnit = state.units === 'kph' ? 'km' : state.units === 'kts' ? 'nm' : 'mi';
+  const distFactor = state.units === 'kph' ? 1.60934 : state.units === 'kts' ? 0.868976 : 1;
 
   scores.forEach((s, i) => {
     const isGold = i === 0, isSilver = i === 1, isBronze = i === 2;
     const medal = isGold ? '🥇' : isSilver ? '🥈' : isBronze ? '🥉' : (i + 1);
     const rowColor = isGold ? 'rgba(255,215,0,0.12)' : isSilver ? 'rgba(192,192,192,0.08)' : isBronze ? 'rgba(205,127,50,0.08)' : 'transparent';
     const nameColor = isGold ? '#ffd700' : isSilver ? '#c0c0c0' : isBronze ? '#cd7f32' : '#c8d6e5';
-    const speedMph = (s.top_speed * 2.23694).toFixed(1);
     const isHighlight = i === highlightIdx;
     const sparkleClass = isHighlight ? ' class="sparkle-row"' : '';
     const hlBg = isHighlight ? 'rgba(255,215,0,0.18)' : rowColor;
+    const dist = (s.distance * distFactor).toFixed(3);
 
     html += `<tr${sparkleClass} style="background:${hlBg};">`;
     html += `<td style="padding:5px 4px;">${medal}</td>`;
     html += `<td style="padding:5px 4px;color:${nameColor};font-weight:${i < 3 || isHighlight ? '600' : '400'};">${escHtml(s.username)}${isHighlight ? ' ✨' : ''}</td>`;
     html += `<td style="padding:5px 4px;text-align:right;color:#fff;font-weight:600;">${s.score.toLocaleString()}</td>`;
-    html += `<td style="padding:5px 4px;text-align:right;color:#90b8e0;">${Math.round(s.distance)}m</td>`;
-    html += `<td style="padding:5px 4px;text-align:right;color:#90b8e0;">${speedMph} mph</td>`;
-    html += `<td style="padding:5px 4px;text-align:right;color:#90b8e0;">${s.pocket_time.toFixed(1)}s</td>`;
+    html += `<td style="padding:5px 4px;text-align:right;color:#90b8e0;">${dist} ${distUnit}</td>`;
+    html += `<td style="padding:5px 4px;color:#90b8e0;">${escHtml(s.city || '')}</td>`;
     html += '</tr>';
   });
 

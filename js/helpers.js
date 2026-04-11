@@ -70,9 +70,9 @@ export function formatSpeed(ms) {
 }
 
 export function formatDistance(m) {
-  if (state.units === 'kph') return (m / 1000).toFixed(2) + ' km';
-  if (state.units === 'kts') return (m / 1852).toFixed(2) + ' nm';
-  return (m / 1609.34).toFixed(2) + ' mi';
+  if (state.units === 'kph') return (m / 1000).toFixed(3) + ' km';
+  if (state.units === 'kts') return (m / 1852).toFixed(3) + ' nm';
+  return (m / 1609.34).toFixed(3) + ' mi';
 }
 
 export function setUnits(newUnit) {

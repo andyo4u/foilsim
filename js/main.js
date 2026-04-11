@@ -984,10 +984,20 @@ function animate() {
   const musicSpeedMs = 5 / 2.23694; // 5 mph in m/s
   if (foil.speed > musicSpeedMs && !foilMusicTriggered) { foilMusicTriggered = true; onFoilStart(); }
 
-  // Stall out: if rider foiled then stalls for 5 seconds, end the ride
+  // Stall out: if rider foiled then stalls for 5 seconds
+  const isTutorial = state.activeBgPreset === 'tutorial';
   if (hasEverFoiled && !isF) {
     stallTimer += dt;
-    if (stallTimer >= 5) { endRide(); return; }
+    if (stallTimer >= 5) {
+      if (isTutorial) {
+        // Tutorial: refill energy and reset stall, no score
+        foil.energy = getVal('sbBatteryCap');
+        stallTimer = 0;
+        hasEverFoiled = false;
+      } else {
+        endRide(); return;
+      }
+    }
   } else {
     stallTimer = 0;
   }
@@ -1004,7 +1014,7 @@ function animate() {
   // (foil is on the downhill face of a swell — especially the pocket) the
   // wave feeds extra energy into the battery, making it actually useful.
   const maxEnergy = getVal('sbBatteryCap');
-  const drainMul = getVal('sbBatteryDrain');
+  const drainMul = getVal('sbBatteryDrain') * (isTutorial ? 0.15 : 1);
   const waveRegen = 0.015 + Math.max(0, slopeForce) * 0.035;
   foil.energy = Math.min(maxEnergy, foil.energy + waveRegen * dt);
 

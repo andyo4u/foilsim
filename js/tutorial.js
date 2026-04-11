@@ -5,16 +5,15 @@
 //    "pump"        — Zero speed, waves present. "Pump to get on foil".
 //                    Waits for foilSpeed > stallMs, then holds 2s.
 //    "foiling"     — "Foiling!" for 5s.
-//    "catch"       — "Catch the wave to keep speed" for 5s.
-//    "pocket"      — "Find the pocket for max lift" for 5s. Pocket glow on.
-//    "drop-back"   — "Drop back a bump if you need more power" for 5s.
-//    "leapfrog"    — "Speed lets you leap-frog forward" for 5s.
-//    "turning"     — "Turning generates some speed" for 5s. Pocket glow off.
-//    "lean-back"   — "Lean back to tighten your turn but lose some speed" for 5s.
-//    "hunt-sets"   — "Hunt for sets" for 10s. DEM render, camera zooms out.
-//    "drone"       — "Control your drone with mouse/touchscreen" for 5s.
-//                    Normal render, camera zooms back in.
-//    "ready"       — "You are ready to rip". Stoked button appears.
+//    "catch"       — "Catch the wave to maintain speed" for 5s.
+//    "pocket"      — "Ride in the pocket for max lift" for 5s. Pocket glow on.
+//    "drop-back"   — "Drop back a bump if you are moving too slow" for 5s.
+//    "leapfrog"    — "Gain enough speed to leap-frog forward" for 5s.
+//    "turning"     — "Pumping and turning generates speed" for 5s. Pocket glow off.
+//    "lean-back"   — "Lean back to increase drag" for 5s.
+//    "hunt-sets"   — "Hunt for sets" for 10s. Camera zooms out.
+//    "drone"       — "Control your follow cam" for 5s. Camera zooms back in.
+//    "ready"       — "You are ready to ride". Stoked button appears.
 //
 //  No timer — rider exits via "Stoked" button when ready.
 //  No power-ups in tutorial (handled in main.js).
@@ -158,7 +157,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
     if (phaseTimer >= 5) {
       phase = 'catch';
       phaseTimer = 0;
-      showMessage('Catch the wave to maintain lift');
+      showMessage('Catch the wave to maintain speed');
     }
     return;
   }
@@ -179,7 +178,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
     if (phaseTimer >= 5) {
       phase = 'drop-back';
       phaseTimer = 0;
-      showMessage('Drop back a bump if you need more power');
+      showMessage('Drop back a bump if you are moving too slow');
     }
     return;
   }
@@ -189,7 +188,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
     if (phaseTimer >= 5) {
       phase = 'leapfrog';
       phaseTimer = 0;
-      showMessage('Speed lets you leap-frog forward');
+      showMessage('Gain enough speed to leap-frog forward');
     }
     return;
   }
@@ -199,7 +198,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
     if (phaseTimer >= 5) {
       phase = 'turning';
       phaseTimer = 0;
-      showMessage('Turning generates some speed');
+      showMessage('Pumping and turning generates speed');
     }
     return;
   }
@@ -220,10 +219,7 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
     if (phaseTimer >= 5) {
       phase = 'hunt-sets';
       phaseTimer = 0;
-      // Switch to DEM render and zoom camera out
-      savedRenderMode = state.oceanMat ? state.oceanMat.uniforms.uRenderMode.value : 0;
       savedCamDist = state.cam.dist;
-      if (state.oceanMat) state.oceanMat.uniforms.uRenderMode.value = 2;
       targetCamDist = 80;
       showMessage('Hunt for sets');
     }
@@ -235,13 +231,11 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
     if (phaseTimer >= 10) {
       phase = 'drone';
       phaseTimer = 0;
-      // Switch back to normal render and zoom camera in
-      if (state.oceanMat) state.oceanMat.uniforms.uRenderMode.value = savedRenderMode;
       targetCamDist = savedCamDist;
       // Start 360 camera orbit — save current offset, reset to 0
       savedOffsetTheta = state.cam.offsetTheta;
       state.cam.offsetTheta = 0;
-      showMessage(state.isMobile ? 'Control your drone with touchscreen' : 'Control your drone with mouse');
+      showMessage('Control your follow cam');
     }
     return;
   }
@@ -255,12 +249,19 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
       phase = 'ready';
       phaseTimer = 0;
       state.cam.offsetTheta = savedOffsetTheta;
-      showMessage('You are ready to rip');
+      showMessage('You are ready to ride');
     }
     return;
   }
 
-  // "ready" phase — just wait for Stoked button click
+  // "ready" phase — show back button after 20 seconds
+  if (phase === 'ready') {
+    phaseTimer += dt;
+    if (phaseTimer >= 20) {
+      const btn = getDoneBtn();
+      if (btn) btn.style.display = '';
+    }
+  }
 }
 
 /** Called when the rider exits the tutorial (via exit button). */
@@ -277,12 +278,12 @@ export function endTutorial() {
     su['mieDirectionalG'].value   = 0;
   }
   if (state.oceanMat) state.oceanMat.uniforms.uShowPocket.value = 0;
-  // Restore render mode and camera in case tutorial ended mid-sequence
-  if (state.oceanMat) state.oceanMat.uniforms.uRenderMode.value = savedRenderMode;
   targetCamDist = savedCamDist;
   state.cam.dist = savedCamDist;
   state.cam.offsetTheta = savedOffsetTheta;
   hideMessage();
+  const btn = getDoneBtn();
+  if (btn) btn.style.display = 'none';
   fadeOutMusic(1500);
   document.getElementById('exit-btn').style.display = 'none';
   document.getElementById('menu-overlay').classList.remove('hidden');

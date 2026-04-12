@@ -83,7 +83,7 @@ export const state = {
   cam: {
     theta        : 0,
     phi          : 0.35,
-    dist         : 32,
+    dist         : 25.6,
     drag         : false,
     lx           : 0,
     ly           : 0,

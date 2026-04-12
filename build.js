@@ -149,11 +149,19 @@ console.log('  terrain-data/ copied');
 copyDir(path.join(SRC, 'assets'), path.join(DIST, 'assets'));
 // Remove source/duplicate/large dev files from dist assets
 for (const f of fs.readdirSync(path.join(DIST, 'assets'))) {
-  if (f.endsWith('.zip') || f.endsWith('.fbx') || f.includes('cartoon character') || f.includes(' ')) {
-    fs.unlinkSync(path.join(DIST, 'assets', f));
+  const full = path.join(DIST, 'assets', f);
+  if (f.endsWith('.zip') || f.endsWith('.fbx')
+      || f.includes('cartoon character') || f.includes(' ')
+      || f.includes('_original')) {
+    if (fs.statSync(full).isFile()) fs.unlinkSync(full);
   }
 }
-console.log('  assets/ copied');
+// Drop dev subdirectories entirely
+for (const dir of ['work', 'screenshots']) {
+  const p = path.join(DIST, 'assets', dir);
+  if (fs.existsSync(p)) fs.rmSync(p, { recursive: true, force: true });
+}
+console.log('  assets/ copied (dev files excluded)');
 
 // Favicon
 if (fs.existsSync(path.join(SRC, 'favicon.ico'))) {

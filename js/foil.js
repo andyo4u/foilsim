@@ -338,7 +338,16 @@ export function updateStreamer(str, wx, wy, wz, ef) {
 function setupInput() {
   const input = state.input;
 
+  // Skip game input when focus is on a text field so typing works normally
+  function isTyping() {
+    const el = document.activeElement;
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+  }
+
   window.addEventListener('keydown', e => {
+    if (isTyping()) return;
     if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft')  input.left  = true;
     if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') input.right = true;
     if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp')    input.up    = true;
@@ -347,6 +356,7 @@ function setupInput() {
   });
 
   window.addEventListener('keyup', e => {
+    if (isTyping()) return;
     if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft')  input.left  = false;
     if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') input.right = false;
     if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp')    input.up    = false;
@@ -623,30 +633,56 @@ export function initFoil() {
   //           tripo3d.ai generated 3D model from the image, exported OBJ (FBX failed) →
   //           imported to mixamo.com for auto-rigging, exported FBX →
   //           converted to GLB for Three.js
-  // Tuned in surfer-viewer.html: scale 1.25, position (0.13, 0.88, 0.10), Y rot -19°
+  //           NOTE: this full rigged pipeline is not fully working yet.
+  //
+  // Current (simple) pipeline actually in use:
+  //   1. Gemini — generate character picture in crouch pose on a green screen
+  //   2. tripo3d.ai — create 3D model from the image, low-quality setting (free GLB export)
+  //   3. Export GLB directly into assets/ as surfer.glb
+  //
+  // Two poses, swapped based on stall state:
+  //   surfer_crouch.glb  — foiling pose (scale 1.25, pos 0.13/0.88/0.10, Y rot -19°)
+  //   surfer_stalled.glb — paddling/stalled pose (scale 1.25, pos -0.02/0.88/-0.05, Y rot -2°)
   if (typeof THREE.GLTFLoader === 'function') {
     const loader = new THREE.GLTFLoader();
-    loader.load('assets/surfer.glb', (gltf) => {
+
+    // Crouch (foiling) — default visible, also used as the animated container
+    loader.load('assets/surfer_crouch.glb', (gltf) => {
       const surfer = gltf.scene;
       surfer.traverse(o => {
         if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
       });
-      // Auto-center horizontally and drop feet to local y=0 (matches viewer setup)
       const box = new THREE.Box3().setFromObject(surfer);
       const center = box.getCenter(new THREE.Vector3());
       surfer.position.set(-center.x, -box.min.y, -center.z);
+      const container = new THREE.Group();
+      container.add(surfer);
+      container.scale.setScalar(1.25);
+      container.position.set(0.13, 0.88, 0.10);
+      container.rotation.y = -19 * Math.PI / 180;
+      foilAsset.add(container);
+      state.surferContainer = container;      // animated pose (foiling)
+      state.surferCrouch = container;
+    }, undefined, (err) => console.warn('surfer_crouch.glb failed:', err));
 
-      // Wrap in container so we can transform without disturbing the auto-fit
-      const surferContainer = new THREE.Group();
-      surferContainer.add(surfer);
-      surferContainer.scale.setScalar(1.25);
-      surferContainer.position.set(0.13, 0.88, 0.10);
-      surferContainer.rotation.y = -19 * Math.PI / 180;
-      foilAsset.add(surferContainer);
-      state.surferContainer = surferContainer;
-    }, undefined, (err) => {
-      console.warn('Surfer GLB failed to load:', err);
-    });
+    // Stalled — hidden until the rider stalls out
+    loader.load('assets/surfer_stalled.glb', (gltf) => {
+      const surfer = gltf.scene;
+      surfer.traverse(o => {
+        if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+      });
+      const box = new THREE.Box3().setFromObject(surfer);
+      const center = box.getCenter(new THREE.Vector3());
+      surfer.position.set(-center.x, -box.min.y, -center.z);
+      const container = new THREE.Group();
+      container.add(surfer);
+      container.scale.setScalar(1.25);
+      container.position.set(-0.02, 0.88, -0.05);
+      container.rotation.y = -2 * Math.PI / 180;
+      container.visible = false;
+      foilAsset.add(container);
+      state.surferStalled = container;
+    }, undefined, (err) => console.warn('surfer_stalled.glb failed:', err));
   }
 
   // Wing tip markers (invisible) – used to track world positions for streamers

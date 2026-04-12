@@ -33,13 +33,41 @@ async function getGeoInfo() {
 
 // Get or prompt for username (cached in localStorage)
 export function getUsername() {
-  return localStorage.getItem('foilbrain_username') || 'Anonymous';
+  return sanitizeUsername(localStorage.getItem('foilbrain_username'));
+}
+
+// Sanitize username: block dangerous chars, keep spaces and most printable text
+export function sanitizeUsername(name) {
+  if (!name) return 'Anonymous';
+  let s = String(name);
+  // Strip HTML tags (< and > removed entirely to kill any markup)
+  s = s.replace(/[<>]/g, '');
+  // Strip control chars (0x00-0x1F, 0x7F) and zero-width / direction-override chars
+  s = s.replace(/[\x00-\x1F\x7F\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g, '');
+  // Collapse runs of whitespace (tabs, newlines) to single space — preserves internal spaces
+  s = s.replace(/[\t\n\r\f\v]+/g, ' ').replace(/  +/g, ' ');
+  // Length cap, then trim leading/trailing whitespace
+  s = s.substring(0, 24).replace(/^\s+|\s+$/g, '');
+  return s || 'Anonymous';
 }
 
 export function setUsername(name) {
-  const clean = (name || '').trim().substring(0, 24) || 'Anonymous';
+  const clean = sanitizeUsername(name);
   localStorage.setItem('foilbrain_username', clean);
   return clean;
+}
+
+// Ride counter — tracks how many rides this user/device has played.
+// Incremented at the start of each ride; persists across sessions via localStorage.
+export function getRideCount() {
+  const n = parseInt(localStorage.getItem('foilbrain_ride_count') || '0', 10);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+export function incrementRideCount() {
+  const n = getRideCount() + 1;
+  localStorage.setItem('foilbrain_ride_count', String(n));
+  return n;
 }
 
 // Submit a score to the leaderboard
@@ -72,6 +100,7 @@ export async function submitScore(scoreData) {
     city: geo.city,
     avg_fps: state._fpsAvgCount > 0 ? Math.round(state._fpsAvgSum / state._fpsAvgCount) : null,
     user_agent: navigator.userAgent.substring(0, 200),
+    ride_count: getRideCount(),
     checksum: checksum,
   };
 

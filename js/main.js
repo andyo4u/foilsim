@@ -118,7 +118,7 @@ import { initOcean, updateEnvMap, getWaveHeight, getWaveSlope, getSwellHeight,
 import { initFoil, emitSpray, updateSpray, updateWake, updateStreamer, toggleFreeCam, updateCamera, applyFoilPreset } from './foil.js';
 import { initTerrain, rebuildTerrain, restartLevel, getRealTerrainHeight,
          RT_WATER_Y, RT_WORLD_W, RT_WORLD_D, terrainConfigs } from './terrain.js';
-import { submitScore, fetchTopScores, renderLeaderboard, getUsername, setUsername } from './leaderboard.js';
+import { submitScore, fetchTopScores, renderLeaderboard, getUsername, setUsername, incrementRideCount } from './leaderboard.js';
 import { onTutorialStart, updateTutorial, endTutorial } from './tutorial.js';
 
 // ═══════════════════════════
@@ -465,6 +465,7 @@ function exitToMenu() {
     document.getElementById('hud-timer').style.display = 'none';
     document.getElementById('hud-boost').style.display = 'none';
     document.getElementById('hud').style.display = 'none';
+    state.cam.intro = null;
     document.getElementById('menu-overlay').classList.remove('hidden');
     state.gamePhase = 'menu';
   }
@@ -539,6 +540,9 @@ window.exitToMenu      = exitToMenu;
 // ═══════════════════════════
 
 function startRide(locationPreset) {
+  // Bump per-device ride counter (reported with score submission)
+  incrementRideCount();
+
   // Reset score & timer
   state.rideTimer = 120;
   state.rideStarted = false; // timer doesn't tick until first pump
@@ -587,6 +591,7 @@ function startRide(locationPreset) {
 
   // UI transitions
   const isTutorial = locationPreset === 'tutorial';
+  const isRufus = locationPreset === 'rufus-real';
   document.getElementById('menu-overlay').classList.add('hidden');
   document.getElementById('score-overlay').classList.add('hidden');
   document.getElementById('hud-timer').style.display = isTutorial ? 'none' : 'block';
@@ -594,9 +599,54 @@ function startRide(locationPreset) {
   document.getElementById('hud-timer').textContent = '2:00';
   document.getElementById('hud-boost').style.display = 'none';
   document.getElementById('info-bar').style.opacity = '';
-  document.getElementById('exit-btn').style.display = 'flex';
-  document.getElementById('sandbox-btn').style.display = state.isSandbox ? 'flex' : 'none';
-  document.getElementById('hud').style.display = 'block';
+
+  if (isRufus) {
+    // Show leaderboard during Rufus load — after scores render, display for 5s
+    const lb = document.getElementById('leaderboard-overlay');
+    const lbContent = document.getElementById('lb-content');
+    const lbBack = document.getElementById('lb-back-btn');
+    const lbMsg = document.getElementById('lb-loading-msg');
+    if (lbContent) lbContent.innerHTML = '<div style="color:#5ea8d8;text-align:center;padding:20px;">Loading...</div>';
+    if (lbBack) lbBack.style.display = 'none';
+    if (lbMsg) lbMsg.style.display = 'block';
+    lb.classList.remove('hidden');
+    // Hide HUD/exit until leaderboard dismisses
+    document.getElementById('exit-btn').style.display = 'none';
+    document.getElementById('sandbox-btn').style.display = 'none';
+    document.getElementById('hud').style.display = 'none';
+    // Freeze camera during leaderboard
+    state.cam.intro = 'leaderboard';
+    state.cam.introT = 0;
+    const dismiss = () => {
+      lb.classList.add('hidden');
+      if (lbBack) lbBack.style.display = '';
+      if (lbMsg) lbMsg.style.display = 'none';
+      document.getElementById('exit-btn').style.display = 'flex';
+      document.getElementById('sandbox-btn').style.display = state.isSandbox ? 'flex' : 'none';
+      document.getElementById('hud').style.display = 'block';
+      // Kick off intro cam sequence: face → spin back
+      state.cam.intro = 'face';
+      state.cam.introT = 0;
+    };
+    // Wait for scores to render, then show for 5s. Fallback: dismiss after 10s max.
+    let dismissed = false;
+    const safety = setTimeout(() => { if (!dismissed) { dismissed = true; dismiss(); } }, 10000);
+    fetchTopScores(10).then(scores => {
+      if (lbContent) renderLeaderboard(scores, lbContent);
+      setTimeout(() => {
+        if (!dismissed) { dismissed = true; clearTimeout(safety); dismiss(); }
+      }, 5000);
+    }).catch(() => {
+      setTimeout(() => {
+        if (!dismissed) { dismissed = true; clearTimeout(safety); dismiss(); }
+      }, 5000);
+    });
+  } else {
+    document.getElementById('exit-btn').style.display = 'flex';
+    document.getElementById('sandbox-btn').style.display = state.isSandbox ? 'flex' : 'none';
+    document.getElementById('hud').style.display = 'block';
+    state.cam.intro = null;
+  }
 
   state.gamePhase = 'riding';
 }
@@ -1233,6 +1283,13 @@ function animate() {
   state.modelGroup.rotation.x = foil.roll + Math.atan(cs) * 0.3;
   state.modelGroup.rotation.z = foil.pitch - Math.atan(slopeDot) * 0.4;
 
+  // ── Surfer pose swap (stalled vs foiling) ───────────────
+  if (state.surferCrouch && state.surferStalled) {
+    const isStalled = foil.speed <= 0.3;
+    state.surferStalled.visible = isStalled;
+    state.surferCrouch.visible = !isStalled;
+  }
+
   // ── Surfer procedural animation ─────────────────────────
   if (state.surferContainer) {
     const sc = state.surferContainer;
@@ -1563,7 +1620,67 @@ function animate() {
   // Camera
   if (!cam.drag && !cam.free) cam.offsetTheta *= 0.97;
   cam.followSmooth = Math.abs(state.foil.roll) > 0.1 ? 0.08 : 0.04;
-  updateCamera();
+
+  // Rufus intro cam sequence (leaderboard → face-on → spin back)
+  if (cam.intro) {
+    cam.introT = (cam.introT || 0) + dt;
+    const foil = state.foil;
+    const fg = state.foilGroup;
+    if (cam.intro === 'leaderboard') {
+      // Hold a pleasant overhead-ish view on the rider, no spin
+      const h = foil.heading;
+      cam.theta = h + Math.PI;
+      cam.phi = 0.35;
+      cam.dist = 25.6;
+      cam.offsetTheta = 0;
+      updateCamera();
+    } else if (cam.intro === 'face') {
+      // Camera in front of rider, close to water level — looking at surfer face
+      const h = foil.heading;
+      const dist = 4.5;
+      const camX = fg.position.x + Math.sin(h) * dist;
+      const camZ = fg.position.z + Math.cos(h) * dist;
+      const camY = Math.max(RT_WATER_Y() + 0.6, fg.position.y + 0.4);
+      camera.position.set(camX, camY, camZ);
+      camera.lookAt(fg.position.x, fg.position.y + 0.8, fg.position.z);
+      // Sync cam.theta so the subsequent spin starts from the right place
+      cam.theta = h;
+      cam.phi = 0.05;
+      cam.dist = dist;
+      cam.offsetTheta = 0;
+      if (cam.introT >= 2.5) {
+        cam.intro = 'spin';
+        cam.introT = 0;
+        cam._spinFromTheta = h;           // in-front angle
+        cam._spinToTheta   = h + Math.PI; // behind angle
+        cam._spinFromPhi = 0.05;
+        cam._spinFromDist = dist;
+      }
+    } else if (cam.intro === 'spin') {
+      const DUR = 2.5;
+      const t = Math.min(1, cam.introT / DUR);
+      // easeInOutCubic
+      const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      cam.theta = cam._spinFromTheta + (cam._spinToTheta - cam._spinFromTheta) * e;
+      cam.phi = cam._spinFromPhi + (0.35 - cam._spinFromPhi) * e;
+      cam.dist = cam._spinFromDist + (25.6 - cam._spinFromDist) * e;
+      cam.offsetTheta = 0;
+      // Directly place the camera (bypassing follow-smooth during spin)
+      const cx = cam.dist * Math.cos(cam.phi) * Math.sin(cam.theta);
+      const cy = cam.dist * Math.sin(cam.phi);
+      const cz = cam.dist * Math.cos(cam.phi) * Math.cos(cam.theta);
+      const tgt = fg.position.clone();
+      tgt.y += 1;
+      camera.position.set(tgt.x + cx, Math.max(tgt.y + cy, 1.5), tgt.z + cz);
+      camera.lookAt(tgt);
+      if (t >= 1) {
+        cam.intro = null;
+        cam.introT = 0;
+      }
+    }
+  } else {
+    updateCamera();
+  }
 
   // Center sky, clouds, silhouettes on camera
   sky.position.copy(camera.position);

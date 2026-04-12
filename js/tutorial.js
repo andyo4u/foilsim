@@ -13,6 +13,7 @@
 //    "lean-back"   — "Lean back to increase drag" for 5s.
 //    "hunt-sets"   — "Hunt for sets" for 10s. Camera zooms out.
 //    "drone"       — "Control your follow cam" for 5s. Camera zooms back in.
+//    "challenge"   — "Harness the water's energy..." for 6s.
 //    "ready"       — "You are ready to ride". Stoked button appears.
 //
 //  No timer — rider exits via "Stoked" button when ready.
@@ -246,9 +247,19 @@ export function updateTutorial(dt, foilSpeed, stallMs) {
     const t = Math.min(phaseTimer / 5, 1);
     state.cam.offsetTheta = t * Math.PI * 2;
     if (phaseTimer >= 5) {
-      phase = 'ready';
+      phase = 'challenge';
       phaseTimer = 0;
       state.cam.offsetTheta = savedOffsetTheta;
+      showMessage("Harness the water's energy — see how far you can ride in 2 minutes");
+    }
+    return;
+  }
+
+  if (phase === 'challenge') {
+    phaseTimer += dt;
+    if (phaseTimer >= 6) {
+      phase = 'ready';
+      phaseTimer = 0;
       showMessage('You are ready to ride');
     }
     return;

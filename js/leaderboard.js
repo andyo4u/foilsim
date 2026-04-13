@@ -122,7 +122,7 @@ export async function submitScore(scoreData) {
 export async function fetchTopScores(limit = 10) {
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/${TABLE}?select=username,score,distance,city,created_at&order=score.desc&limit=${limit}`,
+      `${SUPABASE_URL}/rest/v1/${TABLE}?select=username,score,distance,pocket_time,city,created_at&order=score.desc&limit=${limit}`,
       { headers: supabaseHeaders() }
     );
     if (!res.ok) return [];
@@ -165,6 +165,7 @@ export function renderLeaderboard(scores, container, highlightName, highlightSco
   html += '<th style="padding:6px 4px;text-align:left;">Name</th>';
   html += '<th style="padding:6px 4px;text-align:right;">Score</th>';
   html += '<th style="padding:6px 4px;text-align:right;">Distance</th>';
+  html += '<th style="padding:6px 4px;text-align:right;cursor:help;" title="Time in pocket">TIP</th>';
   html += '<th style="padding:6px 4px;text-align:left;">City</th>';
   html += '</tr>';
 
@@ -187,6 +188,7 @@ export function renderLeaderboard(scores, container, highlightName, highlightSco
     html += `<td style="padding:5px 4px;color:${nameColor};font-weight:${i < 3 || isHighlight ? '600' : '400'};">${escHtml(s.username)}${isHighlight ? ' ✨' : ''}</td>`;
     html += `<td style="padding:5px 4px;text-align:right;color:#fff;font-weight:600;">${s.score.toLocaleString()}</td>`;
     html += `<td style="padding:5px 4px;text-align:right;color:#90b8e0;">${dist} ${distUnit}</td>`;
+    html += `<td style="padding:5px 4px;text-align:right;color:#90b8e0;" title="Time in pocket">${(s.pocket_time || 0).toFixed(1)}s</td>`;
     html += `<td style="padding:5px 4px;color:#90b8e0;">${escHtml(s.city || '')}</td>`;
     html += '</tr>';
   });

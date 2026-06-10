@@ -5,6 +5,9 @@
   "main": "index.js",
   "scripts": {
     "build": "node build.js",
+    "dev": "node build.js --dev --watch",
+    "deploy": "npm run build && wrangler deploy",
+    "deploy:dev": "npm run build && wrangler deploy --env dev",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -21,6 +24,7 @@
   "homepage": "https://github.com/andyo4u/foilsim#readme",
   "devDependencies": {
     "esbuild": "^0.28.0",
-    "gltfpack": "^1.1.0"
+    "gltfpack": "^1.1.0",
+    "wrangler": "^4.99.0"
   }
 }

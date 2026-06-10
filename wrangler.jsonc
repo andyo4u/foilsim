@@ -4,5 +4,16 @@
   "compatibility_date": "2026-04-10",
   "assets": {
     "directory": "dist"
+  },
+  // Dev/test deploy: `npm run deploy:dev` → dev.foil-brain.com (worker foilsim-dev).
+  // Production foil-brain.com is the top-level worker: `npm run deploy`.
+  "env": {
+    "dev": {
+      "name": "foilsim-dev",
+      "routes": [{ "pattern": "dev.foil-brain.com", "custom_domain": true }],
+      "assets": {
+        "directory": "dist"
+      }
+    }
   }
 }

@@ -73,7 +73,7 @@
 //        zones, on-screen joystick, or tilt-to-steer option.
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { state } from './state.js';
 import type { InputState } from './state.js';
 import { lerp, toggleControls, convertSpeedFromMs, updateVal, cacheAllSliders } from './helpers.js';

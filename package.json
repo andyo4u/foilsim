@@ -24,13 +24,13 @@
   },
   "homepage": "https://github.com/andyo4u/foilsim#readme",
   "devDependencies": {
-    "@types/three": "^0.128.0",
+    "@types/three": "0.184.1",
     "esbuild": "^0.28.0",
     "gltfpack": "^1.1.0",
     "typescript": "^6.0.3",
     "wrangler": "^4.99.0"
   },
   "dependencies": {
-    "three": "0.128.0"
+    "three": "0.184.0"
   }
 }

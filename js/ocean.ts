@@ -48,7 +48,7 @@
 //        • Could measure FPS over N frames and auto-step down
 
 import * as THREE from 'three';
-import { Sky } from 'three/examples/jsm/objects/Sky.js';
+import { Sky } from 'three/addons/objects/Sky.js';
 import { state } from './state.js';
 import { getVal, degToDir, lerp, smoothstep, convertSpeedToMs } from './helpers.js';
 

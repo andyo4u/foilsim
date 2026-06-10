@@ -109,7 +109,7 @@
 // ╚═══════════════════════════════════════════════════════════════╝
 
 import * as THREE from 'three';
-import { Sky } from 'three/examples/jsm/objects/Sky.js';
+import { Sky } from 'three/addons/objects/Sky.js';
 import { state } from './state.js';
 import { updateVal, toggleControls, getVal, cacheAllSliders, applyPreset, showToast,
          copySettings, copySettingsJSON, lerp, smoothstep, degToDir,
@@ -135,9 +135,24 @@ import { initScoring, updateScoring } from './systems/scoring.js';
 // THREE.JS CORE SETUP
 // ═══════════════════════════
 
+// ── r128-compat color pipeline (three r184) ──────────────────
+// The 11 hand-written GLSL shaders and every Color uniform in this codebase
+// were tuned against r128's linear pipeline (no implicit sRGB conversion of
+// hex/RGB colors, LinearEncoding output). Modern three converts colors to
+// linear on assignment and outputs sRGB by default, which would silently
+// shift every water/fog/cloud tone. Keep the legacy interpretation; a
+// separate color-management modernization pass can retune later.
+THREE.ColorManagement.enabled = false;
+
+// Lights: r155+ removed the legacy pi-scaling of light intensities. The
+// dynamic day/night formulas below multiply by this to preserve the r128
+// look on the two MeshStandardMaterials (surfer GLB, foil board).
+const LIGHT_SCALE = Math.PI;
+
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace; // r128 look (see above)
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.65;
 renderer.setClearColor(new THREE.Color(0.55, 0.70, 0.85)); // match ocean uFogColor so beyond-mesh is horizon, not black
@@ -161,11 +176,11 @@ state.scene = scene;
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.5, 20000);
 state.camera = camera;
 
-const ambLight = new THREE.AmbientLight(0x8899bb, 0.6);
+const ambLight = new THREE.AmbientLight(0x8899bb, 0.6 * LIGHT_SCALE);
 scene.add(ambLight);
 state.ambLight = ambLight;
 
-const dirLight = new THREE.DirectionalLight(0xffeedd, 1.2);
+const dirLight = new THREE.DirectionalLight(0xffeedd, 1.2 * LIGHT_SCALE);
 dirLight.position.set(50, 80, -60);
 scene.add(dirLight);
 state.dirLight = dirLight;
@@ -752,7 +767,7 @@ initUI();
 // MAIN LOOP
 // ═══════════════════════════
 
-const clock = new THREE.Clock();
+const timer = new THREE.Timer(); // r170+ core Timer (Clock is deprecated)
 let prevSunAngle = -1, prevSunDir = -1;
 
 // Per-frame systems live in js/systems/. setQuality and endRide are injected
@@ -811,10 +826,10 @@ function updateEnvironment(t: number) {
   const sunElev = sv.y;
   const sunBright = smoothstep(0, 0.25, sunElev);
   cloudMat.uniforms.uCloudBright.value = 0.4 + sunBright * 0.6;
-  dirLight.intensity = 0.2 + sunBright * 1.6;
+  dirLight.intensity = (0.2 + sunBright * 1.6) * LIGHT_SCALE;
   const warmth = 1.0 - smoothstep(0, 0.35, sunElev);
   dirLight.color.setRGB(1.0, lerp(0.95, 0.55, warmth), lerp(0.92, 0.3, warmth));
-  ambLight.intensity = 0.15 + sunBright * 0.55;
+  ambLight.intensity = (0.15 + sunBright * 0.55) * LIGHT_SCALE;
 
   // Dynamic fog color — match Preetham sky horizon brightness (linear 1.5-2.0+ at low sun).
   // warmth ≈ 1 at low sun, ≈ 0 at noon. Values must survive ACES at 0.65 exposure.
@@ -1073,8 +1088,9 @@ function animate() {
 
   updateFpsStats();
 
-  const dt = Math.min(clock.getDelta(), .05);
-  const t = clock.getElapsedTime();
+  timer.update();
+  const dt = Math.min(timer.getDelta(), .05);
+  const t = timer.getElapsed();
 
   // Skip heavy rendering on menu/score screens — show splash faster
   if (state.gamePhase === 'menu' || state.gamePhase === 'score') {

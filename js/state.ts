@@ -29,7 +29,7 @@
 //        • "Reset progress" button in settings (with confirmation!)
 
 import * as THREE from 'three';
-import type { Sky } from 'three/examples/jsm/objects/Sky.js';
+import type { Sky } from 'three/addons/objects/Sky.js';
 import type { Streamer } from './foil.js';
 import type { BgPreset, RealTerrainConfig } from './terrain.js';
 

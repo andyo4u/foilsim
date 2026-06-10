@@ -900,7 +900,7 @@ function loadTerrainAssets(cfgName: string, callback: (assets: TerrainAssets) =>
 
   const tLoader = new THREE.TextureLoader();
   tLoader.load(cfg.satellite, function(tex) {
-    tex.encoding = THREE.sRGBEncoding;
+    tex.colorSpace = THREE.SRGBColorSpace;
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.magFilter = THREE.LinearFilter;
     tex.anisotropy = state.renderer!.capabilities.getMaxAnisotropy();

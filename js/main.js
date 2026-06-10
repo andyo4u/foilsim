@@ -114,7 +114,7 @@ import { updateVal, toggleControls, getVal, cacheAllSliders, applyPreset, showTo
          convertSpeedToMs, convertSpeedFromMs, formatSpeed, formatDistance, setUnits } from './helpers.js';
 import { initAudio, updateAudio, toggleAmbient, loadLocalMusic, stopMusic, fadeOutMusic, fadeOutMusicPreview, loadRandomTrackIfNeeded, playTrack } from './audio.js';
 import { initOcean, updateEnvMap, setRenderMode, updateWaveChart, rebuildOceanGeometry } from './ocean.js';
-import { initFoil, emitSpray, updateSpray, updateWake, updateStreamer, toggleFreeCam, updateCamera, applyFoilPreset } from './foil.js';
+import { initFoil, emitSpray, toggleFreeCam, updateCamera, applyFoilPreset } from './foil.js';
 import { initTerrain, rebuildTerrain, restartLevel,
          RT_WATER_Y, RT_WORLD_W, RT_WORLD_D, terrainConfigs } from './terrain.js';
 import { submitScore, fetchTopScores, renderLeaderboard, getUsername, setUsername, incrementRideCount } from './leaderboard.js';
@@ -122,6 +122,10 @@ import { onTutorialStart, endTutorial } from './tutorial.js';
 import { initPerf, updateFpsStats } from './systems/perf.js';
 import { initPhysics, resetRideFlags, updatePhysics } from './systems/physics.js';
 import { updateWorldFollow } from './systems/world.js';
+import { updateSurfer } from './systems/surfer.js';
+import { updateParticles } from './systems/particles.js';
+import { updateHUD } from './systems/hud.js';
+import { initScoring, updateScoring } from './systems/scoring.js';
 
 // ═══════════════════════════
 // THREE.JS CORE SETUP
@@ -704,20 +708,14 @@ window.endTutorial = endTutorial;
 // ═══════════════════════════
 
 const clock = new THREE.Clock();
-let sprayT = 0;
 let prevSunAngle = -1, prevSunDir = -1;
 
-// Surfer animation — smoothed procedural values
-let surferLeanZ = 0;    // counter-lean for roll (radians)
-let surferLeanX = 0;    // forward/back lean for accel/brake (radians)
-let surferCrouch = 0;   // knee bend 0-1 (scales Y)
-let surferHeadY = 0;    // head turn into turns (radians)
-
-// FPS measurement + auto-quality live in systems/perf.js; foil physics in
-// systems/physics.js. setQuality and endRide are injected because they touch
-// main-owned resources (renderer, score overlay) — keeps the graph acyclic.
+// Per-frame systems live in js/systems/. setQuality and endRide are injected
+// because they touch main-owned resources (renderer, score overlay) — keeps
+// the module graph acyclic.
 initPerf({ setQuality });
 initPhysics({ endRide });
+initScoring({ endRide });
 
 // Pano constants (match terrain.js)
 const PANO_ANGLE = Math.PI;
@@ -825,165 +823,6 @@ function updateEnvironment(t) {
   // Water colors
   u.uDeepColor.value.set(lerp(.02, .01, db), lerp(.05, .08, db), lerp(.10, .18, db));
   u.uShallowColor.value.set(lerp(.04, .02, db), lerp(.12, .22, db), lerp(.20, .38, db));
-}
-
-// Surfer pose swap + procedural lean/crouch animation
-function updateSurfer(dt, fr) {
-  const { foil, slopeDot, isPump, isPowerPump } = fr;
-
-  // ── Surfer pose swap (stalled vs foiling) ───────────────
-  if (state.surferCrouch && state.surferStalled) {
-    const isStalled = foil.speed <= 0.3;
-    state.surferStalled.visible = isStalled;
-    state.surferCrouch.visible = !isStalled;
-  }
-
-  // ── Surfer procedural animation ─────────────────────────
-  if (state.surferContainer) {
-    const sc = state.surferContainer;
-    const smoothRate = 1 - Math.exp(-4 * dt); // ~4Hz smoothing
-
-    // 1. Counter-lean with roll — surfer leans opposite to board tilt
-    const targetLeanZ = -foil.roll * 0.6;
-    surferLeanZ = lerp(surferLeanZ, targetLeanZ, smoothRate);
-
-    // 2. Forward lean when accelerating, back lean when braking
-    const accel = (foil.speed - (foil.prevSpeed || 0)) / Math.max(dt, 0.001);
-    const targetLeanX = -Math.max(-0.15, Math.min(0.15, accel * 0.03));
-    surferLeanX = lerp(surferLeanX, targetLeanX, smoothRate);
-
-    // 3. Knee bend — crouch during pumps + absorb chop
-    const pumpCrouch = (isPump || isPowerPump) ? 0.06 : 0;
-    const chopCrouch = Math.min(0.04, Math.abs(slopeDot) * 0.08);
-    const targetCrouch = pumpCrouch + chopCrouch;
-    surferCrouch = lerp(surferCrouch, targetCrouch, smoothRate);
-
-    // 4. Head turn — look into turns
-    const targetHeadY = -foil.roll * 0.4;
-    surferHeadY = lerp(surferHeadY, targetHeadY, smoothRate * 0.7);
-
-    // Apply — rotations are additive on top of rest pose (-19° Y)
-    const restY = -19 * Math.PI / 180;
-    sc.rotation.set(surferLeanX, restY + surferHeadY, surferLeanZ);
-    // Knee bend via slight Y scale reduction (crouch compresses)
-    sc.scale.set(1.25, 1.25 * (1 - surferCrouch), 1.25);
-  }
-}
-
-// Spray, wake history, and wingtip streamers
-function updateParticles(dt, fr) {
-  const { foil, mx, mz, wH, bY, speedCapMs } = fr;
-
-  // Spray & effects — kick in near top speed, intensify above it (pocket)
-  // ef: 0 below 90% top speed, ramps 0→1 from 90%→100%, >1 above top speed
-  const efThresh = speedCapMs * 0.9;
-  const ef = Math.max(0, (foil.speed - efThresh) / (speedCapMs * 0.1));
-  sprayT += dt;
-  if (ef > 0 && sprayT > .015) {
-    sprayT = 0;
-    // Board spray — mist kicked up from board edges
-    const si = Math.floor(Math.min(14, ef * 6));
-    emitSpray(foil.x - mx * .9, bY, foil.z - mz * .9, -mx * foil.speed * .3, 1.5 + foil.speed * .15, -mz * foil.speed * .3, si);
-    // Rooster tail — spray at waterline, only above top speed (pocket riding)
-    if (ef > 1) {
-      const ri = Math.floor(Math.min(10, (ef - 1) * 8));
-      emitSpray(foil.x - mx * 1.2, wH + 0.05, foil.z - mz * 1.2, -mx * foil.speed * .5, 0.5 + foil.speed * .2, -mz * foil.speed * .5, ri);
-    }
-  }
-  updateSpray(dt);
-
-  // Wake
-  if (foil.speed > 1.5) state.wkHist.unshift({ x: foil.x - mx, y: bY - foil.rideH + .05, z: foil.z - mz });
-  while (state.wkHist.length > state.wakeBudget) state.wkHist.pop();
-  updateWake();
-
-  // Wingtip streamers — visible near top speed, intensify above
-  state.foilGroup.updateMatrixWorld(true);
-  state.tipL.getWorldPosition(state._tipLWorld);
-  state.tipR.getWorldPosition(state._tipRWorld);
-  updateStreamer(state.streamerL, state._tipLWorld.x, state._tipLWorld.y, state._tipLWorld.z, ef);
-  updateStreamer(state.streamerR, state._tipRWorld.x, state._tipRWorld.y, state._tipRWorld.z, ef);
-}
-
-// HUD readouts: speed, accel arrow, energy bar, swell bar, status line
-function updateHUD(fr) {
-  const { foil, isF, normSwell, inPocketNow } = fr;
-
-  // HUD
-  document.getElementById('hud-speed').textContent = convertSpeedFromMs(foil.speed).toFixed(1);
-
-  // Acceleration indicator
-  const accelEl = document.getElementById('hud-accel');
-  const speedDelta = foil.speed - foil.prevSpeed;
-  const threshold = 0.005;
-  if (speedDelta > threshold) {
-    accelEl.textContent = '▲';
-    accelEl.style.color = '#5ee8a0';
-    accelEl.style.opacity = Math.min(1, Math.abs(speedDelta) * 20);
-  } else if (speedDelta < -threshold) {
-    accelEl.textContent = '▼';
-    accelEl.style.color = '#ff6b6b';
-    accelEl.style.opacity = Math.min(1, Math.abs(speedDelta) * 20);
-  } else {
-    accelEl.style.opacity = '0.3';
-    accelEl.textContent = '—';
-    accelEl.style.color = '#6a94c0';
-  }
-
-  foil.prevSpeed = foil.speed;
-
-  // Energy bar
-  const ePct = Math.round((foil.energy / getVal('sbBatteryCap')) * 100);
-  const eBar = document.getElementById('hud-energy-bar');
-  const eTxt = document.getElementById('hud-energy-text');
-  eBar.style.width = Math.min(100, ePct) + '%';
-  eTxt.textContent = ePct + '%';
-  if (foil.energy / getVal('sbBatteryCap') > 0.5) {
-    eBar.style.background = 'linear-gradient(90deg,#4ae88a,#5ef0a0)';
-    eTxt.style.color = '#6a94c0';
-  } else if (foil.energy / getVal('sbBatteryCap') > 0.2) {
-    eBar.style.background = 'linear-gradient(90deg,#e8c44a,#f0d060)';
-    eTxt.style.color = '#c0a050';
-  } else {
-    eBar.style.background = 'linear-gradient(90deg,#e85050,#f06060)';
-    eTxt.style.color = '#e06060';
-  }
-
-  // Wave energy meter — normSwell computed in updatePhysics()
-  const swBar = document.getElementById('hud-swell-bar');
-  const absSwell = Math.abs(normSwell);
-  const pct = absSwell * 50;
-  if (normSwell >= 0) {
-    swBar.style.left = '50%';
-    swBar.style.width = pct + '%';
-    swBar.style.background = absSwell > 0.7 ? 'linear-gradient(90deg,#2ee87a,#60ffc0)' : 'linear-gradient(90deg,#3ad080,#5ef0a0)';
-  } else {
-    swBar.style.left = (50 - pct) + '%';
-    swBar.style.width = pct + '%';
-    swBar.style.background = absSwell > 0.7 ? 'linear-gradient(90deg,#ff3030,#e85050)' : 'linear-gradient(90deg,#f05555,#e83a3a)';
-  }
-
-  // HUD status
-  const st = document.getElementById('hud-status');
-  if (foil.energy / getVal('sbBatteryCap') <= 0.10) {
-    st.textContent = '⛽ Gassed';
-    st.style.color = '#ff6040';
-  } else if (foil.speed <= 0.3) {
-    st.textContent = '⚠ STALLED';
-    st.style.color = '#ff5555';
-  } else if (foil.speed < 2.5) {
-    st.textContent = 'Hull Speed';
-    st.style.color = '#c09060';
-  } else if (isF && inPocketNow) {
-    st.textContent = '🏄 In the Pocket!';
-    st.style.color = '#5ef0a0';
-  } else if (isF) {
-    st.textContent = '🏄 Foiling!';
-    st.style.color = '#80e0c0';
-  } else {
-    st.textContent = 'Accelerating...';
-    st.style.color = '#a0b8d0';
-  }
 }
 
 // Power-up spawn/collect/boost (currently disabled via `if (false &&`)
@@ -1109,44 +948,6 @@ function updatePowerups(dt, fr) {
   }
 }
 
-// Ride timer countdown, distance/top-speed/pocket-time tracking, info-bar fade
-function updateScoring(dt, fr) {
-  const { foil, inPocketNow } = fr;
-
-  // ── RIDE TIMER & SCORING ──
-  // Timer countdown — only starts after first pump (skipped in tutorial)
-  if (state.activeBgPreset !== 'tutorial') {
-    if (state.rideStarted) {
-      state.rideTimer -= dt;
-      if (state.rideTimer <= 0) { state.rideTimer = 0; endRide(); }
-    }
-    const mins = Math.floor(state.rideTimer / 60);
-    const secs = Math.floor(state.rideTimer % 60);
-    const timerEl = document.getElementById('hud-timer');
-    timerEl.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
-    if (state.rideTimer <= 10) timerEl.classList.add('warning');
-  }
-
-  // Distance tracking
-  const dx = foil.x - state.ridePrevX;
-  const dz = foil.z - state.ridePrevZ;
-  state.score.distance += Math.sqrt(dx * dx + dz * dz);
-  state.ridePrevX = foil.x;
-  state.ridePrevZ = foil.z;
-
-  // Top speed tracking
-  if (foil.speed > state.score.topSpeedMs) state.score.topSpeedMs = foil.speed;
-
-  // Pocket time tracking
-  if (inPocketNow) state.score.pocketTime += dt;
-
-  // Info bar fade after 10 seconds of riding
-  state.infoBarFadeTimer += dt;
-  if (state.infoBarFadeTimer > 10) {
-    const fadeProgress = Math.min(1, (state.infoBarFadeTimer - 10) / 2);
-    document.getElementById('info-bar').style.opacity = 1 - fadeProgress;
-  }
-}
 
 // Follow cam, free cam, and the Rufus intro cam sequence
 function updateCameraFollow(dt) {

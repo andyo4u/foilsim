@@ -824,9 +824,14 @@ function _getShoreDistM(px, pz) {
   return 999;
 }
 
-function animate() {
-  requestAnimationFrame(animate);
+// ═══════════════════════════
+// PER-FRAME SYSTEMS — called from animate() in fixed order.
+// Order is load-bearing: physics → world follow → surfer → particles → HUD →
+// audio/chart → power-ups → scoring → camera. Systems share one per-frame
+// record (`fr`) built by updatePhysics().
+// ═══════════════════════════
 
+function updateFpsStats() {
   // FPS measurement
   fpsFrames++;
   const fpsNow = performance.now();
@@ -878,24 +883,10 @@ function animate() {
       }
     }
   }
+}
 
-  const dt = Math.min(clock.getDelta(), .05);
-  const t = clock.getElapsedTime();
-
-  // Skip heavy rendering on menu/score screens — show splash faster
-  if (state.gamePhase === 'menu' || state.gamePhase === 'score') {
-    renderer.render(scene, camera);
-    // Dismiss loading screen after first render
-    if (_readyFrames < 2) {
-      _readyFrames++;
-      if (_readyFrames === 2) {
-        document.getElementById('loading-screen').classList.add('hidden');
-        document.getElementById('menu-overlay').classList.remove('hidden');
-      }
-    }
-    return;
-  }
-
+// Sun, sky, clouds, fog, dynamic lighting, and the shared ocean/terrain uniforms
+function updateEnvironment(t) {
   const u = state.oceanMat.uniforms;
   u.uTime.value = t;
   u.uCamPos.value.copy(camera.position);
@@ -985,11 +976,13 @@ function animate() {
   // Water colors
   u.uDeepColor.value.set(lerp(.02, .01, db), lerp(.05, .08, db), lerp(.10, .18, db));
   u.uShallowColor.value.set(lerp(.04, .02, db), lerp(.12, .22, db), lerp(.20, .38, db));
+}
 
-  const cam = state.cam;
-
-  // ── FOIL PHYSICS (only during ride) ──
-  if (state.gamePhase === 'riding') {
+// ── FOIL PHYSICS ──
+// Input → forces → speed → position, stall-out, shore swell, wave-energy
+// normalization. Returns the per-frame record (`fr`) the later systems read,
+// or null if the ride ended mid-frame (caller must skip the rest of the frame).
+function updatePhysics(dt, t) {
   const foil = state.foil;
   const input = state.input;
 
@@ -1055,7 +1048,7 @@ function animate() {
         stallTimer = 0;
         hasEverFoiled = false;
       } else {
-        endRide(); return;
+        endRide(); return null;
       }
     }
   } else {
@@ -1203,6 +1196,48 @@ function animate() {
     state.cachedParams['swell3Height'] = state._swell3ShoreH;
   }
 
+  // Wave-energy normalization (moved here from the HUD body — pure math with
+  // no DOM access; provably independent of the world/HUD updates that
+  // originally ran between the physics block and this calculation)
+  const s1h = getVal('swell1Height'), s1p = getVal('swell1Period');
+  const s2h = getVal('swell2Height'), s2p = getVal('swell2Period');
+  const s3h = getVal('swell3Height'), s3p = getVal('swell3Period');
+  function maxSlope(h, p) { return h > 0.01 ? h * 6.2832 / (1.56 * p * p) : 0; }
+  const maxSlopeSum = (maxSlope(s1h, s1p) + maxSlope(s1h * 0.22, s1p * 0.7)
+    + maxSlope(s2h, s2p) + maxSlope(s2h * 0.2, s2p * 0.65)
+    + maxSlope(s3h, s3p)) * 3.25;
+  const dynamicMax = Math.max(0.05, maxSlopeSum * 0.85);
+
+  // Combine slopeForce with pocket strength: in the pocket pushes toward max
+  const rawNorm = slopeForce / dynamicMax;
+  // When in pocket with positive slope, boost toward 1.0
+  // When out of pocket, show raw slope force
+  const pocketBoost = pocketStrength * Math.max(0, rawNorm);
+  const blended = rawNorm + pocketBoost * (1.0 - Math.abs(rawNorm));
+  const normSwell = Math.max(-1, Math.min(1, blended));
+
+  // Pocket detection — wave energy at 75% or higher
+  const inPocketNow = normSwell >= 0.5 && foil.speed > 3;
+
+  // Debug: log wave energy every 10s
+  state._waveLogTimer = (state._waveLogTimer || 0) + dt;
+  if (state._waveLogTimer >= 10) {
+    state._waveLogTimer = 0;
+    console.log(`Wave energy: ${(normSwell * 100).toFixed(1)}% | pocket: ${inPocketNow} | speed: ${foil.speed.toFixed(1)} m/s`);
+  }
+
+  return {
+    foil, mx, mz, wH, bY: wH + foil.rideH, slope, slopeDot,
+    isF, isPump, isPowerPump, speedCapMs, slopeForce, pocketStrength,
+    normSwell, inPocketNow,
+  };
+}
+
+// Ocean mesh follow, distant-water fill, terrain ring, foil placement
+function updateWorldFollow(fr) {
+  const { foil, mx, mz, wH, bY, slope, slopeDot } = fr;
+  const u = state.oceanMat.uniforms;
+
   // Move ocean mesh to follow foil
   {
     // Snap to cell size to prevent vertex swimming at mesh edges
@@ -1276,12 +1311,16 @@ function animate() {
   }
 
   // Position foil
-  const bY = wH + foil.rideH;
   state.foilGroup.position.set(foil.x, bY, foil.z);
   state.foilGroup.rotation.set(0, foil.heading, 0);
   const cs = -mz * slope.dhdx + mx * slope.dhdz;
   state.modelGroup.rotation.x = foil.roll + Math.atan(cs) * 0.3;
   state.modelGroup.rotation.z = foil.pitch - Math.atan(slopeDot) * 0.4;
+}
+
+// Surfer pose swap + procedural lean/crouch animation
+function updateSurfer(dt, fr) {
+  const { foil, slopeDot, isPump, isPowerPump } = fr;
 
   // ── Surfer pose swap (stalled vs foiling) ───────────────
   if (state.surferCrouch && state.surferStalled) {
@@ -1320,6 +1359,11 @@ function animate() {
     // Knee bend via slight Y scale reduction (crouch compresses)
     sc.scale.set(1.25, 1.25 * (1 - surferCrouch), 1.25);
   }
+}
+
+// Spray, wake history, and wingtip streamers
+function updateParticles(dt, fr) {
+  const { foil, mx, mz, wH, bY, speedCapMs } = fr;
 
   // Spray & effects — kick in near top speed, intensify above it (pocket)
   // ef: 0 below 90% top speed, ramps 0→1 from 90%→100%, >1 above top speed
@@ -1350,6 +1394,11 @@ function animate() {
   state.tipR.getWorldPosition(state._tipRWorld);
   updateStreamer(state.streamerL, state._tipLWorld.x, state._tipLWorld.y, state._tipLWorld.z, ef);
   updateStreamer(state.streamerR, state._tipRWorld.x, state._tipRWorld.y, state._tipRWorld.z, ef);
+}
+
+// HUD readouts: speed, accel arrow, energy bar, swell bar, status line
+function updateHUD(fr) {
+  const { foil, isF, normSwell, inPocketNow } = fr;
 
   // HUD
   document.getElementById('hud-speed').textContent = convertSpeedFromMs(foil.speed).toFixed(1);
@@ -1391,26 +1440,8 @@ function animate() {
     eTxt.style.color = '#e06060';
   }
 
-  // Wave energy meter
-  const s1h = getVal('swell1Height'), s1p = getVal('swell1Period');
-  const s2h = getVal('swell2Height'), s2p = getVal('swell2Period');
-  const s3h = getVal('swell3Height'), s3p = getVal('swell3Period');
-  function maxSlope(h, p) { return h > 0.01 ? h * 6.2832 / (1.56 * p * p) : 0; }
-  const maxSlopeSum = (maxSlope(s1h, s1p) + maxSlope(s1h * 0.22, s1p * 0.7)
-    + maxSlope(s2h, s2p) + maxSlope(s2h * 0.2, s2p * 0.65)
-    + maxSlope(s3h, s3p)) * 3.25;
-  const dynamicMax = Math.max(0.05, maxSlopeSum * 0.85);
-
-  // pocketStrength already computed in physics section above
-
+  // Wave energy meter — normSwell computed in updatePhysics()
   const swBar = document.getElementById('hud-swell-bar');
-  // Combine slopeForce with pocket strength: in the pocket pushes toward max
-  const rawNorm = slopeForce / dynamicMax;
-  // When in pocket with positive slope, boost toward 1.0
-  // When out of pocket, show raw slope force
-  const pocketBoost = pocketStrength * Math.max(0, rawNorm);
-  const blended = rawNorm + pocketBoost * (1.0 - Math.abs(rawNorm));
-  const normSwell = Math.max(-1, Math.min(1, blended));
   const absSwell = Math.abs(normSwell);
   const pct = absSwell * 50;
   if (normSwell >= 0) {
@@ -1421,16 +1452,6 @@ function animate() {
     swBar.style.left = (50 - pct) + '%';
     swBar.style.width = pct + '%';
     swBar.style.background = absSwell > 0.7 ? 'linear-gradient(90deg,#ff3030,#e85050)' : 'linear-gradient(90deg,#f05555,#e83a3a)';
-  }
-
-  // Pocket detection — wave energy at 75% or higher
-  const inPocketNow = normSwell >= 0.5 && foil.speed > 3;
-
-  // Debug: log wave energy every 10s
-  state._waveLogTimer = (state._waveLogTimer || 0) + dt;
-  if (state._waveLogTimer >= 10) {
-    state._waveLogTimer = 0;
-    console.log(`Wave energy: ${(normSwell * 100).toFixed(1)}% | pocket: ${inPocketNow} | speed: ${foil.speed.toFixed(1)} m/s`);
   }
 
   // HUD status
@@ -1454,14 +1475,11 @@ function animate() {
     st.textContent = 'Accelerating...';
     st.style.color = '#a0b8d0';
   }
+}
 
-  // Audio
-  updateAudio(slopeForce, normSwell, foil.speed);
-
-  // Wave chart — pass net energy flow and pocket strength
-  updateWaveChart(wH, slopeDot, normSwell, pocketStrength);
-
-  foil.prevWH = wH;
+// Power-up spawn/collect/boost (currently disabled via `if (false &&`)
+function updatePowerups(dt, fr) {
+  const { foil, mx, mz, bY } = fr;
 
   // ── POWER-UP: Spawn, Collect, Boost — DISABLED (code preserved for future re-enabling) ──
   // TODO: Re-enable power-ups — change `if (false &&` → `if (` and restore speed-cap ternary:
@@ -1580,6 +1598,11 @@ function animate() {
       }
     }
   }
+}
+
+// Ride timer countdown, distance/top-speed/pocket-time tracking, info-bar fade
+function updateScoring(dt, fr) {
+  const { foil, inPocketNow } = fr;
 
   // ── RIDE TIMER & SCORING ──
   // Timer countdown — only starts after first pump (skipped in tutorial)
@@ -1614,8 +1637,11 @@ function animate() {
     const fadeProgress = Math.min(1, (state.infoBarFadeTimer - 10) / 2);
     document.getElementById('info-bar').style.opacity = 1 - fadeProgress;
   }
+}
 
-  } // end gamePhase === 'riding'
+// Follow cam, free cam, and the Rufus intro cam sequence
+function updateCameraFollow(dt) {
+  const cam = state.cam;
 
   // Camera
   if (!cam.drag && !cam.free) cam.offsetTheta *= 0.97;
@@ -1681,6 +1707,56 @@ function animate() {
   } else {
     updateCamera();
   }
+}
+
+// ═══════════════════════════
+// ANIMATE — slim orchestrator; see system functions above
+// ═══════════════════════════
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  updateFpsStats();
+
+  const dt = Math.min(clock.getDelta(), .05);
+  const t = clock.getElapsedTime();
+
+  // Skip heavy rendering on menu/score screens — show splash faster
+  if (state.gamePhase === 'menu' || state.gamePhase === 'score') {
+    renderer.render(scene, camera);
+    // Dismiss loading screen after first render
+    if (_readyFrames < 2) {
+      _readyFrames++;
+      if (_readyFrames === 2) {
+        document.getElementById('loading-screen').classList.add('hidden');
+        document.getElementById('menu-overlay').classList.remove('hidden');
+      }
+    }
+    return;
+  }
+
+  updateEnvironment(t);
+
+  // ── FOIL PHYSICS + ride systems (only during ride) ──
+  if (state.gamePhase === 'riding') {
+    const fr = updatePhysics(dt, t);
+    if (!fr) return; // ride ended mid-frame (stall-out) — skip rest of frame
+
+    updateWorldFollow(fr);
+    updateSurfer(dt, fr);
+    updateParticles(dt, fr);
+    updateHUD(fr);
+
+    // Audio + wave chart + prev-wave-height bookkeeping
+    updateAudio(fr.slopeForce, fr.normSwell, fr.foil.speed);
+    updateWaveChart(fr.wH, fr.slopeDot, fr.normSwell, fr.pocketStrength);
+    fr.foil.prevWH = fr.wH;
+
+    updatePowerups(dt, fr);
+    updateScoring(dt, fr);
+  }
+
+  updateCameraFollow(dt);
 
   // Center sky, clouds, silhouettes on camera
   sky.position.copy(camera.position);

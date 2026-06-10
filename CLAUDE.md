@@ -4,20 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FoilSim is an eFoil/hydrofoil simulator built with Three.js r128. Players ride waves, pump for speed, and explore real-world locations (Columbia River Gorge, Maliko Run Maui). Hosted on GitHub Pages from the master branch.
+FoilSim is an eFoil/hydrofoil simulator built with Three.js r128. Players ride waves, pump for speed, and explore real-world locations (Columbia River Gorge, Maliko Run Maui).
 
-- **Live demo**: https://andyo4u.github.io/foilsim/
+- **Live site**: https://foil-brain.com — a Cloudflare Worker (`foilsim`) serving static assets from `dist/` (see `wrangler.jsonc`). A dev worker (`foilsim-dev`) serves dev.foil-brain.com for pre-release testing. GitHub Pages (andyo4u.github.io/foilsim) is deprecated.
 - **Current version**: stored in `index.html` div#version-label
 
 ## Development Setup
 
-**No build tools, no package manager, no bundler.** The entire app is vanilla ES modules loaded directly by the browser.
+The app is vanilla ES modules (currently migrating to TypeScript — see the v0.3.x series), bundled with esbuild via `build.js`. Three.js r128 is loaded via CDN as `window.THREE` (npm migration in progress).
 
-- **Three.js r128** loaded via CDN as `window.THREE` global (not an npm module)
-- **Sky addon** loaded via separate CDN script tag
-- To develop locally, serve the project root with any static HTTP server (e.g., `python -m http.server` or VS Code Live Server)
-- There are no tests, no linter, and no CI/CD pipeline
-- Pushing to master auto-deploys to GitHub Pages
+- `npm run dev` — unminified watch build + local server on :8080
+- `npm run build` — production build to `dist/` (minified, console.log stripped)
+- `npm run deploy:dev` — build + deploy to dev.foil-brain.com
+- `npm run deploy` — build + deploy to production foil-brain.com
+- `node scripts/wave-golden-check.js` — regression check: the CPU wave math (`getWaveHeight`/`getWaveSlope`) must stay bit-identical; run after touching ocean.js or refactoring anything it imports
+- There are no other tests, no linter, and no CI/CD pipeline; deploys are manual via wrangler
 
 ## Architecture
 
@@ -53,7 +54,7 @@ All mutable shared data lives on the `state` object from `state.js`. Every modul
 
 - **Bump the version** in `index.html` div#version-label with every commit
 - Use detailed, multi-line commit messages explaining the "why"
-- Include co-author tag: `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
+- Include co-author tag for the Claude model that authored the change, e.g. `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`
 
 ## Known Bugs
 

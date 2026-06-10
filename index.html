@@ -379,26 +379,26 @@
 <body>
 
 <!-- Version label: increment on each commit (e.g. v0.51 → v0.52) -->
-<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.3.6</div>
+<div id="version-label" style="display:none;position:fixed;top:8px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">v0.3.7</div>
 <div id="brand-label" style="position:fixed;top:12px;left:14px;z-index:90;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:rgba(200,220,250,0.7);letter-spacing:2px;pointer-events:none;user-select:none;text-shadow:0 1px 6px rgba(0,0,0,0.6);">FOIL-BRAIN.COM</div>
 <!-- FPS counter: updated every 500ms in the animation loop -->
 <div id="fps-label" style="display:none;position:fixed;top:22px;left:10px;z-index:90;font-family:'DM Sans',sans-serif;font-size:11px;color:rgba(255,60,60,0.85);pointer-events:none;user-select:none;">-- fps</div>
 <canvas id="fps-graph" width="120" height="35" style="display:none;position:fixed;top:36px;left:10px;z-index:90;border-radius:3px;background:rgba(0,0,0,0.5);pointer-events:none;"></canvas>
 
 <!-- Controls panel toggle — Tab key only, button hidden -->
-<button id="controls-toggle" onclick="toggleControls()" style="display:none;">⚙</button>
+<button id="controls-toggle" data-action="toggle-controls" style="display:none;">⚙</button>
 
 <div id="controls-panel" class="hidden">
   <div class="panel-header">
     <span class="panel-title">Ocean Parameters</span>
-    <button class="close-btn" onclick="toggleControls()">✕</button>
+    <button class="close-btn" data-action="toggle-controls">✕</button>
   </div>
   <div class="section">
     <div class="section-title">🎛 Presets</div>
     <div class="preset-row">
-      <button class="preset-btn" onclick="applyPreset('clean',this)">Clean</button>
-      <button class="preset-btn" onclick="applyPreset('river',this)">River</button>
-      <button class="preset-btn" onclick="applyPreset('messy',this)">Messy</button>
+      <button class="preset-btn" data-action="apply-preset" data-arg="clean">Clean</button>
+      <button class="preset-btn" data-action="apply-preset" data-arg="river">River</button>
+      <button class="preset-btn" data-action="apply-preset" data-arg="messy">Messy</button>
     </div>
   </div>
   <div class="section">
@@ -453,7 +453,7 @@
     <div class="control-row"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="sbFpsChart" onchange="document.getElementById('hud-fps-graph').style.display=this.checked?'block':'none'" style="width:14px;height:14px;accent-color:#4af;"><span class="control-label" style="flex:1;">FPS Chart</span></label></div>
     <div class="control-row"><span class="control-label">Render Style</span><select id="sbRenderMode" onchange="setRenderMode(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="0">Normal</option><option value="1">Woodcut</option><option value="2">DEM</option><option value="3">Painterly</option><option value="4">Tron</option><option value="5">Sumi-e</option><option value="6">Pixel Art</option><option value="7">X-Ray</option><option value="8">Plastic</option><option value="9">Lava</option><option value="10">Fur</option><option value="11">Watercolor</option><option value="12">Pocket Highlights</option></select></div>
     <div class="control-row"><span class="control-label">Quality</span><select id="sbQuality" onchange="setQuality(this.value)" style="flex:1;background:#1a1e2e;color:#c8d6e5;border:1px solid rgba(255,255,255,0.12);border-radius:4px;padding:2px 4px;font-size:11px;font-family:'DM Sans',sans-serif;"><option value="low">Low</option><option value="med">Medium</option><option value="high">High</option><option value="ultra">Ultra</option><option value="max">Max</option><option value="auto" selected>Auto</option></select></div>
-    <div class="control-row"><span class="control-label">Shader</span><div style="display:flex;gap:4px;flex:1;"><button class="preset-btn" id="sbShaderPerf" onclick="setShaderMode('performance')" style="flex:1;font-size:10px;padding:3px 6px;">Perf</button><button class="preset-btn active-preset" id="sbShaderFull" onclick="setShaderMode('full')" style="flex:1;font-size:10px;padding:3px 6px;">Full</button></div></div>
+    <div class="control-row"><span class="control-label">Shader</span><div style="display:flex;gap:4px;flex:1;"><button class="preset-btn" id="sbShaderPerf" data-action="set-shader-mode" data-arg="performance" style="flex:1;font-size:10px;padding:3px 6px;">Perf</button><button class="preset-btn active-preset" id="sbShaderFull" data-action="set-shader-mode" data-arg="full" style="flex:1;font-size:10px;padding:3px 6px;">Full</button></div></div>
     <div class="control-row"><span class="control-label">Render Scale</span><input type="range" id="sbRenderScale" min="25" max="100" step="5" value="100" oninput="setRenderScale(+this.value/100)" style="flex:1;accent-color:#4af;"><span id="renderScaleLabel" style="min-width:38px;text-align:right;font-size:11px;color:#c8d6e5;">100%</span></div>
     <div class="control-row"><span class="control-label">Ocean Size</span><input type="range" id="sbOceanSize" min="200" max="1200" step="100" value="600" oninput="setOceanSize(+this.value)" style="flex:1;accent-color:#4af;"><span id="oceanSizeLabel" style="min-width:38px;text-align:right;font-size:11px;color:#c8d6e5;">600</span></div>
     <div class="control-row"><span class="control-label">Surface Detail</span><input type="range" id="sbSurfaceDetail" min="0" max="1" step="0.05" value="1" oninput="updateVal(this)"><span class="control-value" id="sbSurfaceDetail-val">1.00×</span></div>
@@ -461,20 +461,20 @@
   <div class="section">
     <div class="section-title">🏝 Background</div>
     <div class="preset-row" style="margin-bottom:8px;">
-      <button class="preset-btn bg-preset-btn" data-bg="ocean-islands" onclick="rebuildTerrain('ocean-islands')">Islands</button>
-      <button class="preset-btn bg-preset-btn" data-bg="big-sur" onclick="rebuildTerrain('big-sur')">Big Sur</button>
-      <button class="preset-btn bg-preset-btn" data-bg="sheltered-bay" onclick="rebuildTerrain('sheltered-bay')">Bay</button>
-      <button class="preset-btn bg-preset-btn" data-bg="columbia-gorge" onclick="rebuildTerrain('columbia-gorge')">Gorge</button>
-<button class="preset-btn bg-preset-btn" data-bg="open-ocean" onclick="rebuildTerrain('open-ocean')">Open</button>
-      <button class="preset-btn bg-preset-btn active-preset" data-bg="gorge-real" onclick="rebuildTerrain('gorge-real')" style="border-color:rgba(80,220,130,0.35);color:#70d8a0;">Gorge HD</button>
-      <button class="preset-btn bg-preset-btn" data-bg="rufus-real" onclick="rebuildTerrain('rufus-real')" style="border-color:rgba(255,140,60,0.35);color:#ff9040;">Rufus HD</button>
+      <button class="preset-btn bg-preset-btn" data-bg="ocean-islands" data-action="rebuild-terrain" data-arg="ocean-islands">Islands</button>
+      <button class="preset-btn bg-preset-btn" data-bg="big-sur" data-action="rebuild-terrain" data-arg="big-sur">Big Sur</button>
+      <button class="preset-btn bg-preset-btn" data-bg="sheltered-bay" data-action="rebuild-terrain" data-arg="sheltered-bay">Bay</button>
+      <button class="preset-btn bg-preset-btn" data-bg="columbia-gorge" data-action="rebuild-terrain" data-arg="columbia-gorge">Gorge</button>
+<button class="preset-btn bg-preset-btn" data-bg="open-ocean" data-action="rebuild-terrain" data-arg="open-ocean">Open</button>
+      <button class="preset-btn bg-preset-btn active-preset" data-bg="gorge-real" data-action="rebuild-terrain" data-arg="gorge-real" style="border-color:rgba(80,220,130,0.35);color:#70d8a0;">Gorge HD</button>
+      <button class="preset-btn bg-preset-btn" data-bg="rufus-real" data-action="rebuild-terrain" data-arg="rufus-real" style="border-color:rgba(255,140,60,0.35);color:#ff9040;">Rufus HD</button>
     </div>
   </div>
   <div class="section">
     <div class="section-title">🔧 Tuner</div>
     <div style="display:flex;gap:6px;">
-      <button class="preset-btn" style="flex:1;padding:9px 0;font-size:12px;" onclick="copySettings()">📋 Copy Settings</button>
-      <button class="preset-btn" style="flex:1;padding:9px 0;font-size:12px;" onclick="copySettingsJSON()">{ } Copy JSON</button>
+      <button class="preset-btn" style="flex:1;padding:9px 0;font-size:12px;" data-action="copy-settings">📋 Copy Settings</button>
+      <button class="preset-btn" style="flex:1;padding:9px 0;font-size:12px;" data-action="copy-settings-json">{ } Copy JSON</button>
     </div>
     <div id="copy-toast" style="margin-top:6px;font-size:10px;color:#5ef0a0;opacity:0;transition:opacity 0.3s;text-align:center;"></div>
   </div>
@@ -482,7 +482,7 @@
 
 <div id="hud">
   <div class="label">Speed</div>
-  <div style="display:flex;align-items:baseline;gap:6px;cursor:pointer;" onclick="toggleControls()">
+  <div style="display:flex;align-items:baseline;gap:6px;cursor:pointer;" data-action="toggle-controls">
     <span class="speed" id="hud-speed">0</span><span class="unit" id="speed-unit">mph</span>
     <span id="hud-accel" style="font-size:18px;font-weight:600;transition:opacity 0.2s;"></span>
   </div>
@@ -506,11 +506,11 @@
 
 <div id="hud-pocket">In the Pocket!</div>
 <div id="hud-tutorial"></div>
-<button id="tutorial-done-btn" onclick="endTutorial()" style="display:none;position:fixed;bottom:32px;left:50%;transform:translateX(-50%);z-index:65;padding:10px 32px;font-size:14px;font-family:'DM Sans',sans-serif;font-weight:600;color:#fff;background:rgba(100,160,255,0.2);border:1px solid rgba(100,160,255,0.4);border-radius:10px;cursor:pointer;letter-spacing:1px;">Back</button>
-<button id="exit-btn" onclick="exitToMenu()" title="Back to Menu">✕</button>
-<button id="sandbox-btn" onclick="toggleControls()" title="Sandbox">S</button>
+<button id="tutorial-done-btn" data-action="end-tutorial" style="display:none;position:fixed;bottom:32px;left:50%;transform:translateX(-50%);z-index:65;padding:10px 32px;font-size:14px;font-family:'DM Sans',sans-serif;font-weight:600;color:#fff;background:rgba(100,160,255,0.2);border:1px solid rgba(100,160,255,0.4);border-radius:10px;cursor:pointer;letter-spacing:1px;">Back</button>
+<button id="exit-btn" data-action="exit-to-menu" title="Back to Menu">✕</button>
+<button id="sandbox-btn" data-action="toggle-controls" title="Sandbox">S</button>
 <div id="shallow-warning">Shallow Water!</div>
-<button id="restart-btn" onclick="restartLevel()">↻ Restart</button>
+<button id="restart-btn" data-action="restart-level">↻ Restart</button>
 
 <!-- Wave height & slope chart — scrolling strip at bottom of screen -->
 <canvas id="wave-chart" width="800" height="80" style="display:none"></canvas>
@@ -538,13 +538,13 @@
   <h1>FOIL-BRAIN</h1>
   <div class="subtitle">Hydrofoil Simulator</div>
   <div style="display:flex;gap:12px;margin-bottom:24px;">
-    <button class="game-btn" style="padding:12px 36px;font-size:14px;" onclick="startRide('tutorial')">Tutorial <span style="font-size:11px;opacity:0.6;">· Learn to Ride</span></button>
-    <button class="game-btn" style="padding:12px 24px;font-size:14px;background:rgba(100,160,255,0.1);box-shadow:none;border:1px solid rgba(100,160,255,0.25);" onclick="openSettings()">⚙</button>
+    <button class="game-btn" style="padding:12px 36px;font-size:14px;" data-action="start-ride" data-arg="tutorial">Tutorial <span style="font-size:11px;opacity:0.6;">· Learn to Ride</span></button>
+    <button class="game-btn" style="padding:12px 24px;font-size:14px;background:rgba(100,160,255,0.1);box-shadow:none;border:1px solid rgba(100,160,255,0.25);" data-action="open-settings">⚙</button>
   </div>
   <div style="width:60px;height:1px;background:linear-gradient(90deg,transparent,rgba(100,160,255,0.3),transparent);margin-bottom:24px;"></div>
   <div style="font-size:10px;color:rgba(140,180,230,0.4);text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;">Choose Location</div>
   <div class="location-grid" style="grid-template-columns:repeat(2,1fr);width:min(360px,92vw);margin-bottom:32px;">
-    <div class="location-card" onclick="startRide('rufus-real')">
+    <div class="location-card" data-action="start-ride" data-arg="rufus-real">
       <div class="loc-name">Rufus Glass Factory</div>
       <div class="loc-tag">Columbia River Gorge</div>
     </div>
@@ -554,9 +554,9 @@
     </div>
   </div>
   <div class="menu-footer">
-    <button onclick="showLeaderboard()">Leaderboard</button>
+    <button data-action="show-leaderboard">Leaderboard</button>
     <span class="sep">·</span>
-    <button onclick="document.getElementById('about-overlay').classList.remove('hidden')">About</button>
+    <button data-action="show-about">About</button>
     <span class="sep">·</span>
     <a href="https://docs.google.com/forms/d/e/1FAIpQLSfpHm03fe2uqrfpB896EXzCWRtpbtSMuymm_SmQtjS0wyqJmQ/viewform" target="_blank" rel="noopener">Feedback</a>
   </div>
@@ -581,10 +581,10 @@
              color:#fff;padding:6px 10px;font-size:13px;width:160px;font-family:'DM Sans',sans-serif;
              outline:none;" onchange="updateUsername(this.value)">
   </div>
-  <button class="game-btn" id="score-submit-btn" onclick="submitRideScore()" style="padding:8px 24px;font-size:13px;margin-bottom:8px;">Submit Score</button>
+  <button class="game-btn" id="score-submit-btn" data-action="submit-ride-score" style="padding:8px 24px;font-size:13px;margin-bottom:8px;">Submit Score</button>
   <div id="score-submit-status" style="font-size:11px;color:#5ef0a0;margin-bottom:8px;"></div>
   <div id="score-leaderboard" style="width:min(560px,94vw);max-height:340px;overflow-y:auto;margin-bottom:16px;"></div>
-  <button class="game-btn" onclick="rideAgain()">Main Menu</button>
+  <button class="game-btn" data-action="ride-again">Main Menu</button>
   <div id="score-version" style="margin-top:8px;font-size:10px;color:rgba(140,180,230,0.3);letter-spacing:1px;"></div>
 </div>
 
@@ -594,7 +594,7 @@
   <div class="subtitle" style="margin-bottom:4px;">Top Riders</div>
   <div id="lb-loading-msg" style="display:none;font-size:13px;color:rgba(200,220,250,0.85);letter-spacing:1px;margin-bottom:14px;">How far can you ride in 2 minutes?</div>
   <div id="lb-content" style="width:min(560px,94vw);max-height:calc(100vh - 230px);overflow-y:auto;"></div>
-  <button id="lb-back-btn" class="game-btn" style="margin-top:12px;padding:9px 30px;font-size:13px;background:rgba(100,160,255,0.15);box-shadow:none;border:1px solid rgba(100,160,255,0.3);" onclick="closeLeaderboard()">Back</button>
+  <button id="lb-back-btn" class="game-btn" style="margin-top:12px;padding:9px 30px;font-size:13px;background:rgba(100,160,255,0.15);box-shadow:none;border:1px solid rgba(100,160,255,0.3);" data-action="close-leaderboard">Back</button>
 </div>
 
 <!-- About overlay -->
@@ -606,7 +606,7 @@
     <p>Your goal: find <em>the pocket</em> — the fast-moving face of the wave where gravity-driven slope acceleration keeps your board flying. Pump to build speed, manage your energy, and stay airborne.</p>
     <p>Physics are still being dialed in, and overall a work in progress. This project is just for fun, but I think it can improve your swell riding.<br>-AndyO</p>
   </div>
-  <button class="game-btn" style="padding:10px 32px;font-size:14px;background:rgba(100,160,255,0.15);box-shadow:none;border:1px solid rgba(100,160,255,0.3);" onclick="document.getElementById('about-overlay').classList.add('hidden')">Back</button>
+  <button class="game-btn" style="padding:10px 32px;font-size:14px;background:rgba(100,160,255,0.15);box-shadow:none;border:1px solid rgba(100,160,255,0.3);" data-action="close-about">Back</button>
   <div class="menu-footer" style="margin-top:16px;">
     <a href="https://docs.google.com/forms/d/e/1FAIpQLSfpHm03fe2uqrfpB896EXzCWRtpbtSMuymm_SmQtjS0wyqJmQ/viewform" target="_blank" rel="noopener">✉ Send Feedback</a>
   </div>
@@ -625,7 +625,7 @@
                 margin-bottom:10px;padding-bottom:8px;
                 border-bottom:1px solid rgba(100,160,255,0.12);">
       <span style="color:#c0d8ff;font-size:13px;font-weight:600;">Settings</span>
-      <button onclick="closeSettings()"
+      <button data-action="close-settings"
         style="width:28px;height:28px;border-radius:7px;border:none;
                background:rgba(255,255,255,0.06);color:#7eb8ff;font-size:16px;cursor:pointer;">✕</button>
     </div>
@@ -633,7 +633,7 @@
     <div class="settings-section">
       <div class="settings-title">FOIL</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
-        <button class="settings-foil-btn active" data-foil="grom" onclick="applyFoilPreset('grom')">
+        <button class="settings-foil-btn active" data-foil="grom" data-action="apply-foil-preset" data-arg="grom">
           <div class="settings-foil-name">Grom</div>
           <div class="settings-foil-desc">Beginner</div>
         </button>
@@ -655,9 +655,9 @@
     <div class="settings-section">
       <div class="settings-title">UNITS</div>
       <div style="display:flex;gap:5px;">
-        <button class="settings-unit-btn active" data-unit="mph" onclick="setUnits('mph')">mph · miles</button>
-        <button class="settings-unit-btn" data-unit="kph" onclick="setUnits('kph')">kph · km</button>
-        <button class="settings-unit-btn" data-unit="kts" onclick="setUnits('kts')">kts · nm</button>
+        <button class="settings-unit-btn active" data-unit="mph" data-action="set-units" data-arg="mph">mph · miles</button>
+        <button class="settings-unit-btn" data-unit="kph" data-action="set-units" data-arg="kph">kph · km</button>
+        <button class="settings-unit-btn" data-unit="kts" data-action="set-units" data-arg="kts">kts · nm</button>
       </div>
     </div>
     <!-- AUDIO -->
@@ -670,8 +670,8 @@
       <div class="settings-row">
         <span class="settings-label">Music tracks</span>
         <div style="display:flex;flex-direction:column;gap:4px;">
-          <button class="settings-unit-btn" style="font-size:10px;padding:4px 8px;" onclick="playTrack('alanajordan-surf-rock-04-269644.mp3',this)">Surf Rock — Alana Jordan</button>
-          <button class="settings-unit-btn" style="font-size:10px;padding:4px 8px;" onclick="playTrack('alexguz-surf-rock-155127.mp3',this)">Surf Rock — Alex Guz</button>
+          <button class="settings-unit-btn" style="font-size:10px;padding:4px 8px;" data-action="play-track" data-arg="alanajordan-surf-rock-04-269644.mp3">Surf Rock — Alana Jordan</button>
+          <button class="settings-unit-btn" style="font-size:10px;padding:4px 8px;" data-action="play-track" data-arg="alexguz-surf-rock-155127.mp3">Surf Rock — Alex Guz</button>
         </div>
       </div>
       <div>
@@ -684,7 +684,7 @@
             <input type="file" accept="audio/mp3,audio/*" style="display:none;"
               onchange="loadLocalMusic(this.files[0])">
           </label>
-          <button id="settings-music-stop" onclick="stopMusic()"
+          <button id="settings-music-stop" data-action="stop-music"
             style="display:none;padding:7px 10px;border-radius:8px;
                    background:rgba(255,60,60,0.15);border:1px solid rgba(255,60,60,0.3);
                    color:#ff8080;font-size:12px;cursor:pointer;">Stop</button>

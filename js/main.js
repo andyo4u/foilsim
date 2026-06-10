@@ -119,6 +119,7 @@ import { initTerrain, rebuildTerrain, restartLevel,
          RT_WATER_Y, RT_WORLD_W, RT_WORLD_D, terrainConfigs } from './terrain.js';
 import { submitScore, fetchTopScores, renderLeaderboard, getUsername, setUsername, incrementRideCount } from './leaderboard.js';
 import { onTutorialStart, endTutorial } from './tutorial.js';
+import { registerActions, initUI } from './ui.js';
 import { initPerf, updateFpsStats } from './systems/perf.js';
 import { initPhysics, resetRideFlags, updatePhysics } from './systems/physics.js';
 import { updateWorldFollow } from './systems/world.js';
@@ -496,22 +497,21 @@ window.toggleAmbient   = toggleAmbient;
 window.loadLocalMusic  = loadLocalMusic;
 window.stopMusic       = stopMusic;
 window.playTrack       = playTrack;
-window.showLeaderboard = function() {
+function showLeaderboard() {
   document.getElementById('leaderboard-overlay').classList.remove('hidden');
   const el = document.getElementById('lb-content');
   if (el) el.innerHTML = '<div style="color:#5ea8d8;text-align:center;padding:20px;">Loading...</div>';
   fetchTopScores(10).then(scores => { if (el) renderLeaderboard(scores, el); });
-};
-window.updateUsername = function(val) { setUsername(val); };
-window.closeLeaderboard = function() {
+}
+function closeLeaderboard() {
   document.getElementById('leaderboard-overlay').classList.add('hidden');
   // If coming from a ride (score phase), go back to menu
   if (state.gamePhase === 'score') {
     document.getElementById('menu-overlay').classList.remove('hidden');
     state.gamePhase = 'menu';
   }
-};
-window.submitRideScore = function() {
+}
+function submitRideScore() {
   const btn = document.getElementById('score-submit-btn');
   const statusEl = document.getElementById('score-submit-status');
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
@@ -536,7 +536,11 @@ window.submitRideScore = function() {
       if (el) renderLeaderboard(scores, el, submittedName, submittedScore);
     });
   });
-};
+}
+window.showLeaderboard = showLeaderboard;
+window.updateUsername  = function(val) { setUsername(val); };
+window.closeLeaderboard = closeLeaderboard;
+window.submitRideScore = submitRideScore;
 window.exitToMenu      = exitToMenu;
 
 // ═══════════════════════════
@@ -702,6 +706,48 @@ function rideAgain() {
 window.startRide = startRide;
 window.rideAgain = rideAgain;
 window.endTutorial = endTutorial;
+
+// ═══════════════════════════
+// UI ACTION REGISTRY — delegated data-attribute wiring (js/ui.js).
+// Replaces the inline onclick/oninput/onchange attributes; the window.*
+// bridge above remains only until the migration completes.
+// ═══════════════════════════
+
+registerActions({
+  // Controls panel
+  'toggle-controls':    () => toggleControls(),
+  'apply-preset':       (arg, el) => applyPreset(arg, el),
+  'rebuild-terrain':    (arg) => rebuildTerrain(arg),
+  'restart-level':      () => restartLevel(),
+  'copy-settings':      () => copySettings(),
+  'copy-settings-json': () => copySettingsJSON(),
+  'set-shader-mode':    (arg) => setShaderMode(arg),
+
+  // Settings overlay
+  'open-settings':      () => openSettings(),
+  'close-settings':     () => closeSettings(),
+  'set-units':          (arg) => setUnits(arg),
+  'apply-foil-preset':  (arg) => applyFoilPreset(arg),
+  'play-track':         (arg, el) => playTrack(arg, el),
+  'stop-music':         () => stopMusic(),
+
+  // Game flow
+  'start-ride':         (arg) => startRide(arg),
+  'ride-again':         () => rideAgain(),
+  'exit-to-menu':       () => exitToMenu(),
+  'end-tutorial':       () => endTutorial(),
+  'restart-ride':       () => restartLevel(),
+
+  // Leaderboard + score
+  'show-leaderboard':   () => showLeaderboard(),
+  'close-leaderboard':  () => closeLeaderboard(),
+  'submit-ride-score':  () => submitRideScore(),
+
+  // About overlay
+  'show-about':         () => document.getElementById('about-overlay').classList.remove('hidden'),
+  'close-about':        () => document.getElementById('about-overlay').classList.add('hidden'),
+});
+initUI();
 
 // ═══════════════════════════
 // MAIN LOOP

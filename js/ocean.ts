@@ -57,10 +57,10 @@ function RT_WORLD_W() { return state.activeTerrainCfg ? state.activeTerrainCfg.w
 function RT_WORLD_D() { return state.activeTerrainCfg ? state.activeTerrainCfg.worldD : 11054; }
 
 /* ── Wave chart (module-local) ─────────────────────────────── */
-let waveChartCanvas = null;
-let waveChartCtx    = null;
+let waveChartCanvas: HTMLCanvasElement | null = null;
+let waveChartCtx: CanvasRenderingContext2D | null = null;
 const CHART_W = 800, CHART_H = 80;
-const waveChartData = [];
+const waveChartData: { h: number; s: number; e: number; p: number }[] = [];
 const CHART_MAX_SAMPLES = CHART_W;
 
 // ═══════════════════════════
@@ -73,15 +73,16 @@ function updateEnvMap() {
   const envSky = new Sky();
   envSky.scale.setScalar(1000);
   const eu = envSky.material.uniforms;
-  eu['turbidity'].value = state.skyUniforms['turbidity'].value;
-  eu['rayleigh'].value = state.skyUniforms['rayleigh'].value;
-  eu['mieCoefficient'].value = state.skyUniforms['mieCoefficient'].value;
-  eu['mieDirectionalG'].value = state.skyUniforms['mieDirectionalG'].value;
-  eu['sunPosition'].value.copy(state.skyUniforms['sunPosition'].value);
+  const su = state.skyUniforms!;
+  eu['turbidity'].value = su['turbidity'].value;
+  eu['rayleigh'].value = su['rayleigh'].value;
+  eu['mieCoefficient'].value = su['mieCoefficient'].value;
+  eu['mieDirectionalG'].value = su['mieDirectionalG'].value;
+  eu['sunPosition'].value.copy(su['sunPosition'].value);
   envScene.add(envSky);
   if (state.envMap) state.envMap.dispose();
-  state.envMap = state.pmremGenerator.fromScene(envScene).texture;
-  state.scene.environment = state.envMap;
+  state.envMap = state.pmremGenerator!.fromScene(envScene).texture;
+  state.scene!.environment = state.envMap;
   envSky.material.dispose();
   envSky.geometry.dispose();
 }
@@ -92,8 +93,8 @@ function updateEnvMap() {
 
 function initOcean() {
   // ── PMREMGenerator ──────────────────────────────────────
-  state.pmremGenerator = new THREE.PMREMGenerator(state.renderer);
-  state.pmremGenerator.compileCubemapShader();
+  state.pmremGenerator = new THREE.PMREMGenerator(state.renderer!);
+  state.pmremGenerator!.compileCubemapShader();
 
   // ── Geometry ────────────────────────────────────────────
   const oceanGeo = new THREE.PlaneGeometry(state.oceanSize, state.oceanSize, state.oceanSegments, state.oceanSegments);
@@ -1395,7 +1396,7 @@ function initOcean() {
 
   // ── Mesh ────────────────────────────────────────────────
   const oceanMesh = new THREE.Mesh(oceanGeo, oceanMat);
-  state.scene.add(oceanMesh);
+  state.scene!.add(oceanMesh);
   state.oceanMesh = oceanMesh;
 
   // ── Horizon fill plane ──────────────────────────────────
@@ -1433,29 +1434,29 @@ function initOcean() {
     const hMesh = new THREE.Mesh(hGeo, hMat);
     hMesh.position.y = -0.5;
     hMesh.renderOrder = 1;
-    state.scene.add(hMesh);
+    state.scene!.add(hMesh);
     state.horizonFill = hMesh;
   }
 
   // ── Wave chart DOM refs ─────────────────────────────────
-  waveChartCanvas = document.getElementById('wave-chart');
-  waveChartCtx    = waveChartCanvas.getContext('2d');
+  waveChartCanvas = document.getElementById('wave-chart') as HTMLCanvasElement | null;
+  waveChartCtx    = waveChartCanvas ? waveChartCanvas.getContext('2d') : null;
 }
 
 // ═══════════════════════════
 // CPU WAVE HEIGHT (mirrors GPU)
 // ═══════════════════════════
 
-function gerstnerY(px,pz,dx,dz,per,ht,t,spdIn){
+function gerstnerY(px: number, pz: number, dx: number, dz: number, per: number, ht: number, t: number, spdIn?: number){
   if(ht<.01)return 0;
-  const wl=1.56*per*per,k=6.28318/wl,spd=spdIn>0.01?spdIn:Math.sqrt(9.81/k);
+  const wl=1.56*per*per,k=6.28318/wl,spd=(spdIn ?? 0)>0.01?spdIn!:Math.sqrt(9.81/k);
   return ht*.5*Math.cos(k*(dx*px+dz*pz)-spd*t*k);
 }
 
 // CPU noise to match GPU fbm detail displacement
-function cpuNoise2D(x,y){
+function cpuNoise2D(x: number, y: number){
   // Simple hash-based gradient noise matching the GPU hash2/noise functions
-  function h2(px,py){
+  function h2(px: number, py: number){
     const sx=Math.sin(px*127.1+py*311.7)*43758.5453;
     const sy=Math.sin(px*269.5+py*183.3)*43758.5453;
     return[(sx-Math.floor(sx))*2-1,(sy-Math.floor(sy))*2-1];
@@ -1468,7 +1469,7 @@ function cpuNoise2D(x,y){
   return va+(vb-va)*ux+(vc-va)*uy+(va-vb-vc+vd)*ux*uy;
 }
 
-function cpuFbm(x,y,octaves){
+function cpuFbm(x: number, y: number, octaves?: number){
   const n=octaves||state.fbmOctaves||6;
   let v=0,a=.5,px=x,py=y;
   for(let i=0;i<n;i++){
@@ -1481,7 +1482,7 @@ function cpuFbm(x,y,octaves){
   return v;
 }
 
-function getWaveHeight(px,pz,t){
+function getWaveHeight(px: number, pz: number, t: number){
   let h=0;
   const s1d=degToDir(getVal('swell1Dir')),s1p=getVal('swell1Period'),s1h=getVal('swell1Height');
   const s2d=degToDir(getVal('swell2Dir')),s2p=getVal('swell2Period'),s2h=getVal('swell2Height');
@@ -1509,7 +1510,7 @@ function getWaveHeight(px,pz,t){
   return h;
 }
 
-function getWaveSlope(px,pz,t){
+function getWaveSlope(px: number, pz: number, t: number){
   const e=.5;
   return{
     dhdx:(getWaveHeight(px+e,pz,t)-getWaveHeight(px-e,pz,t))/(2*e),
@@ -1518,7 +1519,7 @@ function getWaveSlope(px,pz,t){
 }
 
 // Swell-only height (no chop, no fbm noise) — used for wave energy calculation
-function getSwellHeight(px,pz,t){
+function getSwellHeight(px: number, pz: number, t: number){
   let h=0;
   const s1d=degToDir(getVal('swell1Dir')),s1p=getVal('swell1Period'),s1h=getVal('swell1Height');
   const s2d=degToDir(getVal('swell2Dir')),s2p=getVal('swell2Period'),s2h=getVal('swell2Height');
@@ -1532,7 +1533,7 @@ function getSwellHeight(px,pz,t){
   return h;
 }
 
-function getSwellSlope(px,pz,t){
+function getSwellSlope(px: number, pz: number, t: number){
   const e=.5;
   return{
     dhdx:(getSwellHeight(px+e,pz,t)-getSwellHeight(px-e,pz,t))/(2*e),
@@ -1544,19 +1545,20 @@ function getSwellSlope(px,pz,t){
 // RENDER MODE
 // ═══════════════════════════
 
-function setRenderMode(val) {
-  state.oceanMat.uniforms.uRenderMode.value = parseFloat(val);
+function setRenderMode(val: string | number) {
+  state.oceanMat!.uniforms.uRenderMode.value = parseFloat(String(val));
 }
 
 // ═══════════════════════════
 // WAVE CHART — scrolling height & slope strip
 // ═══════════════════════════
 
-function updateWaveChart(waveH, slopeVal, energyVal, pocketVal) {
+function updateWaveChart(waveH: number, slopeVal: number, energyVal: number, pocketVal: number) {
   waveChartData.push({ h: waveH, s: slopeVal, e: energyVal, p: pocketVal || 0 });
   if (waveChartData.length > CHART_MAX_SAMPLES) waveChartData.shift();
 
   // Resize canvas to screen width if needed
+  if (!waveChartCanvas || !waveChartCtx) return;
   const w = window.innerWidth;
   if (waveChartCanvas.width !== w) { waveChartCanvas.width = w; }
 
@@ -1652,10 +1654,10 @@ function rebuildOceanGeometry() {
     state.oceanSegments, state.oceanSegments
   );
   geo.rotateX(-Math.PI / 2);
-  state.oceanMesh.geometry = geo;
+  state.oceanMesh!.geometry = geo;
   state.oceanGeo = geo;
   // Keep uniform in sync so shader fades scale with mesh size
-  if (state.oceanMat) state.oceanMat.uniforms.uOceanHalf.value = state.oceanSize / 2;
+  if (state.oceanMat) state.oceanMat!.uniforms.uOceanHalf.value = state.oceanSize / 2;
 }
 
 // ═══════════════════════════

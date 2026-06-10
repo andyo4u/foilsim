@@ -746,6 +746,18 @@ registerActions({
   // About overlay
   'show-about':         () => document.getElementById('about-overlay').classList.remove('hidden'),
   'close-about':        () => document.getElementById('about-overlay').classList.add('hidden'),
+
+  // Sliders + selects (data-input / data-change)
+  'update-val':         (arg, el) => updateVal(el),
+  'set-render-scale':   (arg, el) => setRenderScale(+el.value / 100),
+  'set-ocean-size':     (arg, el) => setOceanSize(+el.value),
+  'set-quality':        (arg, el) => setQuality(el.value),
+  'set-render-mode':    (arg, el) => setRenderMode(el.value),
+  'toggle-free-cam':    (arg, el) => toggleFreeCam(el.checked),
+  'load-local-music':   (arg, el) => loadLocalMusic(el.files[0]),
+  'update-username':    (arg, el) => setUsername(el.value),
+  'toggle-fps-graph':   (arg, el) => { document.getElementById('hud-fps-graph').style.display = el.checked ? 'block' : 'none'; },
+  'toggle-wave-chart':  (arg, el) => { document.getElementById('wave-chart').style.display = el.checked ? 'block' : 'none'; },
 });
 initUI();
 

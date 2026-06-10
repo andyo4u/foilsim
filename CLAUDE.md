@@ -58,11 +58,11 @@ All mutable shared data lives on the `state` object from `state.js`. Every modul
 
 ## Known Bugs
 
-### Half-Screen Rendering Bug (unresolved)
-Changing `renderer.setPixelRatio()` at runtime in Three.js r128 causes a canvas/buffer mismatch. The auto-quality system triggers this when stepping between quality levels. **When touching rendering code**: always call `setPixelRatio()` BEFORE `setSize()`, and test on multiple devices. See FOILSIM.md for full history.
+### Half-Screen Rendering Bug (RESOLVED in v0.3.19, three r184)
+Changing `renderer.setPixelRatio()` at runtime in Three.js r128 caused a canvas/buffer mismatch (only half the screen rendered). Fixed by the r184 upgrade: modern `setPixelRatio()` internally re-runs `setSize()`, so buffer and CSS size can no longer desync. Verified 2026-06-10 by stepping all five quality levels + shader-mode pixel-ratio toggles + a portrait-resize, asserting canvas buffer dimensions and screenshotting — full-canvas rendering at every step. The setPixelRatio-before-setSize convention is no longer load-bearing but is kept for clarity.
 
-### Wave Energy Display
-Passive energy regen is tiny (0.06 * dt) and `slopeForce` contribution may not feed through correctly. Check the energy gain formula in `animate()`.
+### Wave Energy Display (likely stale — verify before "fixing")
+This entry predates the regen rework: regen is now `0.015 + max(0, slopeForce) * 0.035` in `js/systems/physics.ts` and the roadmap comment says slopeForce scaling was fixed. Audit in-game before changing anything.
 
 ### Board Bounce in High Wind Chop
 `rideH` oscillates rapidly with large chop amplitude — needs low-pass filtering or more aggressive lerp damping.

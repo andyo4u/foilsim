@@ -37,7 +37,7 @@ export function getUsername() {
 }
 
 // Sanitize username: block dangerous chars, keep spaces and most printable text
-export function sanitizeUsername(name) {
+export function sanitizeUsername(name: string | null | undefined) {
   if (!name) return 'Anonymous';
   let s = String(name);
   // Strip HTML tags (< and > removed entirely to kill any markup)
@@ -51,7 +51,7 @@ export function sanitizeUsername(name) {
   return s || 'Anonymous';
 }
 
-export function setUsername(name) {
+export function setUsername(name: string) {
   const clean = sanitizeUsername(name);
   localStorage.setItem('foilbrain_username', clean);
   return clean;
@@ -71,7 +71,9 @@ export function incrementRideCount() {
 }
 
 // Submit a score to the leaderboard
-export async function submitScore(scoreData) {
+import type { ScoreState } from './state.js';
+
+export async function submitScore(scoreData: ScoreState) {
   const geo = await getGeoInfo();
   const username = getUsername();
 
@@ -98,7 +100,7 @@ export async function submitScore(scoreData) {
     country: geo.country,
     region: geo.region,
     city: geo.city,
-    avg_fps: state._fpsAvgCount > 0 ? Math.round(state._fpsAvgSum / state._fpsAvgCount) : null,
+    avg_fps: (state._fpsAvgCount ?? 0) > 0 ? Math.round((state._fpsAvgSum ?? 0) / state._fpsAvgCount!) : null,
     user_agent: navigator.userAgent.substring(0, 200),
     ride_count: getRideCount(),
     checksum: checksum,
@@ -132,7 +134,7 @@ export async function fetchTopScores(limit = 10) {
 
 // Render leaderboard HTML into an element
 // highlightName/highlightScore: if provided, the matching row gets a sparkle animation
-export function renderLeaderboard(scores, container, highlightName, highlightScore) {
+export function renderLeaderboard(scores: any[], container: HTMLElement, highlightName?: string, highlightScore?: number) {
   if (!scores.length) {
     container.innerHTML = '<div style="color:#5ea8d8;font-size:13px;text-align:center;padding:20px;">No scores yet — be the first!</div>';
     return;
@@ -197,7 +199,7 @@ export function renderLeaderboard(scores, container, highlightName, highlightSco
   container.innerHTML = html;
 }
 
-function escHtml(str) {
+function escHtml(str: string) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;

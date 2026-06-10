@@ -8,17 +8,25 @@
 
 import { state } from './state.js';
 
-let audioCtx = null;
+// Web Audio nodes carry a couple of expando refs for modulation — typed here
+type NoiseGain = GainNode & { _filter: BiquadFilterNode };
+type ToneGain  = GainNode & { _g2: GainNode };
+type ToneOsc   = OscillatorNode & { _o2: OscillatorNode };
+// Audio elements carry the object URL they were created from (null = server URL)
+type MusicAudio = HTMLAudioElement & { _url: string | null };
+
+let audioCtx: AudioContext | null = null;
 let audioInited = false;
-let noiseGain, toneOsc, toneGain, toneFilter, masterGain;
-let musicAudio = null;
+let noiseGain: NoiseGain, toneOsc: ToneOsc, toneGain: ToneGain,
+    toneFilter: BiquadFilterNode, masterGain: GainNode;
+let musicAudio: MusicAudio | null = null;
 let musicWaitingForFoil = false;
 let _autoMusicArmed = false;  // true once loadRandomTrackIfNeeded() has run this ride
 
 export function initAudio() {
   if (audioInited) return;
   audioInited = true;
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
 
   masterGain = audioCtx.createGain();
   masterGain.gain.value = 0.5;
@@ -40,7 +48,7 @@ export function initAudio() {
   noiseFilter.frequency.value = 400;
   noiseFilter.Q.value = 0.8;
 
-  noiseGain = audioCtx.createGain();
+  noiseGain = audioCtx.createGain() as NoiseGain;
   noiseGain.gain.value = 0;
 
   noiseNode.connect(noiseFilter);
@@ -52,7 +60,7 @@ export function initAudio() {
   noiseGain._filter = noiseFilter;
 
   // -- Tonal "pocket" chime: smooth sine --
-  toneOsc = audioCtx.createOscillator();
+  toneOsc = audioCtx.createOscillator() as ToneOsc;
   toneOsc.type = 'sine';
   toneOsc.frequency.value = 220;
 
@@ -61,7 +69,7 @@ export function initAudio() {
   toneFilter.frequency.value = 600;
   toneFilter.Q.value = 1;
 
-  toneGain = audioCtx.createGain();
+  toneGain = audioCtx.createGain() as ToneGain;
   toneGain.gain.value = 0;
 
   toneOsc.connect(toneFilter);
@@ -82,7 +90,7 @@ export function initAudio() {
   toneOsc._o2 = toneOsc2;
 }
 
-export function updateAudio(slopeForce, normForce, speed) {
+export function updateAudio(slopeForce: number, normForce: number, speed: number) {
   if (!audioCtx) return;
   if (audioCtx.state === 'suspended') audioCtx.resume();
   const now = audioCtx.currentTime;
@@ -129,26 +137,26 @@ export function updateAudio(slopeForce, normForce, speed) {
   }
 }
 
-export function toggleAmbient(on) {
+export function toggleAmbient(on: boolean) {
   state.audioSettings.ambientOn = on;
   if (!masterGain) return;
-  masterGain.gain.setTargetAtTime(on ? 0.5 : 0.0, audioCtx.currentTime, 0.1);
+  masterGain.gain.setTargetAtTime(on ? 0.5 : 0.0, audioCtx!.currentTime, 0.1);
 }
 
 // ── ID3v2 tag parser (covers v2.2, v2.3, v2.4) ──────────────────────────────
 // Reads the first 64 KB of the file to extract artist and title without any
 // external library.  Returns { artist, title } or null if no ID3 header found.
-function _parseID3(buffer) {
+function _parseID3(buffer: ArrayBuffer): { title?: string; artist?: string } | null {
   try {
     const b = new Uint8Array(buffer);
     if (b[0] !== 0x49 || b[1] !== 0x44 || b[2] !== 0x33) return null; // no "ID3"
     const ver = b[3]; // major version: 2, 3 or 4
     const tagSize = ((b[6]&0x7f)<<21)|((b[7]&0x7f)<<14)|((b[8]&0x7f)<<7)|(b[9]&0x7f);
     const end = Math.min(10 + tagSize, buffer.byteLength);
-    const result = {};
+    const result: { title?: string; artist?: string } = {};
     let pos = 10;
 
-    const decode = (enc, slice) => {
+    const decode = (enc: number, slice: Uint8Array) => {
       if (enc === 1) return new TextDecoder('utf-16').decode(slice);
       if (enc === 2) return new TextDecoder('utf-16be').decode(slice);
       if (enc === 3) return new TextDecoder('utf-8').decode(slice);
@@ -192,11 +200,11 @@ function _parseID3(buffer) {
   } catch { return null; }
 }
 
-export function loadLocalMusic(file) {
+export function loadLocalMusic(file: File) {
   if (!file) return;
-  if (musicAudio) { musicAudio.pause(); URL.revokeObjectURL(musicAudio._url); }
+  if (musicAudio) { musicAudio.pause(); if (musicAudio._url) URL.revokeObjectURL(musicAudio._url); }
   const url = URL.createObjectURL(file);
-  musicAudio = new Audio(url);
+  musicAudio = new Audio(url) as MusicAudio;
   musicAudio._url = url;
   musicAudio.loop = true;
   musicAudio.volume = 0.65;
@@ -213,7 +221,7 @@ export function loadLocalMusic(file) {
   // Read first 64 KB to parse ID3 tags (they live at the very start of the file)
   const reader = new FileReader();
   reader.onload = e => {
-    const tags = _parseID3(e.target.result);
+    const tags = _parseID3(e.target!.result as ArrayBuffer);
     if (tags) {
       const parts = [tags.artist, tags.title].filter(Boolean);
       state.audioSettings.musicFileName = parts.join(' — ');
@@ -240,7 +248,7 @@ export function onFoilStart() {
   const p = musicAudio.play();
   if (p) p.catch(() => {
     // Retry on next user interaction if autoplay blocked
-    const retry = () => { musicAudio.play().catch(() => {}); };
+    const retry = () => { musicAudio?.play().catch(() => {}); };
     window.addEventListener('click', retry, { once: true });
     window.addEventListener('keydown', retry, { once: true });
   });
@@ -312,16 +320,17 @@ async function _loadRandomTrack() {
     const file = playlist[Math.floor(Math.random() * playlist.length)];
     const url = 'music/' + file;
 
-    musicAudio = new Audio(url);
-    musicAudio._url = null;  // server URL — nothing to revoke
-    musicAudio.loop = true;
-    musicAudio.volume = 0;
+    const audio = new Audio(url) as MusicAudio;
+    musicAudio = audio;
+    audio._url = null;  // server URL — nothing to revoke
+    audio.loop = true;
+    audio.volume = 0;
     // Unlock autoplay by playing silently, then pause and restore volume
-    musicAudio.play().then(() => {
-      musicAudio.pause();
-      musicAudio.currentTime = 0;
-      musicAudio.volume = 0.65;
-    }).catch(() => { musicAudio.volume = 0.65; });
+    audio.play().then(() => {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.volume = 0.65;
+    }).catch(() => { audio.volume = 0.65; });
     musicWaitingForFoil = true;
     state.audioSettings.musicFileName = file.replace(/\.[^.]+$/, '');
     state.audioSettings.musicPlaying = false;
@@ -351,10 +360,10 @@ export async function loadRandomTrackIfNeeded() {
 }
 
 // Play a specific track by filename (called from settings UI)
-export function playTrack(filename) {
+export function playTrack(filename: string) {
   if (musicAudio) { musicAudio.pause(); if (musicAudio._url) URL.revokeObjectURL(musicAudio._url); }
   const url = 'music/' + filename;
-  musicAudio = new Audio(url);
+  musicAudio = new Audio(url) as MusicAudio;
   musicAudio._url = null;
   musicAudio.loop = true;
   musicAudio.volume = 0.65;

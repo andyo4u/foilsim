@@ -11,10 +11,11 @@ import { state } from './state.js';
 // SLIDER / CONTROL HELPERS
 // ═══════════════════════════
 
-export function updateVal(el) {
+export function updateVal(el: HTMLInputElement) {
   const id = el.id, v = parseFloat(el.value);
   state.cachedParams[id] = v; // update cache on slider change
   const span = document.getElementById(id + '-val');
+  if (!span) return;
   if (id === 'sbTopSpeed' || id === 'sbPocketSpeed' || id === 'sbWindSpeed') span.textContent = v + ' ' + state.units;
   else if (id === 'sbStallSpeed') span.textContent = v.toFixed(1) + ' ' + state.units;
   else if (id === 'sbWindDir') span.textContent = v + '\u00B0';
@@ -28,11 +29,11 @@ export function updateVal(el) {
 
 export function toggleControls() {
   const p = document.getElementById('controls-panel');
-  p.classList.toggle('hidden');
+  if (p) p.classList.toggle('hidden');
   // Gear button stays hidden -- Tab key is the only toggle
 }
 
-export function getVal(id) { return state.cachedParams[id]; }
+export function getVal(id: string): number { return state.cachedParams[id]; }
 
 export function cacheAllSliders() {
   ['sunAngle','sunDir','cloudCover','chopHeight','chopDir',
@@ -42,7 +43,7 @@ export function cacheAllSliders() {
    'sbGlide','sbPumpPower','sbTurnSpeed','sbTopSpeed','sbPocketSpeed','sbStallSpeed',
    'sbWindSpeed','sbWindDir',
    'sbBatteryCap','sbBatteryDrain','sbWaveEnergy','sbStability','sbDrag','sbSurfaceDetail'].forEach(id => {
-    state.cachedParams[id] = parseFloat(document.getElementById(id).value);
+    state.cachedParams[id] = parseFloat((document.getElementById(id) as HTMLInputElement).value);
   });
 }
 
@@ -51,31 +52,31 @@ const MPH_PER_MS = 2.23694;
 const KPH_PER_MS = 3.6;
 const KTS_PER_MS = 1.94384;
 
-export function convertSpeedToMs(val, unit) {
+export function convertSpeedToMs(val: number, unit?: string) {
   const u = unit || state.units;
   if (u === 'kph') return val / KPH_PER_MS;
   if (u === 'kts') return val / KTS_PER_MS;
   return val / MPH_PER_MS;
 }
 
-export function convertSpeedFromMs(ms, unit) {
+export function convertSpeedFromMs(ms: number, unit?: string) {
   const u = unit || state.units;
   if (u === 'kph') return ms * KPH_PER_MS;
   if (u === 'kts') return ms * KTS_PER_MS;
   return ms * MPH_PER_MS;
 }
 
-export function formatSpeed(ms) {
+export function formatSpeed(ms: number) {
   return convertSpeedFromMs(ms).toFixed(1) + ' ' + state.units;
 }
 
-export function formatDistance(m) {
+export function formatDistance(m: number) {
   if (state.units === 'kph') return (m / 1000).toFixed(3) + ' km';
   if (state.units === 'kts') return (m / 1852).toFixed(3) + ' nm';
   return (m / 1609.34).toFixed(3) + ' mi';
 }
 
-export function setUnits(newUnit) {
+export function setUnits(newUnit: 'mph' | 'kph' | 'kts') {
   const oldUnit = state.units;
   if (oldUnit === newUnit) return;
   state.units = newUnit;
@@ -88,19 +89,21 @@ export function setUnits(newUnit) {
   };
   const R = ranges[newUnit];
 
-  const sliderMap = {
+  type SliderRange = { min: number; max: number; step: number };
+
+  const sliderMap: Record<string, SliderRange> = {
     sbTopSpeed: R.topSpeed, sbPocketSpeed: R.topSpeed, sbStallSpeed: R.stallSpeed,
     sbWindSpeed: R.windSpeed,
     swell1Speed: R.swellSpeed, swell2Speed: R.swellSpeed, swell3Speed: R.swellSpeed,
   };
 
   Object.entries(sliderMap).forEach(([id, r]) => {
-    const el = document.getElementById(id);
+    const el = document.getElementById(id) as HTMLInputElement | null;
     if (!el) return;
     const ms = convertSpeedToMs(parseFloat(el.value), oldUnit);
     const newVal = convertSpeedFromMs(ms, newUnit);
-    el.min = r.min; el.max = r.max; el.step = r.step;
-    el.value = Math.max(r.min, Math.min(r.max, +newVal.toFixed(1)));
+    el.min = String(r.min); el.max = String(r.max); el.step = String(r.step);
+    el.value = String(Math.max(r.min, Math.min(r.max, +newVal.toFixed(1))));
     updateVal(el);
   });
 
@@ -109,7 +112,7 @@ export function setUnits(newUnit) {
   if (unitEl) unitEl.textContent = newUnit;
 
   // Highlight active unit button
-  document.querySelectorAll('.settings-unit-btn').forEach(b =>
+  document.querySelectorAll<HTMLElement>('.settings-unit-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.unit === newUnit));
 }
 
@@ -117,7 +120,7 @@ export function setUnits(newUnit) {
 // WAVE PRESETS
 // ═══════════════════════════
 
-export const presets = {
+export const presets: Record<string, Record<string, number>> = {
   clean: {
     chopHeight:0, chopDir:0,
     swell1Height:1.5, swell1Period:14, swell1Dir:270,
@@ -158,11 +161,11 @@ export const presets = {
   }
 };
 
-export function applyPreset(name, btn) {
+export function applyPreset(name: string, btn?: HTMLElement) {
   const p = presets[name]; if(!p) return;
   Object.keys(p).forEach(id => {
-    const el = document.getElementById(id);
-    if(el){ el.value = p[id]; updateVal(el); }
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if(el){ el.value = String(p[id]); updateVal(el); }
   });
   cacheAllSliders(); // ensure full cache sync after preset
   document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active-preset'));
@@ -173,8 +176,9 @@ export function applyPreset(name, btn) {
 // SETTINGS EXPORT
 // ═══════════════════════════
 
-export function showToast(msg) {
+export function showToast(msg: string) {
   const el = document.getElementById('copy-toast');
+  if (!el) return;
   el.textContent = msg;
   el.style.opacity = '1';
   setTimeout(() => { el.style.opacity = '0'; }, 2000);
@@ -190,9 +194,9 @@ export function getAllSettings() {
     'sbWindSpeed','sbWindDir',
     'sbBatteryCap','sbBatteryDrain','sbWaveEnergy','sbStability','sbDrag'];
 
-  const ocean = {};
+  const ocean: Record<string, number> = {};
   oceanIds.forEach(id => { ocean[id] = getVal(id); });
-  const sandbox = {};
+  const sandbox: Record<string, number> = {};
   sandboxIds.forEach(id => { sandbox[id] = getVal(id); });
 
   const bgPresets = state.bgPresets || {};
@@ -225,7 +229,7 @@ export function copySettings() {
   lines.push('');
   lines.push('// -- Background: ' + s.background + ' --');
   lines.push('const bgCliffs = [');
-  s.bgCliffs.forEach(c => {
+  s.bgCliffs.forEach((c: any) => {
     lines.push('  { angle: ' + c.angle + ', dist: ' + c.dist + ', height: ' + c.height
       + ', width: ' + c.width + ', depth: ' + c.depth + ', seed: ' + c.seed + ' },');
   });
@@ -255,14 +259,14 @@ export function copySettingsJSON() {
 // MATH UTILITIES
 // ═══════════════════════════
 
-export function lerp(a, b, t) { return a + (b - a) * t; }
+export function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
 
-export function smoothstep(e0, e1, x) {
+export function smoothstep(e0: number, e1: number, x: number) {
   const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
   return t * t * (3 - 2 * t);
 }
 
-export function degToDir(deg) {
+export function degToDir(deg: number) {
   const r = deg * Math.PI / 180;
   return { x: -Math.sin(r), y: -Math.cos(r) };
 }

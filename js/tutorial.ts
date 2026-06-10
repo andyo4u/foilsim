@@ -38,7 +38,7 @@ presets.tutorial = {
 };
 
 // Tutorial terrain — open water, no cliffs
-bgPresets['tutorial'] = {
+(bgPresets as Record<string, unknown>)['tutorial'] = {
   label: 'Tutorial',
   maxHeight: 120,
   cliffs: []
@@ -57,8 +57,8 @@ const CAM_LERP = 0.03;           // zoom smoothing factor per frame
 const GLOW_LERP = 0.05;          // pocket glow fade speed per frame
 
 // DOM refs (cached on first use)
-let hudEl = null;
-let doneBtn = null;
+let hudEl: HTMLElement | null = null;
+let doneBtn: HTMLElement | null = null;
 
 function getHud() {
   if (!hudEl) hudEl = document.getElementById('hud-tutorial');
@@ -70,7 +70,7 @@ function getDoneBtn() {
   return doneBtn;
 }
 
-function showMessage(text) {
+function showMessage(text: string) {
   const el = getHud();
   if (!el) return;
   el.textContent = text;
@@ -84,10 +84,10 @@ function hideMessage() {
 }
 
 /** Set a slider's DOM value + cached param in one call. */
-function setSlider(id, val) {
-  const el = document.getElementById(id);
+function setSlider(id: string, val: number) {
+  const el = document.getElementById(id) as HTMLInputElement | null;
   if (!el) return;
-  el.value = val;
+  el.value = String(val);
   updateVal(el);
 }
 
@@ -124,7 +124,7 @@ export function onTutorialStart() {
  * Called each frame from animate() while gamePhase === 'riding'.
  * Only does work when the tutorial location is active.
  */
-export function updateTutorial(dt, foilSpeed, stallMs) {
+export function updateTutorial(dt: number, foilSpeed: number, stallMs: number) {
   if (state.activeBgPreset !== 'tutorial') return;
   if (phase === 'idle') return;
 
@@ -296,11 +296,11 @@ export function endTutorial() {
   const btn = getDoneBtn();
   if (btn) btn.style.display = 'none';
   fadeOutMusic(1500);
-  document.getElementById('exit-btn').style.display = 'none';
-  document.getElementById('sandbox-btn').style.display = 'none';
-  document.getElementById('menu-overlay').classList.remove('hidden');
-  document.getElementById('hud-timer').style.display = 'none';
-  document.getElementById('hud-boost').style.display = 'none';
-  document.getElementById('hud').style.display = 'none';
+  document.getElementById('exit-btn')!.style.display = 'none';
+  document.getElementById('sandbox-btn')!.style.display = 'none';
+  document.getElementById('menu-overlay')!.classList.remove('hidden');
+  document.getElementById('hud-timer')!.style.display = 'none';
+  document.getElementById('hud-boost')!.style.display = 'none';
+  document.getElementById('hud')!.style.display = 'none';
   state.gamePhase = 'menu';
 }

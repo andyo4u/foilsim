@@ -30,6 +30,7 @@
 
 import * as THREE from 'three';
 import type { Sky } from 'three/examples/jsm/objects/Sky.js';
+import type { Streamer } from './foil.js';
 
 /* ── Sub-object shapes ─────────────────────────────────────── */
 
@@ -133,6 +134,17 @@ export interface WakePoint {
   z: number;
 }
 
+export interface SprayParticle {
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  life: number;
+  ml: number;
+}
+
 /* ── The State interface ───────────────────────────────────── */
 
 export interface State {
@@ -216,12 +228,11 @@ export interface State {
   // Info Bar
   infoBarFadeTimer: number;
 
-  // Particles — streamer shape is foil.ts-owned
-  // TODO(types): tighten once foil.ts exports its streamer type
-  spParts: any[];
+  // Particles
+  spParts: SprayParticle[];
   wkHist: WakePoint[];
-  streamerL: any;
-  streamerR: any;
+  streamerL: Streamer | null;
+  streamerR: Streamer | null;
 
   // Surfer model containers (set at runtime by foil.ts GLB loads)
   surferContainer?: THREE.Group | null;

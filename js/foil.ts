@@ -75,6 +75,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { state } from './state.js';
+import type { InputState } from './state.js';
 import { lerp, toggleControls, convertSpeedFromMs, updateVal, cacheAllSliders } from './helpers.js';
 
 /* ── Constants ────────────────────────────────────────────── */
@@ -85,15 +86,15 @@ const STR_N   = 120;
 
 /* ── Materials (module-level, created once in initFoil) ──── */
 
-let boardMat, carbonMat;
+let boardMat: THREE.MeshStandardMaterial, carbonMat: THREE.MeshStandardMaterial;
 
 /* ── Spray geometry / arrays (module-level refs) ─────────── */
 
-let spGeo, spPos, spSz, spAl;
+let spGeo: THREE.BufferGeometry, spPos: Float32Array, spSz: Float32Array, spAl: Float32Array;
 
 /* ── Wake geometry / arrays ──────────────────────────────── */
 
-let wkGeo, wkPos, wkAl;
+let wkGeo: THREE.BufferGeometry, wkPos: Float32Array, wkAl: Float32Array;
 
 // ═══════════════════════════
 // HYDROFOIL MODEL
@@ -173,17 +174,17 @@ function createSpraySystem() {
     fragmentShader: `uniform vec3 uColor;varying float vA;void main(){float d=length(gl_PointCoord-.5);if(d>.5)discard;gl_FragColor=vec4(uColor,vA*(1.-d*2.)*.6);}`
   });
 
-  state.scene.add(new THREE.Points(spGeo, spMat));
+  state.scene!.add(new THREE.Points(spGeo, spMat));
 
   // Initialise particle pool
-  const parts = [];
+  const parts = [] as typeof state.spParts;
   for (let i = 0; i < SPRAY_N; i++) {
     parts.push({ x: 0, y: -100, z: 0, vx: 0, vy: 0, vz: 0, life: 0, ml: 1 });
   }
   state.spParts = parts;
 }
 
-export function emitSpray(px, py, pz, vx, vy, vz, n) {
+export function emitSpray(px: number, py: number, pz: number, vx: number, vy: number, vz: number, n: number) {
   const spParts = state.spParts;
   let e = 0;
   for (let i = 0; i < state.sprayBudget && e < n; i++) {
@@ -202,7 +203,7 @@ export function emitSpray(px, py, pz, vx, vy, vz, n) {
   }
 }
 
-export function updateSpray(dt) {
+export function updateSpray(dt: number) {
   const spParts = state.spParts;
   const budget = state.sprayBudget;
   for (let i = 0; i < budget; i++) {
@@ -251,7 +252,7 @@ function createWakeTrail() {
     fragmentShader: `varying float vA;void main(){gl_FragColor=vec4(.8,.9,1,vA*.3);}`
   });
 
-  state.scene.add(new THREE.Line(wkGeo, wkMat));
+  state.scene!.add(new THREE.Line(wkGeo, wkMat));
   state.wkHist = [];
 }
 
@@ -277,7 +278,17 @@ export function updateWake() {
 // WINGTIP STREAMERS (underwater)
 // ═══════════════════════════
 
-function makeStreamer(color) {
+// Wingtip streamer bundle — also referenced (as `any`) from state.ts
+export interface Streamer {
+  geo: THREE.BufferGeometry;
+  pos: Float32Array;
+  alp: Float32Array;
+  szs: Float32Array;
+  hist: { x: number; y: number; z: number }[];
+  points: THREE.Points;
+}
+
+function makeStreamer(color: THREE.Color): Streamer {
   const geo = new THREE.BufferGeometry();
   const pos = new Float32Array(STR_N * 3);
   const alp = new Float32Array(STR_N);
@@ -303,11 +314,11 @@ function makeStreamer(color) {
   });
 
   const points = new THREE.Points(geo, mat);
-  state.scene.add(points);
+  state.scene!.add(points);
   return { geo, pos, alp, szs, hist: [], points };
 }
 
-export function updateStreamer(str, wx, wy, wz, ef) {
+export function updateStreamer(str: Streamer, wx: number, wy: number, wz: number, ef: number) {
   if (ef > 0) {
     str.hist.unshift({ x: wx, y: wy, z: wz });
   }
@@ -345,7 +356,7 @@ function setupInput() {
     const el = document.activeElement;
     if (!el) return false;
     const tag = el.tagName;
-    return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || (el as HTMLElement).isContentEditable;
   }
 
   window.addEventListener('keydown', e => {
@@ -368,31 +379,31 @@ function setupInput() {
 
   // Mobile touch-pad zones — slide-friendly
   // Track touches at the pad level so sliding between zones works
-  document.querySelectorAll('.touch-pad').forEach(pad => {
+  document.querySelectorAll<HTMLElement>('.touch-pad').forEach(pad => {
     const zones = pad.querySelectorAll('.touch-zone');
-    let activeZone = null;
-    let activeTouchId = null;
+    let activeZone: HTMLElement | null = null;
+    let activeTouchId: number | null = null;
 
-    function activateZone(touch) {
+    function activateZone(touch: Touch) {
       const el = document.elementFromPoint(touch.clientX, touch.clientY);
-      const zone = el && el.closest('.touch-zone');
+      const zone = el && el.closest<HTMLElement>('.touch-zone');
       if (zone === activeZone) return;
       // Deactivate old zone
       if (activeZone) {
-        input[activeZone.dataset.action] = false;
+        input[activeZone.dataset.action as keyof InputState] = false;
         activeZone.classList.remove('active');
       }
       // Activate new zone (if finger is still on a zone)
-      activeZone = zone;
+      activeZone = zone || null;
       if (zone) {
-        input[zone.dataset.action] = true;
+        input[zone.dataset.action as keyof InputState] = true;
         zone.classList.add('active');
       }
     }
 
     function clearAll() {
       if (activeZone) {
-        input[activeZone.dataset.action] = false;
+        input[activeZone.dataset.action as keyof InputState] = false;
         activeZone.classList.remove('active');
         activeZone = null;
       }
@@ -445,16 +456,16 @@ function setupInput() {
     pad.addEventListener('mousedown', e => {
       e.preventDefault(); e.stopPropagation();
       mouseDown = true;
-      const zone = e.target.closest('.touch-zone');
-      if (zone) { activeZone = zone; input[zone.dataset.action] = true; zone.classList.add('active'); }
+      const zone = (e.target as Element | null)?.closest<HTMLElement>('.touch-zone') ?? null;
+      if (zone) { activeZone = zone; input[zone.dataset.action as keyof InputState] = true; zone.classList.add('active'); }
     });
     pad.addEventListener('mousemove', e => {
       if (!mouseDown) return;
-      const zone = e.target.closest('.touch-zone');
+      const zone = (e.target as Element | null)?.closest<HTMLElement>('.touch-zone') ?? null;
       if (zone === activeZone) return;
-      if (activeZone) { input[activeZone.dataset.action] = false; activeZone.classList.remove('active'); }
+      if (activeZone) { input[activeZone.dataset.action as keyof InputState] = false; activeZone.classList.remove('active'); }
       activeZone = zone;
-      if (zone) { input[zone.dataset.action] = true; zone.classList.add('active'); }
+      if (zone) { input[zone.dataset.action as keyof InputState] = true; zone.classList.add('active'); }
     });
     const mouseUp = () => { mouseDown = false; clearAll(); };
     pad.addEventListener('mouseup', mouseUp);
@@ -466,7 +477,7 @@ function setupInput() {
 // CAMERA
 // ═══════════════════════════
 
-export function toggleFreeCam(on) {
+export function toggleFreeCam(on: boolean) {
   const cam = state.cam;
   cam.free = on;
   if (!on) { cam.panX = 0; cam.panY = 0; cam.panZ = 0; }
@@ -474,8 +485,8 @@ export function toggleFreeCam(on) {
 
 export function updateCamera() {
   const cam       = state.cam;
-  const camera    = state.camera;
-  const foilGroup = state.foilGroup;
+  const camera    = state.camera!;
+  const foilGroup = state.foilGroup!;
   const foil      = state.foil;
 
   if (cam.free) {
@@ -511,7 +522,7 @@ export function updateCamera() {
 
 function setupCameraControls() {
   const cam      = state.cam;
-  const renderer = state.renderer;
+  const renderer = state.renderer!;
 
   renderer.domElement.addEventListener('mousedown', e => {
     if (cam.free && e.button === 2) {
@@ -553,7 +564,7 @@ function setupCameraControls() {
   renderer.domElement.addEventListener('contextmenu', e => { if (cam.free) e.preventDefault(); });
 
   renderer.domElement.addEventListener('touchstart', e => {
-    if (e.target.closest('.touch-pad') || e.target.closest('#controls-panel')) return;
+    if ((e.target as Element | null)?.closest('.touch-pad') || (e.target as Element | null)?.closest('#controls-panel')) return;
     if (e.touches.length === 1) {
       cam.drag = true; cam.lx = e.touches[0].clientX; cam.ly = e.touches[0].clientY;
     } else if (e.touches.length === 2) {
@@ -567,7 +578,7 @@ function setupCameraControls() {
   }, { passive: true });
 
   renderer.domElement.addEventListener('touchmove', e => {
-    if (e.target.closest('.touch-pad') || e.target.closest('#controls-panel')) return;
+    if ((e.target as Element | null)?.closest('.touch-pad') || (e.target as Element | null)?.closest('#controls-panel')) return;
     e.preventDefault();
     if (cam.panning && cam.free && e.touches.length >= 3) {
       const dx = e.touches[0].clientX - cam.lx, dy = e.touches[0].clientY - cam.ly;
@@ -611,7 +622,7 @@ export function initFoil() {
 
   // ── Foil group hierarchy ────────────────────────────────
   const foilGroup = new THREE.Group();
-  state.scene.add(foilGroup);
+  state.scene!.add(foilGroup);
   state.foilGroup = foilGroup;
 
   // Inner group rotated so the board's long axis (built along X) aligns with +Z travel
@@ -652,7 +663,7 @@ export function initFoil() {
     loader.load('assets/surfer_crouch.glb', (gltf) => {
       const surfer = gltf.scene;
       surfer.traverse(o => {
-        if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+        if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; }
       });
       const box = new THREE.Box3().setFromObject(surfer);
       const center = box.getCenter(new THREE.Vector3());
@@ -671,7 +682,7 @@ export function initFoil() {
     loader.load('assets/surfer_stalled.glb', (gltf) => {
       const surfer = gltf.scene;
       surfer.traverse(o => {
-        if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+        if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; }
       });
       const box = new THREE.Box3().setFromObject(surfer);
       const center = box.getCenter(new THREE.Vector3());
@@ -715,7 +726,7 @@ export function initFoil() {
   setupCameraControls();
 }
 
-export function applyFoilPreset(key) {
+export function applyFoilPreset(key: string) {
   const preset = state.foilPresets[key];
   if (!preset) return;
   state.foilPreset = key;
@@ -729,15 +740,15 @@ export function applyFoilPreset(key) {
     sbDrag: preset.drag, sbStability: preset.stability,
   };
   Object.entries(updates).forEach(([id, val]) => {
-    const el = document.getElementById(id);
+    const el = document.getElementById(id) as HTMLInputElement | null;
     if (!el) return;
-    el.value = val;
+    el.value = String(val);
     updateVal(el);
   });
   cacheAllSliders();
 
   if (boardMat) boardMat.color.setHex(preset.color);
 
-  document.querySelectorAll('.settings-foil-btn').forEach(b =>
+  document.querySelectorAll<HTMLElement>('.settings-foil-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.foil === key));
 }

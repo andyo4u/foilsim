@@ -42,8 +42,8 @@ function updateParticles(dt: number, fr: FrameRecord) {
   state.foilGroup!.updateMatrixWorld(true);
   state.tipL!.getWorldPosition(tipLWorld);
   state.tipR!.getWorldPosition(tipRWorld);
-  updateStreamer(state.streamerL, tipLWorld.x, tipLWorld.y, tipLWorld.z, ef);
-  updateStreamer(state.streamerR, tipRWorld.x, tipRWorld.y, tipRWorld.z, ef);
+  updateStreamer(state.streamerL!, tipLWorld.x, tipLWorld.y, tipLWorld.z, ef);
+  updateStreamer(state.streamerR!, tipRWorld.x, tipRWorld.y, tipRWorld.z, ef);
 }
 
 export { updateParticles };

@@ -31,6 +31,7 @@
 import * as THREE from 'three';
 import type { Sky } from 'three/examples/jsm/objects/Sky.js';
 import type { Streamer } from './foil.js';
+import type { BgPreset, RealTerrainConfig } from './terrain.js';
 
 /* ── Sub-object shapes ─────────────────────────────────────── */
 
@@ -180,23 +181,22 @@ export interface State {
   // Camera
   cam: CamState;
 
-  // Terrain — config/preset shapes are terrain.ts-owned
-  // TODO(types): tighten once terrain.ts exports its config interfaces
+  // Terrain
   terrainGroup: THREE.Group | null;
   silhouetteMat: THREE.ShaderMaterial | null;
   silhouetteMesh: THREE.Mesh | null;
   cliffMat: THREE.ShaderMaterial | null;
-  activeTerrainCfg: any;
+  activeTerrainCfg: RealTerrainConfig | null;
   activeBgPreset: string;
-  bgPresets: any;
+  bgPresets: Record<string, BgPreset> | null;
   activeWaterStyle: string;
   realTerrainReady: boolean;
   realTerrainMesh: THREE.Mesh | null;
   realTerrainMat: THREE.ShaderMaterial | null;
-  realTerrainHeightData: any;
+  realTerrainHeightData: { pixels: Uint8ClampedArray; width: number; height: number } | null;
   realTerrainHmImg: HTMLImageElement | null;
   realTerrainSatTex: THREE.Texture | null;
-  realTerrainRiverMask: any;
+  realTerrainRiverMask: THREE.CanvasTexture | null;
   waterFillPlane: THREE.Mesh | null;
   horizonFill: THREE.Mesh | null;
   panoCylinder: THREE.Mesh | null;

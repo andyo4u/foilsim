@@ -139,11 +139,11 @@ function createSilhouetteMat() {
 
 // ── JS-side FBM for CPU terrain generation ──
 
-function hashJS(x, y) {
+function hashJS(x: number, y: number) {
   return ((Math.sin(x * 127.1 + y * 311.7) * 43758.5453) % 1 + 1) % 1;
 }
 
-function noiseJS(x, y) {
+function noiseJS(x: number, y: number) {
   const ix = Math.floor(x), iy = Math.floor(y);
   const fx = x - ix, fy = y - iy;
   const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
@@ -152,7 +152,7 @@ function noiseJS(x, y) {
   return (a + (b - a) * ux) + (c - a + (a - b - c + d) * ux) * uy;
 }
 
-function fbmJS(x, y, octaves) {
+function fbmJS(x: number, y: number, octaves?: number) {
   let v = 0, a = 0.5;
   for (let i = 0; i < (octaves || 5); i++) {
     v += a * noiseJS(x, y);
@@ -166,7 +166,7 @@ function fbmJS(x, y, octaves) {
 // ── Layer 2: 3D cliff segments (procedural geometry, follows player via SNAP) ──
 
 // Cliff ShaderMaterial — fog-aware, sun-lit, matches ocean fog exactly
-let cliffMat = null;  // created in initTerrain
+let cliffMat: THREE.ShaderMaterial;  // created in initTerrain
 
 function createCliffMat() {
   return new THREE.ShaderMaterial({
@@ -255,7 +255,7 @@ function createCliffMat() {
 }
 
 // Generate a single cliff segment
-export function createCliffSegment(angle, dist, height, width, depth, seed) {
+export function createCliffSegment(angle: number, dist: number, height: number, width: number, depth: number, seed: number) {
   const steps = 24; // horizontal resolution
   const vSteps = 8;  // vertical resolution
   const positions = [];
@@ -381,7 +381,40 @@ export function createCliffSegment(angle, dist, height, width, depth, seed) {
    REAL TERRAIN — per-location configurations
    ================================================================ */
 
-export const terrainConfigs = {
+export interface CliffDef {
+  angle: number; dist: number; height: number; width: number; depth: number; seed: number;
+}
+
+export interface BgPreset {
+  label: string;
+  maxHeight: number;
+  cliffs: CliffDef[];
+  useRealTerrain?: string;
+  usePanorama?: string;
+  waterStyle?: string;
+}
+
+export interface RealTerrainConfig {
+  label: string;
+  heightmap: string;
+  satellite: string;
+  mapImage?: string;
+  mapBounds?: number[];
+  geoCenter?: { lat: number; lon: number };
+  geoBbox?: { west: number; east: number; south: number; north: number };
+  geoStart?: { lat: number; lon: number };
+  elevMin: number;
+  elevMax: number;
+  worldW: number;
+  worldD: number;
+  waterY: number;
+  waterThresh: number;
+  useRiverMask: boolean;
+  preset: string;
+  startPos: { x: number; z: number; heading?: number } | null;
+}
+
+export const terrainConfigs: Record<string, RealTerrainConfig> = {
   gorge: {
     label: 'Columbia River Gorge',
     heightmap: 'terrain-data/gorge_heightmap_1024.png',
@@ -435,18 +468,18 @@ export const terrainConfigs = {
 };
 
 // Convenience accessors (used throughout the code)
-export function RT_ELEV_MIN()   { return state.activeTerrainCfg.elevMin; }
-export function RT_ELEV_MAX()   { return state.activeTerrainCfg.elevMax; }
-export function RT_ELEV_RANGE() { return state.activeTerrainCfg.elevMax - state.activeTerrainCfg.elevMin; }
-export function RT_WORLD_W()    { return state.activeTerrainCfg.worldW; }
-export function RT_WORLD_D()    { return state.activeTerrainCfg.worldD; }
-export function RT_WATER_Y()    { return state.activeTerrainCfg.waterY; }
+export function RT_ELEV_MIN()   { return state.activeTerrainCfg!.elevMin; }
+export function RT_ELEV_MAX()   { return state.activeTerrainCfg!.elevMax; }
+export function RT_ELEV_RANGE() { return state.activeTerrainCfg!.elevMax - state.activeTerrainCfg!.elevMin; }
+export function RT_WORLD_W()    { return state.activeTerrainCfg!.worldW; }
+export function RT_WORLD_D()    { return state.activeTerrainCfg!.worldD; }
+export function RT_WATER_Y()    { return state.activeTerrainCfg!.waterY; }
 
 /* ================================================================
    Background Presets — different terrain configurations
    ================================================================ */
 
-export const bgPresets = {
+export const bgPresets: Record<string, BgPreset> = {
   'ocean-islands': {
     label: 'Ocean Islands',
     maxHeight: 150,
@@ -584,12 +617,12 @@ export const bgPresets = {
    rebuildTerrain — switches between terrain presets
    ================================================================ */
 
-export function rebuildTerrain(presetName) {
-  const terrainGroup = state.terrainGroup;
+export function rebuildTerrain(presetName: string) {
+  const terrainGroup = state.terrainGroup!;
 
   // Clear existing cliff meshes
   while (terrainGroup.children.length > 0) {
-    const child = terrainGroup.children[0];
+    const child = terrainGroup.children[0] as THREE.Mesh;
     if (child.geometry) child.geometry.dispose();
     terrainGroup.remove(child);
   }
@@ -602,10 +635,10 @@ export function rebuildTerrain(presetName) {
   // Panoramic photo background toggle
   if (preset.usePanorama) {
     buildPanoCylinder();
-    state.silhouetteMesh.visible = false;
+    state.silhouetteMesh!.visible = false;
   } else {
     removePanoCylinder();
-    state.silhouetteMesh.visible = true;
+    state.silhouetteMesh!.visible = true;
   }
 
   // Real terrain toggle
@@ -614,26 +647,26 @@ export function rebuildTerrain(presetName) {
   // We defer ocean/foil setup to a microtask so it runs after all declarations.
   if (preset.useRealTerrain) {
     state.activeTerrainCfg = terrainConfigs[preset.useRealTerrain] || terrainConfigs.gorge;
-    state.silhouetteMesh.visible = false;
+    state.silhouetteMesh!.visible = false;
     terrainGroup.visible = false;
     buildRealTerrain(function onTerrainReady() {
       Promise.resolve().then(() => {
         const startPos = findRiverStartPosition();
         state.foil.x = startPos.x; state.foil.z = startPos.z; state.foil.heading = startPos.heading;
         state.foil.speed = 0;
-        applyPreset(state.activeTerrainCfg.preset || 'clean');
-        if (state.activeTerrainCfg.useRiverMask && state.realTerrainRiverMask) {
-          state.oceanMat.uniforms.uRiverMask.value = state.realTerrainRiverMask;
-          state.oceanMat.uniforms.uUseRiverMask.value = 1;
+        applyPreset(state.activeTerrainCfg!.preset || 'clean');
+        if (state.activeTerrainCfg!.useRiverMask && state.realTerrainRiverMask) {
+          state.oceanMat!.uniforms.uRiverMask.value = state.realTerrainRiverMask;
+          state.oceanMat!.uniforms.uUseRiverMask.value = 1;
         } else {
-          state.oceanMat.uniforms.uUseRiverMask.value = 0;
+          state.oceanMat!.uniforms.uUseRiverMask.value = 0;
         }
-        state.oceanMat.uniforms.uRiverBounds.value.set(-RT_WORLD_W()/2, -RT_WORLD_D()/2, RT_WORLD_W()/2, RT_WORLD_D()/2);
-        state.oceanMat.transparent = true;
-        state.oceanMat.depthWrite = true;
-        state.oceanMat.needsUpdate = true;
-        state.realTerrainMat.uniforms.uWaterLevel.value = RT_WATER_Y();
-        state.oceanMesh.scale.set(1, 1, 1);
+        state.oceanMat!.uniforms.uRiverBounds.value.set(-RT_WORLD_W()/2, -RT_WORLD_D()/2, RT_WORLD_W()/2, RT_WORLD_D()/2);
+        state.oceanMat!.transparent = true;
+        state.oceanMat!.depthWrite = true;
+        state.oceanMat!.needsUpdate = true;
+        state.realTerrainMat!.uniforms.uWaterLevel.value = RT_WATER_Y();
+        state.oceanMesh!.scale.set(1, 1, 1);
         // Mini-map removed (v0.89)
       });
     });
@@ -641,11 +674,11 @@ export function rebuildTerrain(presetName) {
     removeRealTerrain();
     terrainGroup.visible = true;
     Promise.resolve().then(() => {
-      state.oceanMat.uniforms.uUseRiverMask.value = 0;
-      state.oceanMat.transparent = false;
-      state.oceanMat.needsUpdate = true;
-      state.oceanMesh.scale.set(1, 1, 1);
-      state.oceanMesh.position.y = 0;
+      state.oceanMat!.uniforms.uUseRiverMask.value = 0;
+      state.oceanMat!.transparent = false;
+      state.oceanMat!.needsUpdate = true;
+      state.oceanMesh!.scale.set(1, 1, 1);
+      state.oceanMesh!.position.y = 0;
       // Mini-map removed (v0.89)
     });
   }
@@ -667,7 +700,7 @@ export function rebuildTerrain(presetName) {
    PANORAMIC PHOTO BACKGROUND — flat billboard, loaded from file
    ================================================================ */
 
-let panoTexture = null;
+let panoTexture: THREE.Texture | null = null;
 let panoReady = false;
 const PANO_DIST = 1600;
 const PANO_WIDTH = 2800;
@@ -675,7 +708,7 @@ const PANO_HEIGHT = 900;
 const PANO_ANGLE = Math.PI; // coastline faces south
 
 // Photo billboard material
-let panoMat = null;
+let panoMat: THREE.ShaderMaterial | null = null;
 
 function createPanoMat() {
   return new THREE.ShaderMaterial({
@@ -740,7 +773,7 @@ function loadPanoTexture() {
 
 function buildPanoBackdrop() {
   removePanoBackdrop();
-  if (!panoReady) return;
+  if (!panoReady || !panoMat) return;
   panoMat.uniforms.uPanoTex.value = panoTexture;
   const geo = new THREE.PlaneGeometry(PANO_WIDTH, PANO_HEIGHT);
   state.panoCylinder = new THREE.Mesh(geo, panoMat);
@@ -750,13 +783,13 @@ function buildPanoBackdrop() {
     Math.cos(PANO_ANGLE) * PANO_DIST
   );
   state.panoCylinder.rotation.y = PANO_ANGLE;
-  state.scene.add(state.panoCylinder);
+  state.scene!.add(state.panoCylinder);
   console.log('Pano backdrop built at', state.panoCylinder.position.toArray());
 }
 
 function removePanoBackdrop() {
   if (state.panoCylinder) {
-    state.scene.remove(state.panoCylinder);
+    state.scene!.remove(state.panoCylinder);
     state.panoCylinder.geometry.dispose();
     state.panoCylinder = null;
   }
@@ -770,7 +803,7 @@ function removePanoCylinder() { removePanoBackdrop(); }
    ================================================================ */
 
 // Terrain shader — satellite texture + fog + lighting
-let realTerrainMat = null;
+let realTerrainMat: THREE.ShaderMaterial | null = null;
 
 function createRealTerrainMat() {
   const mat = new THREE.ShaderMaterial({
@@ -837,13 +870,14 @@ function createRealTerrainMat() {
 }
 
 // Asset cache — keyed by terrain config name (gorge, maliko, etc.)
-const terrainAssetCache = {};
+interface TerrainAssets { satTex: THREE.Texture | null; hmImg: HTMLImageElement | null }
+const terrainAssetCache: Record<string, TerrainAssets> = {};
 
 // Callback for async terrain loading
-let _terrainReadyCallback = null;
+let _terrainReadyCallback: (() => void) | null = null;
 
 // Load terrain assets on demand for a given config
-function loadTerrainAssets(cfgName, callback) {
+function loadTerrainAssets(cfgName: string, callback: (assets: TerrainAssets) => void) {
   if (terrainAssetCache[cfgName]) {
     // Already loaded
     callback(terrainAssetCache[cfgName]);
@@ -853,7 +887,7 @@ function loadTerrainAssets(cfgName, callback) {
   const cfg = terrainConfigs[cfgName];
   if (!cfg) { console.warn('Unknown terrain config:', cfgName); return; }
 
-  const entry = { satTex: null, hmImg: null };
+  const entry: TerrainAssets = { satTex: null, hmImg: null };
   let loaded = 0;
   function check() {
     loaded++;
@@ -869,7 +903,7 @@ function loadTerrainAssets(cfgName, callback) {
     tex.encoding = THREE.sRGBEncoding;
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.magFilter = THREE.LinearFilter;
-    tex.anisotropy = state.renderer.capabilities.getMaxAnisotropy();
+    tex.anisotropy = state.renderer!.capabilities.getMaxAnisotropy();
     entry.satTex = tex;
     console.log(`Satellite loaded: ${cfg.label}`);
     check();
@@ -885,11 +919,11 @@ function loadTerrainAssets(cfgName, callback) {
   hmImg.src = cfg.heightmap;
 }
 
-function buildRealTerrain(onReady) {
+function buildRealTerrain(onReady?: () => void) {
   if (onReady) _terrainReadyCallback = onReady;
   removeRealTerrain();
   // Find the config name by matching the active config object
-  let cfgName = null;
+  let cfgName: string | null = null;
   for (const [key, cfg] of Object.entries(terrainConfigs)) {
     if (state.activeTerrainCfg === cfg) { cfgName = key; break; }
   }
@@ -907,19 +941,19 @@ function buildRealTerrain(onReady) {
 
   // Extract elevation data from heightmap
   const canvas = document.createElement('canvas');
-  canvas.width = state.realTerrainHmImg.width;
-  canvas.height = state.realTerrainHmImg.height;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(state.realTerrainHmImg, 0, 0);
+  canvas.width = state.realTerrainHmImg!.width;
+  canvas.height = state.realTerrainHmImg!.height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(state.realTerrainHmImg!, 0, 0);
   const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
 
   // -- Generate river mask: white = water, black = land --
-  const WATER_THRESH = state.activeTerrainCfg.waterThresh || 12;
+  const WATER_THRESH = state.activeTerrainCfg!.waterThresh || 12;
   const FEATHER = 4;       // pixels of edge softening
   const maskCanvas = document.createElement('canvas');
   maskCanvas.width = canvas.width;
   maskCanvas.height = canvas.height;
-  const mCtx = maskCanvas.getContext('2d');
+  const mCtx = maskCanvas.getContext('2d')!;
   const maskImg = mCtx.createImageData(canvas.width, canvas.height);
   const mData = maskImg.data;
 
@@ -958,7 +992,7 @@ function buildRealTerrain(onReady) {
   const geometry = new THREE.PlaneGeometry(RT_WORLD_W(), RT_WORLD_D(), geoSegX, geoSegZ);
   geometry.rotateX(-Math.PI / 2);
 
-  const positions = geometry.attributes.position.array;
+  const positions = geometry.attributes.position.array as Float32Array;
 
   for (let i = 0; i <= geoSegZ; i++) {
     for (let j = 0; j <= geoSegX; j++) {
@@ -975,16 +1009,16 @@ function buildRealTerrain(onReady) {
   geometry.computeVertexNormals();
 
   // Set material textures
-  realTerrainMat.uniforms.uSatTex.value = state.realTerrainSatTex;
+  realTerrainMat!.uniforms.uSatTex.value = state.realTerrainSatTex;
 
-  state.realTerrainMesh = new THREE.Mesh(geometry, realTerrainMat);
+  state.realTerrainMesh = new THREE.Mesh(geometry, realTerrainMat!);
 
   // Position terrain so the river is roughly centered on the player start
   // Player starts at (0,0) — put terrain centered there
   // River runs east-west; north is -Z in our Three.js coordinate system
   state.realTerrainMesh.position.set(0, 0, 0);
 
-  state.scene.add(state.realTerrainMesh);
+  state.scene!.add(state.realTerrainMesh);
 
   // Store height data for potential physics interaction
   state.realTerrainHeightData = { pixels, width: canvas.width, height: canvas.height };
@@ -994,9 +1028,9 @@ function buildRealTerrain(onReady) {
   // Create a large flat water fill plane visible only OUTSIDE the ocean mesh.
   // Uses a shader to discard fragments inside the ocean bounds and over land.
   if (state.waterFillPlane) {
-    state.scene.remove(state.waterFillPlane);
+    state.scene!.remove(state.waterFillPlane);
     state.waterFillPlane.geometry.dispose();
-    state.waterFillPlane.material.dispose();
+    (state.waterFillPlane.material as THREE.Material).dispose();
   }
   const fillSize = Math.max(RT_WORLD_W(), RT_WORLD_D()) * 3;
   const fillGeo = new THREE.PlaneGeometry(fillSize, fillSize);
@@ -1006,7 +1040,7 @@ function buildRealTerrain(onReady) {
       uOceanMin: { value: new THREE.Vector2(0, 0) },  // updated each frame
       uOceanMax: { value: new THREE.Vector2(0, 0) },  // updated each frame
       uRiverMask: { value: state.realTerrainRiverMask },
-      uUseRiverMask: { value: state.activeTerrainCfg.useRiverMask ? 1.0 : 0.0 },
+      uUseRiverMask: { value: state.activeTerrainCfg!.useRiverMask ? 1.0 : 0.0 },
       uTerrainBounds: { value: new THREE.Vector4(
         -RT_WORLD_W()/2, -RT_WORLD_D()/2, RT_WORLD_W()/2, RT_WORLD_D()/2
       )},
@@ -1058,7 +1092,7 @@ function buildRealTerrain(onReady) {
   state.waterFillPlane = new THREE.Mesh(fillGeo, fillMat);
   state.waterFillPlane.position.y = RT_WATER_Y() - 0.05;
   state.waterFillPlane.renderOrder = -1;
-  state.scene.add(state.waterFillPlane);
+  state.scene!.add(state.waterFillPlane);
 
   // Notify caller that terrain is ready (handles async asset loading)
   if (_terrainReadyCallback) {
@@ -1069,7 +1103,7 @@ function buildRealTerrain(onReady) {
 }
 
 // Convert lat/lon to world coordinates using terrain geoBbox
-export function geoToWorld(lat, lon) {
+export function geoToWorld(lat: number, lon: number) {
   const cfg = state.activeTerrainCfg;
   if (!cfg || !cfg.geoBbox) return { x: 0, z: 0 };
   const b = cfg.geoBbox;
@@ -1082,15 +1116,16 @@ export function geoToWorld(lat, lon) {
 }
 
 // Find a good starting position in the water
-export function findRiverStartPosition() {
+export function findRiverStartPosition(): { x: number; z: number; heading: number } {
   // Use explicit start position if configured
-  if (state.activeTerrainCfg.startPos) return state.activeTerrainCfg.startPos;
+  const sp = state.activeTerrainCfg!.startPos;
+  if (sp) return { x: sp.x, z: sp.z, heading: sp.heading ?? 0 };
 
   // Resolve from geoStart lat/lon if available
-  if (state.activeTerrainCfg.geoStart && state.activeTerrainCfg.geoBbox) {
-    const gs = state.activeTerrainCfg.geoStart;
+  if (state.activeTerrainCfg!.geoStart && state.activeTerrainCfg!.geoBbox) {
+    const gs = state.activeTerrainCfg!.geoStart;
     const pos = geoToWorld(gs.lat, gs.lon);
-    const wY = state.activeTerrainCfg.waterY || 0;
+    const wY = state.activeTerrainCfg!.waterY || 0;
 
     // If geo position lands on terrain, search nearby for water
     const h = getRealTerrainHeight(pos.x, pos.z);
@@ -1105,20 +1140,20 @@ export function findRiverStartPosition() {
 
   if (!state.realTerrainHeightData) return { x: 0, z: 0, heading: 0 };
   const d = state.realTerrainHeightData;
-  const WATER_THRESH = state.activeTerrainCfg.waterThresh || 12;
+  const WATER_THRESH = state.activeTerrainCfg!.waterThresh || 12;
 
   // If geoStart is configured, scan at the target column instead of 20%
   let startColPct = 0.20;
-  if (state.activeTerrainCfg.geoStart && state.activeTerrainCfg.geoBbox) {
-    const gs = state.activeTerrainCfg.geoStart;
-    const b = state.activeTerrainCfg.geoBbox;
+  if (state.activeTerrainCfg!.geoStart && state.activeTerrainCfg!.geoBbox) {
+    const gs = state.activeTerrainCfg!.geoStart;
+    const b = state.activeTerrainCfg!.geoBbox;
     startColPct = (gs.lon - b.west) / (b.east - b.west);
     console.log(`Auto-detect: scanning at column ${(startColPct*100).toFixed(1)}% for geoStart lon ${gs.lon}`);
   }
   const targetCol = Math.floor(d.width * startColPct);
 
   // Find all water pixels in this column
-  let waterRows = [];
+  let waterRows: number[] = [];
   for (let row = 0; row < d.height; row++) {
     const idx = (row * d.width + targetCol) * 4;
     if (d.pixels[idx] <= WATER_THRESH) {
@@ -1163,20 +1198,20 @@ export function findRiverStartPosition() {
 
 function removeRealTerrain() {
   if (state.realTerrainMesh) {
-    state.scene.remove(state.realTerrainMesh);
+    state.scene!.remove(state.realTerrainMesh);
     if (state.realTerrainMesh.geometry) state.realTerrainMesh.geometry.dispose();
     state.realTerrainMesh = null;
   }
   if (state.waterFillPlane) {
-    state.scene.remove(state.waterFillPlane);
+    state.scene!.remove(state.waterFillPlane);
     if (state.waterFillPlane.geometry) state.waterFillPlane.geometry.dispose();
-    if (state.waterFillPlane.material) state.waterFillPlane.material.dispose();
+    if (state.waterFillPlane.material) (state.waterFillPlane.material as THREE.Material).dispose();
     state.waterFillPlane = null;
   }
 }
 
 // Query real terrain elevation at a world position
-export function getRealTerrainHeight(worldX, worldZ) {
+export function getRealTerrainHeight(worldX: number, worldZ: number) {
   if (!state.realTerrainHeightData || !state.realTerrainMesh) return null;
   const d = state.realTerrainHeightData;
   const localX = worldX - state.realTerrainMesh.position.x;
@@ -1221,7 +1256,7 @@ export function initTerrain() {
     silhouetteMat
   );
   silhouetteMesh.position.y = -50; // sink base below water
-  state.scene.add(silhouetteMesh);
+  state.scene!.add(silhouetteMesh);
   state.silhouetteMesh = silhouetteMesh;
 
   // Create cliff material
@@ -1230,7 +1265,7 @@ export function initTerrain() {
 
   // Create terrain ring group
   const terrainGroup = new THREE.Group();
-  state.scene.add(terrainGroup);
+  state.scene!.add(terrainGroup);
   state.terrainGroup = terrainGroup;
 
   // Set active terrain config

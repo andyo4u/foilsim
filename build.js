@@ -9,7 +9,7 @@
  *   npm run build / npm run dev
  *
  * What it does:
- *   1. Bundles all JS modules (entry js/main.js) into a single file via esbuild
+ *   1. Bundles all TS modules (entry js/main.ts) into a single file via esbuild
  *   2. Minifies index.html (strips comments, collapses whitespace) — skipped in dev
  *   3. Rewrites the <script type="module"> tag to point to the bundle
  *   4. Copies static assets (terrain-data/, assets/, favicon, music)
@@ -70,7 +70,7 @@ function minifyHTML(html) {
 // ── Build steps ──
 
 const bundleOptions = {
-  entryPoints: [path.join(SRC, 'js/main.js')],
+  entryPoints: [path.join(SRC, 'js/main.ts')],
   bundle: true,
   minify: !DEV,
   format: 'esm',
@@ -116,7 +116,7 @@ function processHtml() {
 
   // Replace the module script tag with the bundle
   html = html.replace(
-    '<script type="module" src="js/main.js"></script>',
+    '<script type="module" src="js/main.ts"></script>',
     '<script type="module" src="js/app.min.js"></script>'
   );
 

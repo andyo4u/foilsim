@@ -124,6 +124,7 @@ import { onTutorialStart, endTutorial } from './tutorial.js';
 import { registerActions, initUI } from './ui.js';
 import { initPerf, updateFpsStats } from './systems/perf.js';
 import { initPhysics, resetRideFlags, updatePhysics } from './systems/physics.js';
+import type { FrameRecord } from './systems/physics.js';
 import { updateWorldFollow } from './systems/world.js';
 import { updateSurfer } from './systems/surfer.js';
 import { updateParticles } from './systems/particles.js';
@@ -303,7 +304,7 @@ if (isMobile) {
 
 // Populate version displays from the hidden version label
 {
-  const ver = document.getElementById('version-label').textContent;
+  const ver = document.getElementById('version-label')!.textContent;
   const mv = document.getElementById('menu-version');
   const sv = document.getElementById('score-version');
   if (mv) mv.textContent = ver;
@@ -314,7 +315,20 @@ if (isMobile) {
 // QUALITY / LOD
 // ═══════════════════════════
 
-const QUALITY_PRESETS = {
+interface QualityPreset {
+  oceanSegments: number;
+  oceanSize: number;
+  pixelRatioCap: number;
+  renderScale: number;
+  shaderMode: 'full' | 'performance';
+  sprayBudget: number;
+  wakeBudget: number;
+  streamerBudget: number;
+  fbmOctaves: number;
+  detailLevel: number;
+}
+
+const QUALITY_PRESETS: Record<string, QualityPreset> = {
   low:   { oceanSegments: 128,  oceanSize: 400,  pixelRatioCap: 1,   renderScale: 0.50, shaderMode: 'performance', sprayBudget: 50,  wakeBudget: 60,  streamerBudget: 40,  fbmOctaves: 3, detailLevel: 0 },
   med:   { oceanSegments: 192,  oceanSize: 600,  pixelRatioCap: 1,   renderScale: 0.75, shaderMode: 'performance', sprayBudget: 100, wakeBudget: 100, streamerBudget: 80,  fbmOctaves: 4, detailLevel: 1 },
   high:  { oceanSegments: 384,  oceanSize: 800,  pixelRatioCap: 2,   renderScale: 1.0,  shaderMode: 'full',        sprayBudget: 150, wakeBudget: 150, streamerBudget: 100, fbmOctaves: 5, detailLevel: 2 },
@@ -322,7 +336,7 @@ const QUALITY_PRESETS = {
   max:   { oceanSegments: 1000, oceanSize: 1200, pixelRatioCap: 2,   renderScale: 1.0,  shaderMode: 'full',        sprayBudget: 200, wakeBudget: 200, streamerBudget: 120, fbmOctaves: 6, detailLevel: 2 },
 };
 
-function setQuality(level) {
+function setQuality(level: string) {
   if (level === 'auto') {
     state.autoQuality = true;
     // Start auto from current level
@@ -339,7 +353,7 @@ function setQuality(level) {
   );
 
   // Apply all quality properties to state
-  state.quality        = level;
+  state.quality        = level as typeof state.quality;
   state.oceanSegments  = preset.oceanSegments;
   state.oceanSize      = preset.oceanSize;
   state.pixelRatioCap  = preset.pixelRatioCap;
@@ -353,7 +367,7 @@ function setQuality(level) {
   // Apply shader mode (without disabling auto — only manual overrides do that)
   state.shaderMode = preset.shaderMode;
   if (state.oceanMat) {
-    state.oceanMat.uniforms.uPerfMode.value = (preset.shaderMode === 'performance') ? 1.0 : 0.0;
+    state.oceanMat!.uniforms.uPerfMode.value = (preset.shaderMode === 'performance') ? 1.0 : 0.0;
   }
   const perfBtn = document.getElementById('sbShaderPerf');
   const fullBtn = document.getElementById('sbShaderFull');
@@ -365,9 +379,9 @@ function setQuality(level) {
 
   // Apply render scale
   updateRendererSize();
-  const rsSlider = document.getElementById('sbRenderScale');
+  const rsSlider = document.getElementById('sbRenderScale') as HTMLInputElement | null;
   const rsLabel  = document.getElementById('renderScaleLabel');
-  if (rsSlider) rsSlider.value = Math.round(state.renderScale * 100);
+  if (rsSlider) rsSlider.value = String(Math.round(state.renderScale * 100));
   if (rsLabel)  rsLabel.textContent = Math.round(state.renderScale * 100) + '%';
 
   // Rebuild ocean geometry if size or segments changed
@@ -379,22 +393,22 @@ function setQuality(level) {
   while (state.wkHist.length > state.wakeBudget) state.wkHist.pop();
 
   // Update the dropdown to reflect current level
-  const sel = document.getElementById('sbQuality');
+  const sel = document.getElementById('sbQuality') as HTMLSelectElement | null;
   if (sel && sel.value !== level && sel.value !== 'auto') sel.value = level;
 
   // Sync ocean size slider
-  const osSlider = document.getElementById('sbOceanSize');
+  const osSlider = document.getElementById('sbOceanSize') as HTMLInputElement | null;
   const osLabel  = document.getElementById('oceanSizeLabel');
-  if (osSlider) osSlider.value = preset.oceanSize;
-  if (osLabel)  osLabel.textContent = preset.oceanSize;
+  if (osSlider) osSlider.value = String(preset.oceanSize);
+  if (osLabel)  osLabel.textContent = String(preset.oceanSize);
 }
 
 // ── Fine-tune overrides (disable auto-quality when used manually) ──
 
-function setShaderMode(mode) {
+function setShaderMode(mode: 'full' | 'performance') {
   state.shaderMode = mode;
   if (state.oceanMat) {
-    state.oceanMat.uniforms.uPerfMode.value = (mode === 'performance') ? 1.0 : 0.0;
+    state.oceanMat!.uniforms.uPerfMode.value = (mode === 'performance') ? 1.0 : 0.0;
   }
   if (mode === 'performance') {
     renderer.setPixelRatio(1);
@@ -408,7 +422,7 @@ function setShaderMode(mode) {
   state.autoQuality = false;
 }
 
-function setRenderScale(val) {
+function setRenderScale(val: number) {
   state.renderScale = Math.max(0.25, Math.min(1.0, val));
   updateRendererSize();
   const label = document.getElementById('renderScaleLabel');
@@ -416,10 +430,10 @@ function setRenderScale(val) {
   state.autoQuality = false;
 }
 
-function setOceanSize(val) {
+function setOceanSize(val: number) {
   val = Math.max(200, Math.min(1200, val));
   const label = document.getElementById('oceanSizeLabel');
-  if (label) label.textContent = val;
+  if (label) label.textContent = String(val);
   if (state.oceanSize === val) return;
   state.oceanSize = val;
   rebuildOceanGeometry();
@@ -434,13 +448,13 @@ state.renderScale = 0.90;
 rebuildOceanGeometry();
 setShaderMode('performance');
 // Sync UI controls
-const _osSlider = document.getElementById('sbOceanSize');
+const _osSlider = document.getElementById('sbOceanSize') as HTMLInputElement | null;
 const _osLabel = document.getElementById('oceanSizeLabel');
-if (_osSlider) _osSlider.value = 500;
+if (_osSlider) _osSlider.value = '500';
 if (_osLabel) _osLabel.textContent = '500';
-const _rsSlider = document.getElementById('sbRenderScale');
+const _rsSlider = document.getElementById('sbRenderScale') as HTMLInputElement | null;
 const _rsLabel = document.getElementById('renderScaleLabel');
-if (_rsSlider) _rsSlider.value = 90;
+if (_rsSlider) _rsSlider.value = '90';
 if (_rsLabel) _rsLabel.textContent = '90%';
 updateRendererSize();
 
@@ -449,16 +463,16 @@ updateRendererSize();
 // ═══════════════════════════
 
 function openSettings() {
-  document.getElementById('settings-overlay').style.display = 'flex';
-  document.querySelectorAll('.settings-foil-btn').forEach(b =>
+  document.getElementById('settings-overlay')!.style.display = 'flex';
+  document.querySelectorAll<HTMLElement>('.settings-foil-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.foil === state.foilPreset));
-  document.querySelectorAll('.settings-unit-btn').forEach(b =>
+  document.querySelectorAll<HTMLElement>('.settings-unit-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.unit === state.units));
-  const amb = document.getElementById('settings-ambient-toggle');
+  const amb = document.getElementById('settings-ambient-toggle') as HTMLInputElement | null;
   if (amb) amb.checked = state.audioSettings.ambientOn;
 }
 function closeSettings() {
-  document.getElementById('settings-overlay').style.display = 'none';
+  document.getElementById('settings-overlay')!.style.display = 'none';
   fadeOutMusicPreview();
 }
 
@@ -467,38 +481,38 @@ function exitToMenu() {
   if (state.activeBgPreset === 'tutorial') {
     endTutorial();   // handles its own phase cleanup + shows menu
   } else {
-    document.getElementById('exit-btn').style.display = 'none';
-    document.getElementById('sandbox-btn').style.display = 'none';
-    document.getElementById('hud-timer').style.display = 'none';
-    document.getElementById('hud-boost').style.display = 'none';
-    document.getElementById('hud').style.display = 'none';
+    document.getElementById('exit-btn')!.style.display = 'none';
+    document.getElementById('sandbox-btn')!.style.display = 'none';
+    document.getElementById('hud-timer')!.style.display = 'none';
+    document.getElementById('hud-boost')!.style.display = 'none';
+    document.getElementById('hud')!.style.display = 'none';
     state.cam.intro = null;
-    document.getElementById('menu-overlay').classList.remove('hidden');
+    document.getElementById('menu-overlay')!.classList.remove('hidden');
     state.gamePhase = 'menu';
   }
 }
 
 function showLeaderboard() {
-  document.getElementById('leaderboard-overlay').classList.remove('hidden');
+  document.getElementById('leaderboard-overlay')!.classList.remove('hidden');
   const el = document.getElementById('lb-content');
   if (el) el.innerHTML = '<div style="color:#5ea8d8;text-align:center;padding:20px;">Loading...</div>';
   fetchTopScores(10).then(scores => { if (el) renderLeaderboard(scores, el); });
 }
 function closeLeaderboard() {
-  document.getElementById('leaderboard-overlay').classList.add('hidden');
+  document.getElementById('leaderboard-overlay')!.classList.add('hidden');
   // If coming from a ride (score phase), go back to menu
   if (state.gamePhase === 'score') {
-    document.getElementById('menu-overlay').classList.remove('hidden');
+    document.getElementById('menu-overlay')!.classList.remove('hidden');
     state.gamePhase = 'menu';
   }
 }
 function submitRideScore() {
-  const btn = document.getElementById('score-submit-btn');
+  const btn = document.getElementById('score-submit-btn') as HTMLButtonElement | null;
   const statusEl = document.getElementById('score-submit-status');
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
   if (statusEl) statusEl.textContent = '';
   // Save username from input before submitting
-  const nameInput = document.getElementById('score-username');
+  const nameInput = document.getElementById('score-username') as HTMLInputElement | null;
   if (nameInput) setUsername(nameInput.value);
   const submittedScore = state.score.total;
   const submittedName = getUsername();
@@ -509,8 +523,8 @@ function submitRideScore() {
       return;
     }
     // Switch to leaderboard overlay
-    document.getElementById('score-overlay').classList.add('hidden');
-    document.getElementById('leaderboard-overlay').classList.remove('hidden');
+    document.getElementById('score-overlay')!.classList.add('hidden');
+    document.getElementById('leaderboard-overlay')!.classList.remove('hidden');
     const el = document.getElementById('lb-content');
     if (el) el.innerHTML = '<div style="color:#5ea8d8;text-align:center;padding:20px;">Loading...</div>';
     fetchTopScores(10).then(scores => {
@@ -523,7 +537,7 @@ function submitRideScore() {
 // GAME LOOP — Menu → Ride → Score
 // ═══════════════════════════
 
-function startRide(locationPreset) {
+function startRide(locationPreset: string) {
   // Bump per-device ride counter (reported with score submission)
   incrementRideCount();
 
@@ -547,12 +561,12 @@ function startRide(locationPreset) {
   pu.boostActive = false;
   pu.boostTimer = 0;
   pu.spawnTimer = 15 + Math.random() * 10; // first spawn 15-25s in
-  if (state.oceanMat) state.oceanMat.uniforms.uPowerUpActive.value = 0;
+  if (state.oceanMat) state.oceanMat!.uniforms.uPowerUpActive.value = 0;
   const eb = state.energyBoost;
   eb.active = false;
   eb.hudTimer = 0;
   eb.spawnTimer = 30 + Math.random() * 10; // first spawn 30-40s in
-  if (state.oceanMat) state.oceanMat.uniforms.uEnergyBoostActive.value = 0;
+  if (state.oceanMat) state.oceanMat!.uniforms.uEnergyBoostActive.value = 0;
 
   // Load location and restart
   rebuildTerrain(locationPreset);
@@ -574,17 +588,17 @@ function startRide(locationPreset) {
   // UI transitions
   const isTutorial = locationPreset === 'tutorial';
   const isRufus = locationPreset === 'rufus-real';
-  document.getElementById('menu-overlay').classList.add('hidden');
-  document.getElementById('score-overlay').classList.add('hidden');
-  document.getElementById('hud-timer').style.display = isTutorial ? 'none' : 'block';
-  document.getElementById('hud-timer').classList.remove('warning');
-  document.getElementById('hud-timer').textContent = '2:00';
-  document.getElementById('hud-boost').style.display = 'none';
-  document.getElementById('info-bar').style.opacity = '';
+  document.getElementById('menu-overlay')!.classList.add('hidden');
+  document.getElementById('score-overlay')!.classList.add('hidden');
+  document.getElementById('hud-timer')!.style.display = isTutorial ? 'none' : 'block';
+  document.getElementById('hud-timer')!.classList.remove('warning');
+  document.getElementById('hud-timer')!.textContent = '2:00';
+  document.getElementById('hud-boost')!.style.display = 'none';
+  document.getElementById('info-bar')!.style.opacity = '';
 
   if (isRufus) {
     // Show leaderboard during Rufus load — after scores render, display for 5s
-    const lb = document.getElementById('leaderboard-overlay');
+    const lb = document.getElementById('leaderboard-overlay')!;
     const lbContent = document.getElementById('lb-content');
     const lbBack = document.getElementById('lb-back-btn');
     const lbMsg = document.getElementById('lb-loading-msg');
@@ -593,9 +607,9 @@ function startRide(locationPreset) {
     if (lbMsg) lbMsg.style.display = 'block';
     lb.classList.remove('hidden');
     // Hide HUD/exit until leaderboard dismisses
-    document.getElementById('exit-btn').style.display = 'none';
-    document.getElementById('sandbox-btn').style.display = 'none';
-    document.getElementById('hud').style.display = 'none';
+    document.getElementById('exit-btn')!.style.display = 'none';
+    document.getElementById('sandbox-btn')!.style.display = 'none';
+    document.getElementById('hud')!.style.display = 'none';
     // Freeze camera during leaderboard
     state.cam.intro = 'leaderboard';
     state.cam.introT = 0;
@@ -603,9 +617,9 @@ function startRide(locationPreset) {
       lb.classList.add('hidden');
       if (lbBack) lbBack.style.display = '';
       if (lbMsg) lbMsg.style.display = 'none';
-      document.getElementById('exit-btn').style.display = 'flex';
-      document.getElementById('sandbox-btn').style.display = state.isSandbox ? 'flex' : 'none';
-      document.getElementById('hud').style.display = 'block';
+      document.getElementById('exit-btn')!.style.display = 'flex';
+      document.getElementById('sandbox-btn')!.style.display = state.isSandbox ? 'flex' : 'none';
+      document.getElementById('hud')!.style.display = 'block';
       // Kick off intro cam sequence: face → spin back
       state.cam.intro = 'face';
       state.cam.introT = 0;
@@ -624,9 +638,9 @@ function startRide(locationPreset) {
       }, 5000);
     });
   } else {
-    document.getElementById('exit-btn').style.display = 'flex';
-    document.getElementById('sandbox-btn').style.display = state.isSandbox ? 'flex' : 'none';
-    document.getElementById('hud').style.display = 'block';
+    document.getElementById('exit-btn')!.style.display = 'flex';
+    document.getElementById('sandbox-btn')!.style.display = state.isSandbox ? 'flex' : 'none';
+    document.getElementById('hud')!.style.display = 'block';
     state.cam.intro = null;
   }
 
@@ -635,7 +649,7 @@ function startRide(locationPreset) {
 
 function endRide() {
   state.gamePhase = 'score';
-  document.getElementById('hud').style.display = 'none';
+  document.getElementById('hud')!.style.display = 'none';
 
   // Fade out music over 2s
   fadeOutMusic(2000);
@@ -646,24 +660,24 @@ function endRide() {
   s.total = Math.round(s.distance + 2 * s.pocketTime + 10 * (s.topSpeedMs * 2.23694));
 
   // Populate score overlay
-  document.getElementById('score-distance').textContent = formatDistance(s.distance);
-  document.getElementById('score-topspeed').textContent = formatSpeed(s.topSpeedMs);
-  document.getElementById('score-pocket').textContent = s.pocketTime.toFixed(1) + 's';
-  document.getElementById('score-total').textContent = s.total;
+  document.getElementById('score-distance')!.textContent = formatDistance(s.distance);
+  document.getElementById('score-topspeed')!.textContent = formatSpeed(s.topSpeedMs);
+  document.getElementById('score-pocket')!.textContent = s.pocketTime.toFixed(1) + 's';
+  document.getElementById('score-total')!.textContent = String(s.total);
 
   // Pre-fill username from localStorage
-  const usernameInput = document.getElementById('score-username');
+  const usernameInput = document.getElementById('score-username') as HTMLInputElement | null;
   if (usernameInput) usernameInput.value = getUsername();
 
   // Show score overlay, hide timer and exit
-  document.getElementById('score-overlay').classList.remove('hidden');
-  document.getElementById('hud-timer').style.display = 'none';
-  document.getElementById('hud-boost').style.display = 'none';
-  document.getElementById('exit-btn').style.display = 'none';
-  document.getElementById('sandbox-btn').style.display = 'none';
+  document.getElementById('score-overlay')!.classList.remove('hidden');
+  document.getElementById('hud-timer')!.style.display = 'none';
+  document.getElementById('hud-boost')!.style.display = 'none';
+  document.getElementById('exit-btn')!.style.display = 'none';
+  document.getElementById('sandbox-btn')!.style.display = 'none';
 
   // Reset submit button and hide leaderboard until submitted
-  const submitBtn = document.getElementById('score-submit-btn');
+  const submitBtn = document.getElementById('score-submit-btn') as HTMLButtonElement | null;
   if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit Score'; submitBtn.style.display = ''; }
   const statusEl = document.getElementById('score-submit-status');
   if (statusEl) statusEl.textContent = '';
@@ -672,10 +686,10 @@ function endRide() {
 }
 
 function rideAgain() {
-  document.getElementById('score-overlay').classList.add('hidden');
-  document.getElementById('menu-overlay').classList.remove('hidden');
-  document.getElementById('exit-btn').style.display = 'none';
-  document.getElementById('sandbox-btn').style.display = 'none';
+  document.getElementById('score-overlay')!.classList.add('hidden');
+  document.getElementById('menu-overlay')!.classList.remove('hidden');
+  document.getElementById('exit-btn')!.style.display = 'none';
+  document.getElementById('sandbox-btn')!.style.display = 'none';
   state.gamePhase = 'menu';
 }
 
@@ -689,23 +703,23 @@ function rideAgain() {
 registerActions({
   // Controls panel
   'toggle-controls':    () => toggleControls(),
-  'apply-preset':       (arg, el) => applyPreset(arg, el),
-  'rebuild-terrain':    (arg) => rebuildTerrain(arg),
+  'apply-preset':       (arg, el) => applyPreset(arg!, el),
+  'rebuild-terrain':    (arg) => rebuildTerrain(arg!),
   'restart-level':      () => restartLevel(),
   'copy-settings':      () => copySettings(),
   'copy-settings-json': () => copySettingsJSON(),
-  'set-shader-mode':    (arg) => setShaderMode(arg),
+  'set-shader-mode':    (arg) => setShaderMode(arg as 'full' | 'performance'),
 
   // Settings overlay
   'open-settings':      () => openSettings(),
   'close-settings':     () => closeSettings(),
-  'set-units':          (arg) => setUnits(arg),
-  'apply-foil-preset':  (arg) => applyFoilPreset(arg),
-  'play-track':         (arg, el) => playTrack(arg, el),
+  'set-units':          (arg) => setUnits(arg as 'mph' | 'kph' | 'kts'),
+  'apply-foil-preset':  (arg) => applyFoilPreset(arg!),
+  'play-track':         (arg) => playTrack(arg!),
   'stop-music':         () => stopMusic(),
 
   // Game flow
-  'start-ride':         (arg) => startRide(arg),
+  'start-ride':         (arg) => startRide(arg!),
   'ride-again':         () => rideAgain(),
   'exit-to-menu':       () => exitToMenu(),
   'end-tutorial':       () => endTutorial(),
@@ -717,20 +731,20 @@ registerActions({
   'submit-ride-score':  () => submitRideScore(),
 
   // About overlay
-  'show-about':         () => document.getElementById('about-overlay').classList.remove('hidden'),
-  'close-about':        () => document.getElementById('about-overlay').classList.add('hidden'),
+  'show-about':         () => document.getElementById('about-overlay')!.classList.remove('hidden'),
+  'close-about':        () => document.getElementById('about-overlay')!.classList.add('hidden'),
 
   // Sliders + selects (data-input / data-change)
-  'update-val':         (arg, el) => updateVal(el),
-  'set-render-scale':   (arg, el) => setRenderScale(+el.value / 100),
-  'set-ocean-size':     (arg, el) => setOceanSize(+el.value),
-  'set-quality':        (arg, el) => setQuality(el.value),
-  'set-render-mode':    (arg, el) => setRenderMode(el.value),
-  'toggle-free-cam':    (arg, el) => toggleFreeCam(el.checked),
-  'load-local-music':   (arg, el) => loadLocalMusic(el.files[0]),
-  'update-username':    (arg, el) => setUsername(el.value),
-  'toggle-fps-graph':   (arg, el) => { document.getElementById('hud-fps-graph').style.display = el.checked ? 'block' : 'none'; },
-  'toggle-wave-chart':  (arg, el) => { document.getElementById('wave-chart').style.display = el.checked ? 'block' : 'none'; },
+  'update-val':         (arg, el) => updateVal(el as HTMLInputElement),
+  'set-render-scale':   (arg, el) => setRenderScale(+(el as HTMLInputElement).value / 100),
+  'set-ocean-size':     (arg, el) => setOceanSize(+(el as HTMLInputElement).value),
+  'set-quality':        (arg, el) => setQuality((el as HTMLSelectElement).value),
+  'set-render-mode':    (arg, el) => setRenderMode((el as HTMLSelectElement).value),
+  'toggle-free-cam':    (arg, el) => toggleFreeCam((el as HTMLInputElement).checked),
+  'load-local-music':   (arg, el) => loadLocalMusic((el as HTMLInputElement).files![0]),
+  'update-username':    (arg, el) => setUsername((el as HTMLInputElement).value),
+  'toggle-fps-graph':   (arg, el) => { document.getElementById('hud-fps-graph')!.style.display = (el as HTMLInputElement).checked ? 'block' : 'none'; },
+  'toggle-wave-chart':  (arg, el) => { document.getElementById('wave-chart')!.style.display = (el as HTMLInputElement).checked ? 'block' : 'none'; },
 });
 initUI();
 
@@ -764,8 +778,8 @@ let _readyFrames = 0;
 // ═══════════════════════════
 
 // Sun, sky, clouds, fog, dynamic lighting, and the shared ocean/terrain uniforms
-function updateEnvironment(t) {
-  const u = state.oceanMat.uniforms;
+function updateEnvironment(t: number) {
+  const u = state.oceanMat!.uniforms;
   u.uTime.value = t;
   u.uCamPos.value.copy(camera.position);
   u.uFbmOctaves.value = state.fbmOctaves;
@@ -818,28 +832,28 @@ function updateEnvironment(t) {
   renderer.setClearColor(u.uFogColor.value);
 
   // Terrain uniforms — share fog/sun with ocean
-  state.silhouetteMat.uniforms.uSunDir.value.copy(sv);
-  state.silhouetteMat.uniforms.uFogColor.value.copy(u.uFogColor.value);
-  state.silhouetteMat.uniforms.uFogSunColor.value.copy(u.uFogSunColor.value);
-  state.cliffMat.uniforms.uSunDir.value.copy(sv);
-  state.cliffMat.uniforms.uCamPos.value.copy(camera.position);
-  state.cliffMat.uniforms.uFogColor.value.copy(u.uFogColor.value);
-  state.cliffMat.uniforms.uFogSunColor.value.copy(u.uFogSunColor.value);
+  state.silhouetteMat!.uniforms.uSunDir.value.copy(sv);
+  state.silhouetteMat!.uniforms.uFogColor.value.copy(u.uFogColor.value);
+  state.silhouetteMat!.uniforms.uFogSunColor.value.copy(u.uFogSunColor.value);
+  state.cliffMat!.uniforms.uSunDir.value.copy(sv);
+  state.cliffMat!.uniforms.uCamPos.value.copy(camera.position);
+  state.cliffMat!.uniforms.uFogColor.value.copy(u.uFogColor.value);
+  state.cliffMat!.uniforms.uFogSunColor.value.copy(u.uFogSunColor.value);
 
   // Panoramic photo backdrop uniforms + positioning
   if (state.panoCylinder) {
-    state.panoMat.uniforms.uSunDir.value.copy(sv);
-    state.panoMat.uniforms.uCamPos.value.copy(camera.position);
-    state.panoMat.uniforms.uFogColor.value.copy(u.uFogColor.value);
-    state.panoMat.uniforms.uFogSunColor.value.copy(u.uFogSunColor.value);
+    state.panoMat!.uniforms.uSunDir.value.copy(sv);
+    state.panoMat!.uniforms.uCamPos.value.copy(camera.position);
+    state.panoMat!.uniforms.uFogColor.value.copy(u.uFogColor.value);
+    state.panoMat!.uniforms.uFogSunColor.value.copy(u.uFogSunColor.value);
   }
 
   // Real terrain uniforms
   if (state.realTerrainMesh) {
-    state.realTerrainMat.uniforms.uSunDir.value.copy(sv);
-    state.realTerrainMat.uniforms.uCamPos.value.copy(camera.position);
-    state.realTerrainMat.uniforms.uFogColor.value.copy(u.uFogColor.value);
-    state.realTerrainMat.uniforms.uFogSunColor.value.copy(u.uFogSunColor.value);
+    state.realTerrainMat!.uniforms.uSunDir.value.copy(sv);
+    state.realTerrainMat!.uniforms.uCamPos.value.copy(camera.position);
+    state.realTerrainMat!.uniforms.uFogColor.value.copy(u.uFogColor.value);
+    state.realTerrainMat!.uniforms.uFogSunColor.value.copy(u.uFogSunColor.value);
   }
 
   // Swell uniforms
@@ -857,7 +871,7 @@ function updateEnvironment(t) {
 }
 
 // Power-up spawn/collect/boost (currently disabled via `if (false &&`)
-function updatePowerups(dt, fr) {
+function updatePowerups(dt: number, fr: FrameRecord) {
   const { foil, mx, mz, bY } = fr;
 
   // ── POWER-UP: Spawn, Collect, Boost — DISABLED (code preserved for future re-enabling) ──
@@ -887,7 +901,7 @@ function updatePowerups(dt, fr) {
         pu.active = true;
         pu.nextSpawnDelay = 20 + Math.random() * 15;
         // Activate shader glow
-        const puU = state.oceanMat.uniforms;
+        const puU = state.oceanMat!.uniforms;
         puU.uPowerUpPos.value.set(pu.x, 0, pu.z);
         puU.uPowerUpActive.value = 1;
       }
@@ -899,10 +913,10 @@ function updatePowerups(dt, fr) {
       const cdz = foil.z - pu.z;
       if (Math.sqrt(cdx * cdx + cdz * cdz) < 6) {
         pu.active = false;
-        state.oceanMat.uniforms.uPowerUpActive.value = 0;
+        state.oceanMat!.uniforms.uPowerUpActive.value = 0;
         pu.boostActive = true;
         pu.boostTimer = pu.boostDuration;
-        document.getElementById('hud-boost').style.display = 'block';
+        document.getElementById('hud-boost')!.style.display = 'block';
       }
     }
 
@@ -914,7 +928,7 @@ function updatePowerups(dt, fr) {
       foil.speed = Math.min(foil.speed, boostCap);
 
       pu.boostTimer -= dt;
-      document.getElementById('hud-boost').textContent = 'VORTEX ' + pu.boostTimer.toFixed(1) + 's';
+      document.getElementById('hud-boost')!.textContent = 'VORTEX ' + pu.boostTimer.toFixed(1) + 's';
 
       // Extra spray during boost
       if (foil.speed > 3 && Math.random() < 0.5) {
@@ -931,7 +945,7 @@ function updatePowerups(dt, fr) {
         pu.boostActive = false;
         pu.boostTimer = 0;
         pu.spawnTimer = pu.nextSpawnDelay;
-        document.getElementById('hud-boost').style.display = 'none';
+        document.getElementById('hud-boost')!.style.display = 'none';
       }
     }
 
@@ -949,7 +963,7 @@ function updatePowerups(dt, fr) {
         eb.z = foil.z + fwd_z * ahead - fwd_x * lateral;
         eb.active = true;
         eb.nextSpawnDelay = 30 + Math.random() * 15;
-        const ebU = state.oceanMat.uniforms;
+        const ebU = state.oceanMat!.uniforms;
         ebU.uEnergyBoostPos.value.set(eb.x, 0, eb.z);
         ebU.uEnergyBoostActive.value = 1;
       }
@@ -960,12 +974,12 @@ function updatePowerups(dt, fr) {
       const edz = foil.z - eb.z;
       if (Math.sqrt(edx * edx + edz * edz) < 6) {
         eb.active = false;
-        state.oceanMat.uniforms.uEnergyBoostActive.value = 0;
+        state.oceanMat!.uniforms.uEnergyBoostActive.value = 0;
         const cap = getVal('sbBatteryCap');
         foil.energy = Math.min(foil.energy + cap * 0.75, cap);
         eb.hudTimer = eb.hudDuration;
         eb.spawnTimer = eb.nextSpawnDelay;
-        document.getElementById('hud-energy-boost').style.display = 'block';
+        document.getElementById('hud-energy-boost')!.style.display = 'block';
       }
     }
 
@@ -973,7 +987,7 @@ function updatePowerups(dt, fr) {
       eb.hudTimer -= dt;
       if (eb.hudTimer <= 0) {
         eb.hudTimer = 0;
-        document.getElementById('hud-energy-boost').style.display = 'none';
+        document.getElementById('hud-energy-boost')!.style.display = 'none';
       }
     }
   }
@@ -981,7 +995,7 @@ function updatePowerups(dt, fr) {
 
 
 // Follow cam, free cam, and the Rufus intro cam sequence
-function updateCameraFollow(dt) {
+function updateCameraFollow(dt: number) {
   const cam = state.cam;
 
   // Camera
@@ -992,7 +1006,7 @@ function updateCameraFollow(dt) {
   if (cam.intro) {
     cam.introT = (cam.introT || 0) + dt;
     const foil = state.foil;
-    const fg = state.foilGroup;
+    const fg = state.foilGroup!;
     if (cam.intro === 'leaderboard') {
       // Hold a pleasant overhead-ish view on the rider, no spin
       const h = foil.heading;
@@ -1015,7 +1029,7 @@ function updateCameraFollow(dt) {
       cam.phi = 0.05;
       cam.dist = dist;
       cam.offsetTheta = 0;
-      if (cam.introT >= 2.5) {
+      if (cam.introT! >= 2.5) {
         cam.intro = 'spin';
         cam.introT = 0;
         cam._spinFromTheta = h;           // in-front angle
@@ -1025,12 +1039,12 @@ function updateCameraFollow(dt) {
       }
     } else if (cam.intro === 'spin') {
       const DUR = 2.5;
-      const t = Math.min(1, cam.introT / DUR);
+      const t = Math.min(1, cam.introT! / DUR);
       // easeInOutCubic
       const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-      cam.theta = cam._spinFromTheta + (cam._spinToTheta - cam._spinFromTheta) * e;
-      cam.phi = cam._spinFromPhi + (0.35 - cam._spinFromPhi) * e;
-      cam.dist = cam._spinFromDist + (25.6 - cam._spinFromDist) * e;
+      cam.theta = cam._spinFromTheta! + (cam._spinToTheta! - cam._spinFromTheta!) * e;
+      cam.phi = cam._spinFromPhi! + (0.35 - cam._spinFromPhi!) * e;
+      cam.dist = cam._spinFromDist! + (25.6 - cam._spinFromDist!) * e;
       cam.offsetTheta = 0;
       // Directly place the camera (bypassing follow-smooth during spin)
       const cx = cam.dist * Math.cos(cam.phi) * Math.sin(cam.theta);
@@ -1069,8 +1083,8 @@ function animate() {
     if (_readyFrames < 2) {
       _readyFrames++;
       if (_readyFrames === 2) {
-        document.getElementById('loading-screen').classList.add('hidden');
-        document.getElementById('menu-overlay').classList.remove('hidden');
+        document.getElementById('loading-screen')!.classList.add('hidden');
+        document.getElementById('menu-overlay')!.classList.remove('hidden');
       }
     }
     return;
@@ -1102,13 +1116,13 @@ function animate() {
   // Center sky, clouds, silhouettes on camera
   sky.position.copy(camera.position);
   cloudMesh.position.copy(camera.position);
-  state.silhouetteMesh.position.x = camera.position.x;
-  state.silhouetteMesh.position.z = camera.position.z;
+  state.silhouetteMesh!.position.x = camera.position.x;
+  state.silhouetteMesh!.position.z = camera.position.z;
 
   // Photo backdrop follows camera
   if (state.panoCylinder) {
-    state.panoCylinder.position.x = camera.position.x + Math.sin(PANO_ANGLE) * PANO_DIST;
-    state.panoCylinder.position.z = camera.position.z + Math.cos(PANO_ANGLE) * PANO_DIST;
+    state.panoCylinder!.position.x = camera.position.x + Math.sin(PANO_ANGLE) * PANO_DIST;
+    state.panoCylinder!.position.z = camera.position.z + Math.cos(PANO_ANGLE) * PANO_DIST;
   }
 
   renderer.render(scene, camera);

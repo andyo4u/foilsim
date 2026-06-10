@@ -6,11 +6,10 @@
     "lib": ["es2020", "dom", "dom.iterable"],
     "strict": true,
     "noEmit": true,
-    "allowJs": true,
-    "checkJs": false,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitAny": true
   },
   "include": ["js/**/*"],
   "exclude": ["node_modules", "dist"]

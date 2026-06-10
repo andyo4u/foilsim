@@ -17,16 +17,19 @@
 //  unknown actions silently.
 // ──────────────────────────────────────────────────────────────
 
-const actions = {};
+export type ActionHandler = (arg: string | undefined, el: HTMLElement, ev: Event) => void;
 
-function registerActions(map) {
+const actions: Record<string, ActionHandler> = {};
+
+function registerActions(map: Record<string, ActionHandler>) {
   Object.assign(actions, map);
 }
 
-function dispatch(attr, ev) {
-  const el = ev.target.closest('[data-' + attr + ']');
+function dispatch(attr: 'action' | 'input' | 'change', ev: Event) {
+  const target = ev.target as Element | null;
+  const el = target ? target.closest<HTMLElement>('[data-' + attr + ']') : null;
   if (!el) return;
-  const fn = actions[el.dataset[attr]];
+  const fn = actions[el.dataset[attr]!];
   if (!fn) return; // unregistered names (e.g. touch-pad zones) are not ours
   fn(el.dataset.arg, el, ev);
 }

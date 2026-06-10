@@ -5,31 +5,35 @@
 //  terrain ring follow, and foil group placement.
 // ──────────────────────────────────────────────────────────────
 
+import * as THREE from 'three';
 import { state } from '../state.js';
 import { RT_WATER_Y } from '../terrain.js';
+import type { FrameRecord } from './physics.js';
 
-function updateWorldFollow(fr) {
+function updateWorldFollow(fr: FrameRecord) {
   const { foil, mx, mz, wH, bY, slope, slopeDot } = fr;
-  const u = state.oceanMat.uniforms;
+  const u = state.oceanMat!.uniforms;
+  const oceanMesh = state.oceanMesh!;
+  const camera = state.camera!;
 
   // Move ocean mesh to follow foil
   {
     // Snap to cell size to prevent vertex swimming at mesh edges
     const SNAP = state.oceanSize / state.oceanSegments;
-    state.oceanMesh.position.x = Math.round(foil.x / SNAP) * SNAP;
-    state.oceanMesh.position.z = Math.round(foil.z / SNAP) * SNAP;
-    state.oceanMesh.position.y = state.realTerrainMesh ? RT_WATER_Y() : 0;
+    oceanMesh.position.x = Math.round(foil.x / SNAP) * SNAP;
+    oceanMesh.position.z = Math.round(foil.z / SNAP) * SNAP;
+    oceanMesh.position.y = state.realTerrainMesh ? RT_WATER_Y() : 0;
 
     // Update water fill plane
     if (state.waterFillPlane) {
       const half = state.oceanSize / 2;
-      const fu = state.waterFillPlane.material.uniforms;
-      fu.uOceanMin.value.set(state.oceanMesh.position.x - half, state.oceanMesh.position.z - half);
-      fu.uOceanMax.value.set(state.oceanMesh.position.x + half, state.oceanMesh.position.z + half);
-      fu.uCamPos.value.copy(state.camera.position);
+      const fu = (state.waterFillPlane.material as THREE.ShaderMaterial).uniforms;
+      fu.uOceanMin.value.set(oceanMesh.position.x - half, oceanMesh.position.z - half);
+      fu.uOceanMax.value.set(oceanMesh.position.x + half, oceanMesh.position.z + half);
+      fu.uCamPos.value.copy(camera.position);
 
       // Match distant water color to ocean render mode
-      const rm = state.oceanMat.uniforms.uRenderMode.value;
+      const rm = u.uRenderMode.value;
       if (rm > 9.5) {
         fu.uWaterColor.value.set(0.30, 0.20, 0.10);
         fu.uFogColor.value.set(0.55, 0.45, 0.35);
@@ -69,9 +73,9 @@ function updateWorldFollow(fr) {
     // Horizon fill — disabled in real-terrain mode (waterFillPlane handles that)
     if (state.horizonFill) {
       const half = state.oceanSize / 2;
-      const hfu = state.horizonFill.material.uniforms;
-      hfu.uOceanMin.value.set(state.oceanMesh.position.x - half, state.oceanMesh.position.z - half);
-      hfu.uOceanMax.value.set(state.oceanMesh.position.x + half, state.oceanMesh.position.z + half);
+      const hfu = (state.horizonFill.material as THREE.ShaderMaterial).uniforms;
+      hfu.uOceanMin.value.set(oceanMesh.position.x - half, oceanMesh.position.z - half);
+      hfu.uOceanMax.value.set(oceanMesh.position.x + half, oceanMesh.position.z + half);
       hfu.uFogColor.value.copy(u.uFogColor.value);
       state.horizonFill.visible = !state.waterFillPlane;
     }
@@ -80,16 +84,16 @@ function updateWorldFollow(fr) {
   // Terrain ring follows player
   if (!state.realTerrainMesh) {
     const TSNAP = 400;
-    state.terrainGroup.position.x = Math.round(foil.x / TSNAP) * TSNAP;
-    state.terrainGroup.position.z = Math.round(foil.z / TSNAP) * TSNAP;
+    state.terrainGroup!.position.x = Math.round(foil.x / TSNAP) * TSNAP;
+    state.terrainGroup!.position.z = Math.round(foil.z / TSNAP) * TSNAP;
   }
 
   // Position foil
-  state.foilGroup.position.set(foil.x, bY, foil.z);
-  state.foilGroup.rotation.set(0, foil.heading, 0);
+  state.foilGroup!.position.set(foil.x, bY, foil.z);
+  state.foilGroup!.rotation.set(0, foil.heading, 0);
   const cs = -mz * slope.dhdx + mx * slope.dhdz;
-  state.modelGroup.rotation.x = foil.roll + Math.atan(cs) * 0.3;
-  state.modelGroup.rotation.z = foil.pitch - Math.atan(slopeDot) * 0.4;
+  state.modelGroup!.rotation.x = foil.roll + Math.atan(cs) * 0.3;
+  state.modelGroup!.rotation.z = foil.pitch - Math.atan(slopeDot) * 0.4;
 }
 
 export { updateWorldFollow };

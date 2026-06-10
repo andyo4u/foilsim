@@ -6,25 +6,26 @@
 // ──────────────────────────────────────────────────────────────
 
 import { getVal, convertSpeedFromMs } from '../helpers.js';
+import type { FrameRecord } from './physics.js';
 
-function updateHUD(fr) {
+function updateHUD(fr: FrameRecord) {
   const { foil, isF, normSwell, inPocketNow } = fr;
 
   // HUD
-  document.getElementById('hud-speed').textContent = convertSpeedFromMs(foil.speed).toFixed(1);
+  document.getElementById('hud-speed')!.textContent = convertSpeedFromMs(foil.speed).toFixed(1);
 
   // Acceleration indicator
-  const accelEl = document.getElementById('hud-accel');
+  const accelEl = document.getElementById('hud-accel')!;
   const speedDelta = foil.speed - foil.prevSpeed;
   const threshold = 0.005;
   if (speedDelta > threshold) {
     accelEl.textContent = '▲';
     accelEl.style.color = '#5ee8a0';
-    accelEl.style.opacity = Math.min(1, Math.abs(speedDelta) * 20);
+    accelEl.style.opacity = String(Math.min(1, Math.abs(speedDelta) * 20));
   } else if (speedDelta < -threshold) {
     accelEl.textContent = '▼';
     accelEl.style.color = '#ff6b6b';
-    accelEl.style.opacity = Math.min(1, Math.abs(speedDelta) * 20);
+    accelEl.style.opacity = String(Math.min(1, Math.abs(speedDelta) * 20));
   } else {
     accelEl.style.opacity = '0.3';
     accelEl.textContent = '—';
@@ -35,8 +36,8 @@ function updateHUD(fr) {
 
   // Energy bar
   const ePct = Math.round((foil.energy / getVal('sbBatteryCap')) * 100);
-  const eBar = document.getElementById('hud-energy-bar');
-  const eTxt = document.getElementById('hud-energy-text');
+  const eBar = document.getElementById('hud-energy-bar')!;
+  const eTxt = document.getElementById('hud-energy-text')!;
   eBar.style.width = Math.min(100, ePct) + '%';
   eTxt.textContent = ePct + '%';
   if (foil.energy / getVal('sbBatteryCap') > 0.5) {
@@ -51,7 +52,7 @@ function updateHUD(fr) {
   }
 
   // Wave energy meter — normSwell computed in updatePhysics()
-  const swBar = document.getElementById('hud-swell-bar');
+  const swBar = document.getElementById('hud-swell-bar')!;
   const absSwell = Math.abs(normSwell);
   const pct = absSwell * 50;
   if (normSwell >= 0) {
@@ -65,7 +66,7 @@ function updateHUD(fr) {
   }
 
   // HUD status
-  const st = document.getElementById('hud-status');
+  const st = document.getElementById('hud-status')!;
   if (foil.energy / getVal('sbBatteryCap') <= 0.10) {
     st.textContent = '⛽ Gassed';
     st.style.color = '#ff6040';

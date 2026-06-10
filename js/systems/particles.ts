@@ -7,10 +7,11 @@
 
 import { state } from '../state.js';
 import { emitSpray, updateSpray, updateWake, updateStreamer } from '../foil.js';
+import type { FrameRecord } from './physics.js';
 
 let sprayT = 0;
 
-function updateParticles(dt, fr) {
+function updateParticles(dt: number, fr: FrameRecord) {
   const { foil, mx, mz, wH, bY, speedCapMs } = fr;
 
   // Spray & effects — kick in near top speed, intensify above it (pocket)
@@ -37,11 +38,12 @@ function updateParticles(dt, fr) {
   updateWake();
 
   // Wingtip streamers — visible near top speed, intensify above
-  state.foilGroup.updateMatrixWorld(true);
-  state.tipL.getWorldPosition(state._tipLWorld);
-  state.tipR.getWorldPosition(state._tipRWorld);
-  updateStreamer(state.streamerL, state._tipLWorld.x, state._tipLWorld.y, state._tipLWorld.z, ef);
-  updateStreamer(state.streamerR, state._tipRWorld.x, state._tipRWorld.y, state._tipRWorld.z, ef);
+  const tipLWorld = state._tipLWorld!, tipRWorld = state._tipRWorld!;
+  state.foilGroup!.updateMatrixWorld(true);
+  state.tipL!.getWorldPosition(tipLWorld);
+  state.tipR!.getWorldPosition(tipRWorld);
+  updateStreamer(state.streamerL, tipLWorld.x, tipLWorld.y, tipLWorld.z, ef);
+  updateStreamer(state.streamerR, tipRWorld.x, tipRWorld.y, tipRWorld.z, ef);
 }
 
 export { updateParticles };

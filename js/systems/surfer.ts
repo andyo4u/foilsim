@@ -4,6 +4,7 @@
 
 import { state } from '../state.js';
 import { lerp } from '../helpers.js';
+import type { FrameRecord } from './physics.js';
 
 // Smoothed procedural values
 let surferLeanZ = 0;    // counter-lean for roll (radians)
@@ -11,7 +12,7 @@ let surferLeanX = 0;    // forward/back lean for accel/brake (radians)
 let surferCrouch = 0;   // knee bend 0-1 (scales Y)
 let surferHeadY = 0;    // head turn into turns (radians)
 
-function updateSurfer(dt, fr) {
+function updateSurfer(dt: number, fr: FrameRecord) {
   const { foil, slopeDot, isPump, isPowerPump } = fr;
 
   // ── Surfer pose swap (stalled vs foiling) ───────────────

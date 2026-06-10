@@ -8,11 +8,31 @@
 // ──────────────────────────────────────────────────────────────
 
 import { state } from '../state.js';
+import type { FoilState } from '../state.js';
 import { getVal, lerp, smoothstep, degToDir, convertSpeedToMs } from '../helpers.js';
 import { getWaveHeight, getWaveSlope, getSwellHeight, getSwellSlope } from '../ocean.js';
 import { getRealTerrainHeight, RT_WATER_Y } from '../terrain.js';
 import { onFoilStart } from '../audio.js';
 import { updateTutorial } from '../tutorial.js';
+
+// Per-frame record shared by every system downstream of physics
+export interface FrameRecord {
+  foil: FoilState;
+  mx: number;
+  mz: number;
+  wH: number;
+  bY: number;
+  slope: { dhdx: number; dhdz: number };
+  slopeDot: number;
+  isF: boolean;
+  isPump: boolean;
+  isPowerPump: boolean;
+  speedCapMs: number;
+  slopeForce: number;
+  pocketStrength: number;
+  normSwell: number;
+  inPocketNow: boolean;
+}
 
 let pumpPhase = 0;
 let foilMusicTriggered = false;
@@ -20,13 +40,13 @@ let hasEverFoiled = false;    // true once rider exceeds stall speed
 let stallTimer = 0;           // seconds below stall speed after having foiled
 
 // DOM refs for shallow water
-const shallowWarningEl = document.getElementById('shallow-warning');
-const restartBtnEl = document.getElementById('restart-btn');
+const shallowWarningEl = document.getElementById('shallow-warning')!;
+const restartBtnEl = document.getElementById('restart-btn')!;
 
 // Injected from main.js
-let endRide = null;
+let endRide: () => void;
 
-function initPhysics(deps) {
+function initPhysics(deps: { endRide: () => void }) {
   endRide = deps.endRide;
 }
 
@@ -39,7 +59,7 @@ function resetRideFlags() {
 
 // Shore-proximity swell: scan outward in 8 directions to find nearest land.
 // Returns distance in metres; 999 if no land within 300 m (or no terrain data).
-function _getShoreDistM(px, pz) {
+function _getShoreDistM(px: number, pz: number) {
   if (!state.realTerrainHeightData) return 999;
   const wY = RT_WATER_Y();
   for (let r = 25; r <= 300; r += 25) {
@@ -55,7 +75,7 @@ function _getShoreDistM(px, pz) {
 // ── FOIL PHYSICS ──
 // Returns the per-frame record (`fr`) the later systems read, or null if the
 // ride ended mid-frame (caller must skip the rest of the frame).
-function updatePhysics(dt, t) {
+function updatePhysics(dt: number, t: number): FrameRecord | null {
   const foil = state.foil;
   const input = state.input;
 
@@ -275,7 +295,7 @@ function updatePhysics(dt, t) {
   const s1h = getVal('swell1Height'), s1p = getVal('swell1Period');
   const s2h = getVal('swell2Height'), s2p = getVal('swell2Period');
   const s3h = getVal('swell3Height'), s3p = getVal('swell3Period');
-  function maxSlope(h, p) { return h > 0.01 ? h * 6.2832 / (1.56 * p * p) : 0; }
+  function maxSlope(h: number, p: number) { return h > 0.01 ? h * 6.2832 / (1.56 * p * p) : 0; }
   const maxSlopeSum = (maxSlope(s1h, s1p) + maxSlope(s1h * 0.22, s1p * 0.7)
     + maxSlope(s2h, s2p) + maxSlope(s2h * 0.2, s2p * 0.65)
     + maxSlope(s3h, s3p)) * 3.25;

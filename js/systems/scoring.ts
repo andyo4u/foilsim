@@ -7,15 +7,16 @@
 // ──────────────────────────────────────────────────────────────
 
 import { state } from '../state.js';
+import type { FrameRecord } from './physics.js';
 
 // Injected from main.js
-let endRide = null;
+let endRide: () => void;
 
-function initScoring(deps) {
+function initScoring(deps: { endRide: () => void }) {
   endRide = deps.endRide;
 }
 
-function updateScoring(dt, fr) {
+function updateScoring(dt: number, fr: FrameRecord) {
   const { foil, inPocketNow } = fr;
 
   // ── RIDE TIMER & SCORING ──
@@ -27,7 +28,7 @@ function updateScoring(dt, fr) {
     }
     const mins = Math.floor(state.rideTimer / 60);
     const secs = Math.floor(state.rideTimer % 60);
-    const timerEl = document.getElementById('hud-timer');
+    const timerEl = document.getElementById('hud-timer')!;
     timerEl.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
     if (state.rideTimer <= 10) timerEl.classList.add('warning');
   }
@@ -49,7 +50,7 @@ function updateScoring(dt, fr) {
   state.infoBarFadeTimer += dt;
   if (state.infoBarFadeTimer > 10) {
     const fadeProgress = Math.min(1, (state.infoBarFadeTimer - 10) / 2);
-    document.getElementById('info-bar').style.opacity = 1 - fadeProgress;
+    document.getElementById('info-bar')!.style.opacity = String(1 - fadeProgress);
   }
 }
 

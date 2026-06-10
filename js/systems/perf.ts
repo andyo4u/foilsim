@@ -11,19 +11,19 @@ import { state } from '../state.js';
 
 // FPS counter
 let fpsFrames = 0, fpsLastTime = performance.now();
-const fpsLabel = document.getElementById('fps-label');
-const hudFps = document.getElementById('hud-fps');
+const fpsLabel = document.getElementById('fps-label')!;
+const hudFps = document.getElementById('hud-fps')!;
 let fpsAvgSum = 0, fpsAvgCount = 0; // running average
 
 // FPS graph history (120 samples × 500ms = 60 seconds)
-const fpsHistory = [];
+const fpsHistory: number[] = [];
 const FPS_HISTORY_MAX = 120;
-const fpsGraphCanvas = document.getElementById('fps-graph');
+const fpsGraphCanvas = document.getElementById('fps-graph') as HTMLCanvasElement | null;
 const fpsGraphCtx = fpsGraphCanvas ? fpsGraphCanvas.getContext('2d') : null;
-const hudFpsGraphCanvas = document.getElementById('hud-fps-graph');
+const hudFpsGraphCanvas = document.getElementById('hud-fps-graph') as HTMLCanvasElement | null;
 const hudFpsGraphCtx = hudFpsGraphCanvas ? hudFpsGraphCanvas.getContext('2d') : null;
 
-function drawFpsGraph(ctx, w, h) {
+function drawFpsGraph(ctx: CanvasRenderingContext2D | null, w: number, h: number) {
   if (!ctx || fpsHistory.length < 2) return;
   ctx.clearRect(0, 0, w, h);
 
@@ -74,12 +74,12 @@ function drawFpsGraph(ctx, w, h) {
   // Min/max labels
   ctx.font = '7px sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.fillText(Math.round(minFps), 2, h - 2);
-  ctx.fillText(Math.round(maxFps), 2, 7);
+  ctx.fillText(String(Math.round(minFps)), 2, h - 2);
+  ctx.fillText(String(Math.round(maxFps)), 2, 7);
 }
 
 // Auto-quality FPS tracking
-let autoQFrames = [];
+let autoQFrames: number[] = [];
 const AUTO_Q_WINDOW    = 8;    // 500ms samples → 4 seconds of data
 const AUTO_Q_DOWN_FPS  = 35;   // step down if avg below this (was 45 — less trigger-happy)
 const AUTO_Q_UP_FPS    = 52;   // step up if avg comfortably above this
@@ -91,9 +91,9 @@ let autoQLastChange = performance.now() - AUTO_Q_INTERVAL; // allow first check 
 const QUALITY_LEVELS = ['low', 'med', 'high', 'ultra', 'max'];
 
 // Injected from main.js (setQuality touches renderer + ocean rebuild)
-let setQuality = null;
+let setQuality: (level: string) => void;
 
-function initPerf(deps) {
+function initPerf(deps: { setQuality: (level: string) => void }) {
   setQuality = deps.setQuality;
 }
 

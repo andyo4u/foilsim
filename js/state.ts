@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────────────────────
-//  state.js  –  Shared mutable state for the hydrofoil simulator
+//  state.ts  –  Shared mutable state for the hydrofoil simulator
 //
 //  Every module imports the single `state` object and reads /
 //  writes properties on it.  This replaces the dozens of global
@@ -27,12 +27,251 @@
 //          – Power-ups collected / inventory
 //        • On first load, detect no save → show welcome / tutorial
 //        • "Reset progress" button in settings (with confirmation!)
-//
+
+import * as THREE from 'three';
+import type { Sky } from 'three/examples/jsm/objects/Sky.js';
+
+/* ── Sub-object shapes ─────────────────────────────────────── */
+
+export interface FoilState {
+  x: number;
+  z: number;
+  heading: number;
+  speed: number;
+  pitch: number;
+  roll: number;
+  rideH: number;
+  energy: number;
+  prevWH: number;
+  prevSpeed: number;
+}
+
+export interface InputState {
+  left: boolean;
+  right: boolean;
+  up: boolean;
+  down: boolean;
+  pump: boolean;
+}
+
+export interface CamState {
+  theta: number;
+  phi: number;
+  dist: number;
+  drag: boolean;
+  lx: number;
+  ly: number;
+  pd: number;
+  offsetTheta: number;
+  followSmooth: number;
+  free: boolean;
+  panX: number;
+  panY: number;
+  panZ: number;
+  panning: boolean;
+  // Rufus intro cam sequence (set at runtime by main.ts)
+  intro?: 'leaderboard' | 'face' | 'spin' | null;
+  introT?: number;
+  _spinFromTheta?: number;
+  _spinToTheta?: number;
+  _spinFromPhi?: number;
+  _spinFromDist?: number;
+}
+
+export interface ScoreState {
+  distance: number;
+  topSpeed: number;
+  topSpeedMs: number;
+  pocketTime: number;
+  total: number;
+  rideTimer?: number; // elapsed seconds, set by endRide()
+}
+
+export interface PowerUpState {
+  active: boolean;
+  x: number;
+  z: number;
+  spawnTimer: number;
+  nextSpawnDelay: number;
+  boostActive: boolean;
+  boostTimer: number;
+  boostDuration: number;
+  boostAmount: number;
+}
+
+export interface EnergyBoostState {
+  active: boolean;
+  x: number;
+  z: number;
+  spawnTimer: number;
+  nextSpawnDelay: number;
+  hudTimer: number;
+  hudDuration: number;
+}
+
+export interface FoilPreset {
+  name: string;
+  desc: string;
+  topSpeedMs: number;
+  stallSpeedMs: number;
+  glide: number;
+  pump: number;
+  drag: number;
+  stability: number;
+  color: number;
+}
+
+export interface AudioSettings {
+  ambientOn: boolean;
+  musicPlaying: boolean;
+  musicFileName: string;
+}
+
+export interface WakePoint {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/* ── The State interface ───────────────────────────────────── */
+
+export interface State {
+  // Three.js Core (set during init in main.ts)
+  renderer: THREE.WebGLRenderer | null;
+  scene: THREE.Scene | null;
+  camera: THREE.PerspectiveCamera | null;
+  ambLight: THREE.AmbientLight | null;
+  dirLight: THREE.DirectionalLight | null;
+
+  // Sky / Clouds
+  sky: Sky | null;
+  skyUniforms: { [name: string]: THREE.IUniform } | null;
+  cloudMat: THREE.ShaderMaterial | null;
+  cloudMesh: THREE.Mesh | null;
+
+  // Ocean
+  oceanMat: THREE.ShaderMaterial | null;
+  oceanMesh: THREE.Mesh | null;
+  oceanGeo: THREE.BufferGeometry | null;
+
+  // Foil
+  foilGroup: THREE.Group | null;
+  foilAsset: THREE.Group | null;
+  modelGroup: THREE.Group | null;
+  tipL: THREE.Object3D | null;
+  tipR: THREE.Object3D | null;
+  foil: FoilState;
+
+  // Input
+  input: InputState;
+
+  // Camera
+  cam: CamState;
+
+  // Terrain — config/preset shapes are terrain.ts-owned
+  // TODO(types): tighten once terrain.ts exports its config interfaces
+  terrainGroup: THREE.Group | null;
+  silhouetteMat: THREE.ShaderMaterial | null;
+  silhouetteMesh: THREE.Mesh | null;
+  cliffMat: THREE.ShaderMaterial | null;
+  activeTerrainCfg: any;
+  activeBgPreset: string;
+  bgPresets: any;
+  activeWaterStyle: string;
+  realTerrainReady: boolean;
+  realTerrainMesh: THREE.Mesh | null;
+  realTerrainMat: THREE.ShaderMaterial | null;
+  realTerrainHeightData: any;
+  realTerrainHmImg: HTMLImageElement | null;
+  realTerrainSatTex: THREE.Texture | null;
+  realTerrainRiverMask: any;
+  waterFillPlane: THREE.Mesh | null;
+  horizonFill: THREE.Mesh | null;
+  panoCylinder: THREE.Mesh | null;
+  panoMat: THREE.ShaderMaterial | null;
+  panoTexture: THREE.Texture | null;
+
+  // Environment
+  pmremGenerator: THREE.PMREMGenerator | null;
+  envMap: THREE.Texture | null;
+  envDirty: boolean;
+
+  // UI State
+  cachedParams: Record<string, number>;
+  shallowStalled: boolean;
+  shallowTimer: number;
+
+  // Game Loop
+  gamePhase: 'menu' | 'riding' | 'score';
+  rideTimer: number;
+  rideStarted?: boolean;
+  score: ScoreState;
+  ridePrevX: number;
+  ridePrevZ: number;
+
+  // Power-ups
+  powerUp: PowerUpState;
+  energyBoost: EnergyBoostState;
+
+  // Info Bar
+  infoBarFadeTimer: number;
+
+  // Particles — streamer shape is foil.ts-owned
+  // TODO(types): tighten once foil.ts exports its streamer type
+  spParts: any[];
+  wkHist: WakePoint[];
+  streamerL: any;
+  streamerR: any;
+
+  // Surfer model containers (set at runtime by foil.ts GLB loads)
+  surferContainer?: THREE.Group | null;
+  surferCrouch?: THREE.Group | null;
+  surferStalled?: THREE.Group | null;
+
+  // Pre-allocated vectors (avoid GC)
+  _tipLWorld: THREE.Vector3 | null;
+  _tipRWorld: THREE.Vector3 | null;
+
+  // Quality / LOD
+  oceanSize: number;
+  oceanSegments: number;
+  pixelRatioCap: number;
+  quality: 'low' | 'med' | 'high' | 'ultra' | 'max';
+  autoQuality: boolean;
+  sprayBudget: number;
+  wakeBudget: number;
+  streamerBudget: number;
+  fbmOctaves: number;
+  detailLevel: number;
+  renderScale: number;
+  shaderMode: 'full' | 'performance';
+
+  // Units
+  units: 'mph' | 'kph' | 'kts';
+
+  // Foil preset
+  foilPreset: string;
+  foilPresets: Record<string, FoilPreset>;
+
+  // Audio settings
+  audioSettings: AudioSettings;
+
+  // Runtime flags + per-frame scratch (added outside init)
+  isSandbox?: boolean;
+  isMobile?: boolean;
+  _fpsAvgSum?: number;
+  _fpsAvgCount?: number;
+  _shoreCheckTick?: number;
+  _shoreDist?: number;
+  _swell3ShoreH?: number;
+  _waveLogTimer?: number;
+}
+
 /* ── State ─────────────────────────────────────────────────── */
 
-export const state = {
+export const state: State = {
 
-  // ── Three.js Core (set during init in main.js) ────────────
+  // ── Three.js Core (set during init in main.ts) ────────────
   renderer : null,
   scene    : null,
   camera   : null,
@@ -104,7 +343,7 @@ export const state = {
   cliffMat              : null,
   activeTerrainCfg      : null,   // will be set to terrainConfigs.gorge
   activeBgPreset        : 'ocean-islands',
-  bgPresets             : null,            // set by terrain.js
+  bgPresets             : null,            // set by terrain.ts
   activeWaterStyle      : 'normal',
   realTerrainReady      : false,
   realTerrainMesh       : null,

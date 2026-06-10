@@ -112,7 +112,7 @@ import { state } from './state.js';
 import { updateVal, toggleControls, getVal, cacheAllSliders, applyPreset, showToast,
          copySettings, copySettingsJSON, lerp, smoothstep, degToDir,
          convertSpeedToMs, convertSpeedFromMs, formatSpeed, formatDistance, setUnits } from './helpers.js';
-import { initAudio, updateAudio, toggleAmbient, loadLocalMusic, stopMusic, fadeOutMusic, fadeOutMusicPreview, loadRandomTrackIfNeeded, playTrack } from './audio.js';
+import { initAudio, updateAudio, loadLocalMusic, stopMusic, fadeOutMusic, fadeOutMusicPreview, loadRandomTrackIfNeeded, playTrack } from './audio.js';
 import { initOcean, updateEnvMap, setRenderMode, updateWaveChart, rebuildOceanGeometry } from './ocean.js';
 import { initFoil, emitSpray, toggleFreeCam, updateCamera, applyFoilPreset } from './foil.js';
 import { initTerrain, rebuildTerrain, restartLevel,
@@ -476,27 +476,6 @@ function exitToMenu() {
   }
 }
 
-window.updateVal         = updateVal;
-window.toggleControls    = toggleControls;
-window.applyPreset       = applyPreset;
-window.rebuildTerrain    = rebuildTerrain;
-window.restartLevel      = restartLevel;
-window.copySettings      = copySettings;
-window.copySettingsJSON  = copySettingsJSON;
-window.toggleFreeCam     = toggleFreeCam;
-window.setRenderMode     = setRenderMode;
-window.setQuality        = setQuality;
-window.setShaderMode     = setShaderMode;
-window.setRenderScale    = setRenderScale;
-window.setOceanSize      = setOceanSize;
-window.openSettings    = openSettings;
-window.closeSettings   = closeSettings;
-window.setUnits        = setUnits;
-window.applyFoilPreset = applyFoilPreset;
-window.toggleAmbient   = toggleAmbient;
-window.loadLocalMusic  = loadLocalMusic;
-window.stopMusic       = stopMusic;
-window.playTrack       = playTrack;
 function showLeaderboard() {
   document.getElementById('leaderboard-overlay').classList.remove('hidden');
   const el = document.getElementById('lb-content');
@@ -537,11 +516,6 @@ function submitRideScore() {
     });
   });
 }
-window.showLeaderboard = showLeaderboard;
-window.updateUsername  = function(val) { setUsername(val); };
-window.closeLeaderboard = closeLeaderboard;
-window.submitRideScore = submitRideScore;
-window.exitToMenu      = exitToMenu;
 
 // ═══════════════════════════
 // GAME LOOP — Menu → Ride → Score
@@ -703,9 +677,6 @@ function rideAgain() {
   state.gamePhase = 'menu';
 }
 
-window.startRide = startRide;
-window.rideAgain = rideAgain;
-window.endTutorial = endTutorial;
 
 // ═══════════════════════════
 // UI ACTION REGISTRY — delegated data-attribute wiring (js/ui.js).

@@ -1,38 +1,44 @@
 # FoilSim — Developer Notes
 
-> Last updated: v0.90
+> Last updated: v0.3.21 (modernization series)
 
 ## Project Overview
 
-eFoil / hydrofoil simulator built with Three.js r128. Ride waves, pump for speed,
-explore real-world terrain locations (Columbia River Gorge, Maliko Run Maui).
+eFoil / hydrofoil simulator built with Three.js r184 in strict TypeScript. Ride waves,
+pump for speed, explore real-world terrain locations (Columbia River Gorge, Maliko Run Maui).
 
-- **Live demo**: https://andyo4u.github.io/foilsim/
+- **Live site**: https://foil-brain.com (Cloudflare Worker, assets from dist/)
+- **Dev site**: https://dev.foil-brain.com (deploy + verify here first)
 - **Repo**: https://github.com/andyo4u/foilsim
 - **Git user**: Andy O'Brien (obr.andy@yahoo.com)
-- **Hosting**: GitHub Pages (master branch)
+- **Hosting**: Cloudflare Workers via wrangler (GitHub Pages + freehostia FTP are retired)
 
 ## Stack & Constraints
 
-- **Three.js r128** via CDN (`window.THREE` global) — NOT an npm module
-- **Vanilla ES modules** — `<script type="module" src="js/main.js">`
-- **No build tools** — no webpack, no bundler, no transpiler
-- **No node_modules** — all dependencies via CDN `<script>` tags
-- Three.js Sky addon loaded separately: `three@0.128.0/examples/js/Sky.js`
+- **Three.js r184** from npm, bundled — no CDN globals
+- **TypeScript** (strict, noImplicitAny) — esbuild bundles `js/main.ts` → `dist/js/app.min.js` via `build.js`
+- **npm scripts**: `dev` (watch + :8080 server), `build`, `typecheck`, `test` (wave goldens), `deploy:dev`, `deploy`
+- r128-compat color pipeline: `ColorManagement.enabled = false`, linear output, light intensities scaled by pi — see CLAUDE.md before touching colors/lights
+- Sky + GLTFLoader imported from `three/addons/`
 
 ## Architecture
 
-7 JS modules under `js/`, all sharing a single mutable state object:
+TypeScript modules under `js/` plus per-frame systems under `js/systems/`, all sharing a
+single mutable typed state object (see CLAUDE.md for the full module/system tables):
 
 | Module       | Responsibility |
 |-------------|----------------|
-| `state.js`   | Shared mutable state object — every module imports this |
-| `main.js`    | Renderer, scene, camera, lights, sky, clouds, animate loop, quality/LOD, window.* bridge |
-| `ocean.js`   | Ocean mesh, wave shaders (11 render modes), Gerstner wave math, env map, wave chart |
-| `foil.js`    | Foil model, physics, camera follow, spray/wake/streamer particles, touch pad input |
-| `terrain.js` | Silhouettes, 3D cliffs, real terrain (heightmap+satellite), panoramas, terrain configs |
-| `helpers.js` | Slider caching, presets, value getters, UI utilities, math helpers |
-| `audio.js`   | Web Audio API — wind, water, foil sounds |
+| `state.ts`   | Shared mutable state — fully typed `State` interface; every module imports this |
+| `main.ts`    | Renderer, scene, sky, clouds, quality/LOD, game flow, UI action registry, slim animate() |
+| `ui.ts`      | Delegated data-attribute event wiring (replaced inline onclick + window.* bridge) |
+| `ocean.ts`   | Ocean mesh, wave shaders (11 render modes), Gerstner wave math, env map, wave chart |
+| `foil.ts`    | Foil + surfer models, particle pools, keyboard/touch input, camera controls |
+| `terrain.ts` | Silhouettes, 3D cliffs, real terrain (heightmap+satellite), panoramas, terrain configs |
+| `helpers.ts` | Slider caching, presets, value getters, UI utilities, math helpers |
+| `audio.ts`   | Web Audio API — wind, water, music |
+| `leaderboard.ts` | Supabase score submission/retrieval |
+| `tutorial.ts` | First-ride tutorial flow |
+| `systems/*.ts` | Per-frame: perf, physics (owns FrameRecord), world, surfer, particles, hud, scoring |
 
 ### Init Order (matters!)
 
@@ -100,33 +106,19 @@ report coarse pointer even with a mouse connected.
 
 ## Known Bugs & Gotchas
 
-### Half-Screen Rendering Bug (UNRESOLVED)
-**Symptom**: After v0.86, the simulation renders only on the bottom half of
-the screen. Starts full-screen then jumps to half after auto-quality kicks in.
+### Half-Screen Rendering Bug (RESOLVED — v0.3.19/v0.3.20, three r184)
+**Was**: runtime `renderer.setPixelRatio()` changes in r128 desynced the canvas
+buffer vs CSS size; only half the screen rendered after auto-quality stepped.
+**Fix**: the r184 upgrade — modern `setPixelRatio()` re-runs `setSize()` internally,
+so buffer and CSS size can no longer desync. Verified 2026-06-10 by stepping all
+five quality levels + shader-mode pixel-ratio toggles + a portrait resize, with
+canvas buffer assertions and screenshots. The HUD version/FPS display feature
+reverted in v0.88 is safe to re-implement now.
 
-**Root cause (suspected)**: Changing `renderer.setPixelRatio()` at runtime
-in Three.js r128 causes a canvas size / buffer size mismatch. The auto-quality
-system changes pixel ratio when stepping between quality levels, which triggers it.
-
-**What was tried**:
-1. Added `renderer.setSize()` after `setPixelRatio()` in `setQuality()` — didn't fix
-2. Reordered init to `setPixelRatio` before `setSize` everywhere — didn't fix
-3. Added camera aspect ratio update in `setQuality()` — didn't fix
-
-**Resolution**: Reverted to v0.86 (before the HUD version/FPS display changes).
-The bug may be triggered by some interaction between the HUD DOM changes and the
-quality system, or purely by runtime pixel ratio changes in r128.
-
-**IMPORTANT**: When re-implementing features that touch rendering:
-- Be very careful with `renderer.setPixelRatio()` at runtime
-- Always call `setPixelRatio()` BEFORE `setSize()` in Three.js r128
-- Test on multiple devices after any renderer changes
-- The resize handler already does this correctly (line 822-827 of main.js)
-
-### Wave Energy Never Goes Very High
-The passive energy regen (`0.06 * dt`) is tiny, and the `slopeForce` contribution
-to wave energy display may not be feeding through correctly. Check the energy gain
-formula in `animate()` and the `sbWaveEnergy` slider range/default.
+### Wave Energy Never Goes Very High (likely stale — verify first)
+This entry predates the regen rework. Current formula in `systems/physics.ts`:
+`waveRegen = 0.015 + max(0, slopeForce) * 0.035` — slopeForce does feed through.
+Audit in-game before changing anything; this may just need deleting.
 
 ### Board Bouncy in High Wind Chop
 `rideH` oscillates rapidly when chop amplitude is large. Needs low-pass filtering
@@ -163,6 +155,14 @@ Defined in `terrainConfigs` object in terrain.js:
 | v0.88   | Version bump after revert to v0.86 baseline |
 | v0.89   | Remove mini-map tracker completely from codebase |
 | v0.90   | Version bump for repo access verification |
+| v0.1.x–v0.2.25 | Build system (esbuild → dist/), surfer GLB + animation, leaderboard (Supabase), stall-out, ride counter, music, Cloudflare hosting |
+| v0.3.0–v0.3.2  | Modernization Phase 0: Cloudflare dev env (dev.foil-brain.com), build --dev/--watch, wave-math golden harness |
+| v0.3.3–v0.3.6  | Phase 1: animate() split into js/systems/ (perf, physics, world, surfer, particles, hud, scoring) |
+| v0.3.7–v0.3.9  | Phase 2: ui.ts action registry; all inline handlers + window.* bridge removed |
+| v0.3.10        | Phase 3: three.js from npm, pinned 0.128.0 |
+| v0.3.11–v0.3.18 | Phase 4: full strict-TypeScript conversion (state.ts State interface keystone) |
+| v0.3.19–v0.3.20 | Phase 5: three 0.128 → 0.184 with r128-compat color flags; half-screen bug verified fixed |
+| v0.3.21        | Phase 6: docs rewrite, freehostia FTP deploy removed |
 
 ## Reverted Features (Available for Re-Implementation)
 
@@ -191,7 +191,7 @@ panel with distance, time, avg speed, elevation profile, etc.).
 - **Version bump**: Increment version in `index.html` div#version-label with every commit
 - **Commit and push**: After each feature/fix
 - **Commit messages**: Detailed, multi-line, explain the "why" not just the "what"
-- **Co-author tag**: `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
+- **Co-author tag** for the Claude model that authored the change, e.g. `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`
 
 ## File Inventory
 
@@ -203,14 +203,24 @@ C:\foilsim\
 ├── readme.txt              Links to live demo and repo
 ├── favicon.ico             Browser tab icon
 ├── kauai.jpg               Panoramic photo for Kauai preset
+├── build.js                esbuild bundler (prod / --dev / --watch)
+├── tsconfig.json           strict TypeScript config (tsc --noEmit gate)
+├── wrangler.jsonc          Cloudflare Workers config (prod + dev env)
+├── scripts/
+│   ├── wave-golden-check.js  CPU wave-math regression gate
+│   └── wave-golden.json      360 pinned golden samples
 ├── js/
-│   ├── main.js             Entry point, renderer, animate loop, quality/LOD
-│   ├── state.js            Shared mutable state object
-│   ├── ocean.js            Ocean mesh, wave shaders, 11 render modes
-│   ├── foil.js             Foil model, physics, particles, touch input
-│   ├── terrain.js          Terrain systems (cliffs, real terrain, panoramas)
-│   ├── helpers.js          UI utilities, presets, math helpers
-│   └── audio.js            Web Audio API sounds
+│   ├── main.ts             Entry point, renderer, game flow, action registry, animate()
+│   ├── state.ts            Shared mutable state (typed State interface)
+│   ├── ui.ts               Delegated data-attribute event wiring
+│   ├── ocean.ts            Ocean mesh, wave shaders, 11 render modes
+│   ├── foil.ts             Foil + surfer models, particles, input, camera
+│   ├── terrain.ts          Terrain systems (cliffs, real terrain, panoramas)
+│   ├── helpers.ts          UI utilities, presets, math helpers
+│   ├── audio.ts            Web Audio API sounds + music
+│   ├── leaderboard.ts      Supabase leaderboard
+│   ├── tutorial.ts         Tutorial phase machine
+│   └── systems/            Per-frame systems (perf, physics, world, surfer, particles, hud, scoring)
 ├── terrain-data/
 │   ├── gorge_heightmap_1024.png
 │   ├── gorge_satellite_2048.jpg
@@ -220,11 +230,7 @@ C:\foilsim\
 └── mask.html               Standalone heightmap mask tool
 ```
 
-## possible names
+## Domain
 
-foilbrain.io
-foil-brain.com
-foil-brained.com
-foilrunner.com
-
-foilbrain.com - forsale..
+foil-brain.com (registered; live on Cloudflare). Runner-up names considered:
+foilbrain.io, foil-brained.com, foilrunner.com.

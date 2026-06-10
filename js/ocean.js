@@ -47,6 +47,8 @@
 //        • Half-res render + upscale on low-end GPUs
 //        • Could measure FPS over N frames and auto-step down
 
+import * as THREE from 'three';
+import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { state } from './state.js';
 import { getVal, degToDir, lerp, smoothstep, convertSpeedToMs } from './helpers.js';
 
@@ -68,7 +70,7 @@ const CHART_MAX_SAMPLES = CHART_W;
 function updateEnvMap() {
   // Render just the sky (not clouds/ocean) into a cubemap for reflections
   const envScene = new THREE.Scene();
-  const envSky = new THREE.Sky();
+  const envSky = new Sky();
   envSky.scale.setScalar(1000);
   const eu = envSky.material.uniforms;
   eu['turbidity'].value = state.skyUniforms['turbidity'].value;

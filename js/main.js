@@ -108,6 +108,8 @@
 // ║                                                              ║
 // ╚═══════════════════════════════════════════════════════════════╝
 
+import * as THREE from 'three';
+import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { state } from './state.js';
 import { updateVal, toggleControls, getVal, cacheAllSliders, applyPreset, showToast,
          copySettings, copySettingsJSON, lerp, smoothstep, degToDir,
@@ -171,7 +173,7 @@ state.dirLight = dirLight;
 // SKY — Preetham atmospheric scattering via THREE.Sky
 // ═══════════════════════════
 
-const sky = new THREE.Sky();
+const sky = new Sky();
 sky.scale.setScalar(4500);
 scene.add(sky);
 state.sky = sky;

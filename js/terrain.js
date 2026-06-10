@@ -42,6 +42,7 @@
 //          shows up on your Strava feed somewhere epic — eFoil
 //          across Lake Geneva, down the Amazon, around Alcatraz…
 
+import * as THREE from 'three';
 import { state } from './state.js';
 import { lerp, smoothstep, getVal, applyPreset, cacheAllSliders, degToDir } from './helpers.js';
 

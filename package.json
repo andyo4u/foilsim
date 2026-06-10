@@ -26,5 +26,8 @@
     "esbuild": "^0.28.0",
     "gltfpack": "^1.1.0",
     "wrangler": "^4.99.0"
+  },
+  "dependencies": {
+    "three": "0.128.0"
   }
 }

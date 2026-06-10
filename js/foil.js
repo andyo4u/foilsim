@@ -72,6 +72,8 @@
 //        on Android Chrome + iOS Safari. May need larger touch
 //        zones, on-screen joystick, or tilt-to-steer option.
 
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { state } from './state.js';
 import { lerp, toggleControls, convertSpeedFromMs, updateVal, cacheAllSliders } from './helpers.js';
 
@@ -643,8 +645,8 @@ export function initFoil() {
   // Two poses, swapped based on stall state:
   //   surfer_crouch.glb  — foiling pose (scale 1.25, pos 0.13/0.88/0.10, Y rot -19°)
   //   surfer_stalled.glb — paddling/stalled pose (scale 1.25, pos -0.02/0.88/-0.05, Y rot -2°)
-  if (typeof THREE.GLTFLoader === 'function') {
-    const loader = new THREE.GLTFLoader();
+  {
+    const loader = new GLTFLoader();
 
     // Crouch (foiling) — default visible, also used as the animated container
     loader.load('assets/surfer_crouch.glb', (gltf) => {

@@ -151,6 +151,12 @@ function initOcean() {
       float radialDist=length(position.xz);
       float edgeFade=1.0-smoothstep(uOceanHalf*0.6,uOceanHalf*0.95,radialDist);
       vec3 d=vec3(0),T=vec3(1,0,0),B_=vec3(0,0,1),t1,b1;
+      // Flat-skirt early-out: every amplitude below is scaled by edgeFade, so
+      // where edgeFade==0 (the outer rim + the square's corners, ~29% of all
+      // vertices) the result is provably flat — skip the 9 Gerstner waves and
+      // 2 FBM evaluations entirely. The rim is fully fogged and alpha-faded
+      // in the fragment shader, so skipping its foam noise is invisible.
+      if(edgeFade>0.001){
       if(uSwell1.w>.01){d+=gw(pos.xz,uSwell1.xy,uSwell1.z,uSwell1.w*edgeFade,uTime,uSwellSpeed.x,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
         d+=gw(pos.xz,uSwell1.xy*1.07,uSwell1.z*.7,uSwell1.w*.22*edgeFade,uTime*1.05+7.3,uSwellSpeed.x,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);}
       if(uSwell2.w>.01){d+=gw(pos.xz,uSwell2.xy,uSwell2.z,uSwell2.w*edgeFade,uTime,uSwellSpeed.y,t1,b1);T+=t1-vec3(1,0,0);B_+=b1-vec3(0,0,1);
@@ -170,6 +176,9 @@ function initOcean() {
       float jac=T.x*B_.z-T.z*B_.x;vFoam=smoothstep(.3,-.1,jac)*.8;
       if(uDetailLevel>0.5){vFoam+=smoothstep(.4,.8,fbm(pos.xz*.15+uTime*.2))*.2*uChopHeight;}
       vFoam=clamp(vFoam,0.,1.);
+      }else{
+        vNormal=vec3(0.,1.,0.);vFoam=0.;
+      }
       vWorldPos=pos;vHeight=d.y;vLocalPos=position.xz;
       gl_Position=projectionMatrix*viewMatrix*vec4(pos,1.0);
     }`,
@@ -1189,6 +1198,16 @@ function initOcean() {
         vec3 N=normalize(vNormal),V=normalize(uCamPos-vWorldPos),L=normalize(uSunDir);
         float cd=length(uCamPos-vWorldPos);
 
+        // Fully-fogged early-out: past 0.42*half the distance fog saturates,
+        // so the final color is the fog color no matter what the surface
+        // does — skip detail normals, GGX, SSS, glitter and foam.
+        float fogHalfE=uOceanHalf*0.42;
+        float fogE=smoothstep(0.0,fogHalfE,cd);fogE*=fogE;
+        if(fogE>=0.999){
+          vec3 vdE=normalize(vWorldPos-uCamPos);
+          gl_FragColor=vec4(mix(atmosphericScattering(vdE,L),vec3(0.15,0.35,0.45),0.4)*1.2, alpha);
+        } else {
+
         // Performance detail normals (1 octave, 2D noise, short fade)
         if (uDetailLevel > 0.5) {
           N = detailNormalPerf(vWorldPos, N, cd);
@@ -1266,11 +1285,20 @@ function initOcean() {
         vec3 fogColor=mix(skyFog,vec3(0.15,0.35,0.45),0.4)*1.2;
         col=mix(col,fogColor,clamp(fogFactor,0.0,1.0));
         gl_FragColor=vec4(col, alpha);
+        }
 
       } else {
         // ═══ NORMAL / REALISTIC PBR PATH (Full Quality) ═══
         vec3 N=normalize(vNormal),V=normalize(uCamPos-vWorldPos),L=normalize(uSunDir);
         float cd=length(uCamPos-vWorldPos);
+
+        // Fully-fogged early-out (see performance path above)
+        float fogHalfE=uOceanHalf*0.42;
+        float fogE=smoothstep(0.0,fogHalfE,cd);fogE*=fogE;
+        if(fogE>=0.999){
+          vec3 vdE=normalize(vWorldPos-uCamPos);
+          gl_FragColor=vec4(mix(atmosphericScattering(vdE,L),vec3(0.15,0.35,0.45),0.4)*1.2, alpha);
+        } else {
 
         // Detail normal perturbation (3D gradient noise, distance-faded)
         if (uDetailLevel > 0.5) {
@@ -1372,6 +1400,7 @@ function initOcean() {
         vec3 fogColor=mix(skyFog,oceanHorizon,0.4)*1.2;
         col=mix(col,fogColor,clamp(fogFactor,0.0,1.0));
         gl_FragColor=vec4(col, alpha);
+        }
       }
 
       // ── Rim cross-fade ──

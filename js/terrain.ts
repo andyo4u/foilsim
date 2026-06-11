@@ -1046,6 +1046,8 @@ function buildRealTerrain(onReady?: () => void) {
       )},
       uFogColor: { value: new THREE.Color(0.55, 0.7, 0.85) },
       uWaterColor: { value: new THREE.Color(0.30, 0.48, 0.58) },
+      uSunDir: { value: new THREE.Vector3(0, 0.4, -1).normalize() },
+      uUseAtmo: { value: 1.0 },
       uCamPos: { value: new THREE.Vector3() }
     },
     vertexShader: `
@@ -1059,9 +1061,28 @@ function buildRealTerrain(onReady?: () => void) {
       uniform vec2 uOceanMin, uOceanMax;
       uniform sampler2D uRiverMask;
       uniform float uUseRiverMask;
+      uniform float uUseAtmo;
       uniform vec4 uTerrainBounds; // minX, minZ, maxX, maxZ
-      uniform vec3 uFogColor, uWaterColor, uCamPos;
+      uniform vec3 uFogColor, uWaterColor, uCamPos, uSunDir;
       varying vec3 vWorldPos;
+      // Identical to the ocean shader's atmosphericScattering — the fill must
+      // converge to the exact color the ocean fades to at its mesh edge.
+      vec3 atmosphericScattering(vec3 dir, vec3 sunDir) {
+        float sunDot = max(dot(dir, sunDir), 0.0);
+        float y = max(dir.y, 0.001);
+        vec3 rayleigh = vec3(0.22, 0.45, 0.75) * (1.0 + pow(sunDot, 2.0)) * 0.85;
+        float mie = pow(sunDot, 64.0) * 0.7 + pow(sunDot, 256.0) * 1.8;
+        vec3 mieColor = vec3(1.0, 0.92, 0.75) * mie;
+        float horizon = exp(-y * 3.0);
+        vec3 horizonColor = mix(vec3(0.55, 0.7, 0.85), vec3(1.0, 0.75, 0.45), pow(sunDot, 4.0));
+        vec3 sky = rayleigh / (y * 1.2 + 0.12) * 0.18;
+        sky += mieColor;
+        sky = mix(sky, horizonColor, horizon * 0.75);
+        float sunDisc = smoothstep(0.9997, 0.9999, sunDot);
+        sky += vec3(3.0, 2.5, 1.8) * sunDisc;
+        sky *= mix(0.45, 1.0, smoothstep(0.0, 0.45, y));
+        return sky;
+      }
       void main() {
         // Discard if inside the ocean mesh bounds (ocean handles that area)
         if (vWorldPos.x > uOceanMin.x && vWorldPos.x < uOceanMax.x &&
@@ -1079,12 +1100,21 @@ function buildRealTerrain(onReady?: () => void) {
           }
         }
 
-        // Water color matches ocean wave tops, with distance fog
-        float dist = length(vWorldPos - uCamPos);
-        float fogF = 1.0 - exp(-dist * 0.00015);
-        vec3 col = mix(uWaterColor, uFogColor, fogF);
+        // The ocean shader is 100% fogged at its mesh edge, so the fill —
+        // which only ever covers area beyond that edge — paints exactly the
+        // ocean's edge-fog color and the seam disappears.
+        vec3 col;
+        if (uUseAtmo > 0.5) {
+          // Default/performance PBR paths: same formula as their distance fog
+          vec3 viewDir = normalize(vWorldPos - uCamPos);
+          vec3 skyFog = atmosphericScattering(viewDir, normalize(uSunDir));
+          col = mix(skyFog, vec3(0.15, 0.35, 0.45), 0.4) * 1.2;
+        } else {
+          // Stylized modes: their shaders fade to the per-mode fog color
+          col = uFogColor;
+        }
 
-        gl_FragColor = vec4(col, 0.92);
+        gl_FragColor = vec4(col, 1.0);
       }`,
     transparent: true,
     depthWrite: false

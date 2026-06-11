@@ -31,10 +31,19 @@ function updateWorldFollow(fr: FrameRecord) {
       fu.uOceanMin.value.set(oceanMesh.position.x - half, oceanMesh.position.z - half);
       fu.uOceanMax.value.set(oceanMesh.position.x + half, oceanMesh.position.z + half);
       fu.uCamPos.value.copy(camera.position);
+      fu.uSunDir.value.copy(u.uSunDir.value);
 
-      // Match distant water color to ocean render mode
+      // Match distant water color to the ocean render mode's edge fog.
+      // Default mode (rm 0) uses the shader's atmospheric-scattering formula;
+      // stylized modes paint their per-mode fog color (their ocean paths are
+      // fully fogged at the mesh edge).
       const rm = u.uRenderMode.value;
-      if (rm > 9.5) {
+      fu.uUseAtmo.value = rm < 0.5 ? 1.0 : 0.0;
+      if (rm > 11.5) {
+        // Pocket Highlights renders like the default but fogs to the dynamic
+        // sun-driven fog color
+        fu.uFogColor.value.copy(u.uFogColor.value);
+      } else if (rm > 9.5) {
         fu.uWaterColor.value.set(0.30, 0.20, 0.10);
         fu.uFogColor.value.set(0.55, 0.45, 0.35);
       } else if (rm > 8.5) {
@@ -65,6 +74,7 @@ function updateWorldFollow(fr: FrameRecord) {
         fu.uWaterColor.value.set(0.85, 0.78, 0.68);
         fu.uFogColor.value.set(0.85, 0.78, 0.68);
       } else {
+        // rm 0 — atmospheric path; uFogColor unused but kept sane
         fu.uWaterColor.value.copy(u.uShallowColor.value);
         fu.uFogColor.value.set(0.55, 0.7, 0.85);
       }
@@ -77,6 +87,9 @@ function updateWorldFollow(fr: FrameRecord) {
       hfu.uOceanMin.value.set(oceanMesh.position.x - half, oceanMesh.position.z - half);
       hfu.uOceanMax.value.set(oceanMesh.position.x + half, oceanMesh.position.z + half);
       hfu.uFogColor.value.copy(u.uFogColor.value);
+      hfu.uSunDir.value.copy(u.uSunDir.value);
+      hfu.uCamPos.value.copy(camera.position);
+      hfu.uUseAtmo.value = u.uRenderMode.value < 0.5 ? 1.0 : 0.0;
       state.horizonFill.visible = !state.waterFillPlane;
     }
   }

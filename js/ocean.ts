@@ -134,7 +134,7 @@ function initOcean() {
     uniform float uTime;uniform float uChopHeight;uniform vec2 uChopDir;
     uniform vec4 uSwell1,uSwell2,uSwell3;uniform vec3 uSwellSpeed;
     uniform float uFbmOctaves;uniform float uDetailLevel;uniform float uOceanHalf;
-    varying vec3 vWorldPos;varying vec3 vNormal;varying float vFoam;varying float vHeight;
+    varying vec3 vWorldPos;varying vec3 vNormal;varying float vFoam;varying float vHeight;varying vec2 vLocalPos;
     vec2 hash2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
     float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);return mix(mix(dot(hash2(i),f),dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)),dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
     float fbm(vec2 p){float v=0.,a=.5;mat2 r=mat2(.8,.6,-.6,.8);for(int i=0;i<6;i++){if(float(i)>=uFbmOctaves)break;v+=a*noise(p);p=r*p*2.03;a*=.48;}return v;}
@@ -170,7 +170,7 @@ function initOcean() {
       float jac=T.x*B_.z-T.z*B_.x;vFoam=smoothstep(.3,-.1,jac)*.8;
       if(uDetailLevel>0.5){vFoam+=smoothstep(.4,.8,fbm(pos.xz*.15+uTime*.2))*.2*uChopHeight;}
       vFoam=clamp(vFoam,0.,1.);
-      vWorldPos=pos;vHeight=d.y;
+      vWorldPos=pos;vHeight=d.y;vLocalPos=position.xz;
       gl_Position=projectionMatrix*viewMatrix*vec4(pos,1.0);
     }`,
     fragmentShader: `
@@ -182,7 +182,7 @@ function initOcean() {
     uniform vec3 uPowerUpPos,uPowerUpColor;uniform float uPowerUpActive;
     uniform vec3 uEnergyBoostPos,uEnergyBoostColor;uniform float uEnergyBoostActive;
     uniform float uFbmOctaves;uniform float uDetailLevel;uniform float uPerfMode;uniform float uSurfaceDetail;
-    varying vec3 vWorldPos,vNormal;varying float vFoam,vHeight;
+    varying vec3 vWorldPos,vNormal;varying float vFoam,vHeight;varying vec2 vLocalPos;
     vec2 hash2(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453)*2.-1.;}
     float noise(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);return mix(mix(dot(hash2(i),f),dot(hash2(i+vec2(1,0)),f-vec2(1,0)),u.x),mix(dot(hash2(i+vec2(0,1)),f-vec2(0,1)),dot(hash2(i+vec2(1,1)),f-vec2(1,1)),u.x),u.y);}
     float fbm(vec2 p){float v=0.,a=.5;mat2 r=mat2(.8,.6,-.6,.8);for(int i=0;i<6;i++){if(float(i)>=uFbmOctaves)break;v+=a*noise(p);p=r*p*2.03;a*=.48;}return v;}
@@ -1373,6 +1373,15 @@ function initOcean() {
         col=mix(col,fogColor,clamp(fogFactor,0.0,1.0));
         gl_FragColor=vec4(col, alpha);
       }
+
+      // ── Rim cross-fade ──
+      // Fade the outermost ~4% of the mesh to transparent. The distant-water
+      // fill plane extends under this band (see systems/world.ts inset), so
+      // the wave mesh dissolves into the fill over ~10-15m instead of
+      // butting against it at a single pixel. Chebyshev distance in local
+      // (pre-displacement) space follows the square mesh edge.
+      float rimD = max(abs(vLocalPos.x), abs(vLocalPos.y));
+      gl_FragColor.a *= 1.0 - smoothstep(uOceanHalf * 0.955, uOceanHalf * 0.995, rimD);
 
       // ── Power-up water glow (applied after all render modes) ──
       if (uPowerUpActive > 0.5) {

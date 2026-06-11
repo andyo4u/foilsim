@@ -28,8 +28,14 @@ function updateWorldFollow(fr: FrameRecord) {
     if (state.waterFillPlane) {
       const half = state.oceanSize / 2;
       const fu = (state.waterFillPlane.material as THREE.ShaderMaterial).uniforms;
-      fu.uOceanMin.value.set(oceanMesh.position.x - half, oceanMesh.position.z - half);
-      fu.uOceanMax.value.set(oceanMesh.position.x + half, oceanMesh.position.z + half);
+      // Inset the discard rect so the fill extends UNDER the ocean rim.
+      // The fill draws first (renderOrder -1) and the opaque ocean covers the
+      // overlap, but at grazing angles the old exact butt-joint exposed a
+      // sub-pixel gap (fill sits 5cm lower) where the bright clear color
+      // leaked through as a hairline seam.
+      const inset = half * 0.94;
+      fu.uOceanMin.value.set(oceanMesh.position.x - inset, oceanMesh.position.z - inset);
+      fu.uOceanMax.value.set(oceanMesh.position.x + inset, oceanMesh.position.z + inset);
       fu.uCamPos.value.copy(camera.position);
       fu.uSunDir.value.copy(u.uSunDir.value);
 
@@ -84,8 +90,9 @@ function updateWorldFollow(fr: FrameRecord) {
     if (state.horizonFill) {
       const half = state.oceanSize / 2;
       const hfu = (state.horizonFill.material as THREE.ShaderMaterial).uniforms;
-      hfu.uOceanMin.value.set(oceanMesh.position.x - half, oceanMesh.position.z - half);
-      hfu.uOceanMax.value.set(oceanMesh.position.x + half, oceanMesh.position.z + half);
+      const hInset = half * 0.94; // same rim overlap as the water fill plane
+      hfu.uOceanMin.value.set(oceanMesh.position.x - hInset, oceanMesh.position.z - hInset);
+      hfu.uOceanMax.value.set(oceanMesh.position.x + hInset, oceanMesh.position.z + hInset);
       hfu.uFogColor.value.copy(u.uFogColor.value);
       hfu.uSunDir.value.copy(u.uSunDir.value);
       hfu.uCamPos.value.copy(camera.position);

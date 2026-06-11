@@ -8,7 +8,7 @@ FoilSim is an eFoil/hydrofoil simulator built with Three.js (r184, npm) in stric
 
 - **Live site**: https://foil-brain.com — Cloudflare Worker `foilsim`, static assets from `dist/` (`wrangler.jsonc`)
 - **Dev/test site**: https://dev.foil-brain.com — Cloudflare Worker `foilsim-dev` (wrangler env `dev`). Deploy here and verify before touching production.
-- GitHub Pages (andyo4u.github.io/foilsim) is deprecated; the old freehostia FTP path is gone.
+- GitHub Pages (andyo4u.github.io/foilsim) is deprecated. Cloudflare is the only deploy path.
 - **Current version**: stored in `index.html` div#version-label
 
 ## Development Setup

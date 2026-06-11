@@ -11,7 +11,7 @@ pump for speed, explore real-world terrain locations (Columbia River Gorge, Mali
 - **Dev site**: https://dev.foil-brain.com (deploy + verify here first)
 - **Repo**: https://github.com/andyo4u/foilsim
 - **Git user**: Andy O'Brien (obr.andy@yahoo.com)
-- **Hosting**: Cloudflare Workers via wrangler (GitHub Pages + freehostia FTP are retired)
+- **Hosting**: Cloudflare Workers via wrangler (GitHub Pages is retired)
 
 ## Stack & Constraints
 
@@ -162,7 +162,7 @@ Defined in `terrainConfigs` object in terrain.js:
 | v0.3.10        | Phase 3: three.js from npm, pinned 0.128.0 |
 | v0.3.11–v0.3.18 | Phase 4: full strict-TypeScript conversion (state.ts State interface keystone) |
 | v0.3.19–v0.3.20 | Phase 5: three 0.128 → 0.184 with r128-compat color flags; half-screen bug verified fixed |
-| v0.3.21        | Phase 6: docs rewrite, freehostia FTP deploy removed |
+| v0.3.21        | Phase 6: docs rewrite, legacy deploy script removed |
 
 ## Reverted Features (Available for Re-Implementation)
 

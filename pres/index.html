@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Gorge Pressure Gradient</title>
+<style>
+  :root{
+    --ink:#0f172a; --muted:#64748b; --faint:#94a3b8;
+    --line:#e7edf3; --card:#ffffff; --bg:#eef2f7;
+    --accent:#6366f1; --pos:#10b981; --neg:#f43f5e;
+    --shadow:0 1px 2px rgba(15,23,42,.04),0 6px 20px rgba(15,23,42,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink); background:
+      radial-gradient(1200px 500px at 80% -10%, #e7ecfb 0%, rgba(231,236,251,0) 60%),
+      linear-gradient(180deg,#f3f6fb 0%, #eaeef5 100%);
+    min-height:100vh; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px; margin:0 auto; padding:26px 22px 60px}
+  header{display:flex; flex-wrap:wrap; align-items:flex-end; gap:6px 18px; margin-bottom:6px}
+  h1{font-size:22px; margin:0; font-weight:800; letter-spacing:-.02em}
+  .date{font-size:14px; color:var(--muted); font-weight:600}
+  .tag{font-size:11px; font-weight:700; color:var(--accent); background:#eef0fe;
+       padding:3px 9px; border-radius:999px; letter-spacing:.04em; text-transform:uppercase}
+  .lede{color:var(--muted); font-size:13.5px; margin:7px 0 0; max-width:760px; line-height:1.5}
+  .statusbar{display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; margin:16px 0 22px;
+       font-size:12.5px; color:var(--muted)}
+  .pill{display:inline-flex; align-items:center; gap:7px; background:var(--card); border:1px solid var(--line);
+       padding:6px 12px; border-radius:999px; box-shadow:var(--shadow)}
+  .dot{width:8px;height:8px;border-radius:50%}
+  .ok{background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.18)}
+  .warn{background:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.18)}
+  .err{background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.18)}
+  .load{background:#94a3b8;box-shadow:0 0 0 3px rgba(148,163,184,.18)}
+  .statusbar b{color:var(--ink)}
+  button,select{font:inherit;font-size:12.5px;color:var(--ink);background:var(--card);
+       border:1px solid var(--line);border-radius:9px;padding:6px 12px;cursor:pointer;box-shadow:var(--shadow)}
+  button:hover{background:#f8fafc}
+  select{padding-right:26px}
+  .grid3{display:grid; grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); gap:18px}
+  @media(max-width:880px){.grid3{grid-template-columns:1fr}}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:16px;
+       padding:14px 16px 12px; box-shadow:var(--shadow)}
+  .card.zoom{margin:0}
+  .modal{position:fixed; inset:0; z-index:100; display:flex; align-items:center; justify-content:center; padding:18px}
+  .modal[hidden]{display:none}
+  .modal-backdrop{position:absolute; inset:0; background:rgba(15,23,42,.42); backdrop-filter:blur(2px); animation:fade .15s ease}
+  .modal-body{position:relative; width:min(940px,95vw); max-height:92vh; overflow:auto; animation:pop .16s ease}
+  .modal-close{position:absolute; top:8px; right:8px; z-index:2; width:30px; height:30px; padding:0; border-radius:8px;
+       font-size:20px; line-height:1; color:var(--muted); background:var(--card); border:1px solid var(--line)}
+  .modal-close:hover{background:#f1f5f9; color:var(--ink)}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  @keyframes pop{from{opacity:0; transform:translateY(8px) scale(.985)}to{opacity:1; transform:none}}
+  .card.click{position:relative; cursor:pointer; transition:transform .12s ease, box-shadow .12s ease}
+  .card.click:hover{transform:translateY(-2px); box-shadow:0 2px 6px rgba(15,23,42,.08),0 14px 30px rgba(15,23,42,.10)}
+  .card.click:hover .expand{opacity:1}
+  .expand{opacity:0; transition:opacity .12s; font-size:10px; font-weight:700; color:var(--accent); white-space:nowrap; margin-top:3px}
+  .dlbtn{font:inherit; font-size:11px; font-weight:600; color:var(--muted); background:var(--card); border:1px solid var(--line);
+       border-radius:7px; padding:3px 8px; cursor:pointer; box-shadow:var(--shadow); white-space:nowrap}
+  .dlbtn:hover{background:#f1f5f9; color:var(--ink)}
+  .dlbtn.cardz{position:absolute; bottom:8px; right:10px; z-index:3; opacity:.5; transition:opacity .12s}
+  .card.click:hover .dlbtn.cardz{opacity:1}
+  .seclabel{font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); margin:22px 2px 10px}
+  .grid-sec{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px}
+  @media(max-width:760px){.grid-sec{grid-template-columns:1fr}}
+  .card.mini{padding:11px 13px 9px; background:#fbfcfe; opacity:.92}
+  .card.mini .ctitle{font-size:12px}
+  .card.mini .cval .num{font-size:13px}
+  .card.mini:hover{opacity:1}
+  /* Gorge footer image with town overlay */
+  .gorgefig{margin:8px 0 0}
+  .gorgefig-inner{position:relative; border-radius:14px; overflow:hidden; border:1px solid var(--line); box-shadow:var(--shadow); line-height:0}
+  .gorgefig img{display:block; width:100%; height:auto}
+  .gorgefig figcaption{font-size:11.5px; color:var(--muted); margin-top:8px; text-align:center; line-height:1.5}
+  .towns{position:absolute; inset:0; pointer-events:none}
+  .town{position:absolute; transform:translate(-50%,-50%)}
+  .town .pin{display:block; width:9px; height:9px; border-radius:50%; background:#475569; border:2px solid #fff;
+       box-shadow:0 0 0 1px rgba(15,23,42,.35),0 1px 3px rgba(0,0,0,.45); transition:all .15s}
+  .town .lbl{position:absolute; left:50%; bottom:calc(100% + 3px); transform:translateX(-50%); white-space:nowrap;
+       font:800 11px -apple-system,Segoe UI,Arial,sans-serif; color:#0f172a;
+       text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 2px #fff,0 0 6px #fff}
+  .town.below .lbl{bottom:auto; top:calc(100% + 3px)}
+  .town.on .pin{background:#4338ca; width:11px; height:11px; box-shadow:0 0 0 1px rgba(67,56,202,.5),0 0 10px rgba(99,102,241,.75)}
+  .town.on .lbl{color:#4338ca}
+  .town.spot .pin{width:7px; height:7px; background:#fff; border:2px solid #0d9488; box-shadow:0 0 0 1px rgba(15,23,42,.25),0 1px 2px rgba(0,0,0,.4)}
+  .town.spot .lbl{font:italic 700 10px -apple-system,Segoe UI,Arial,sans-serif; color:#0f766e}
+  @media(max-width:680px){.town .lbl{font-size:10px} .town.spot .lbl{font-size:9px}}
+  .hist{display:inline-flex;align-items:center;gap:4px}
+  .hist button{padding:5px 9px}
+  .hist button:disabled{opacity:.4;cursor:default}
+  .chead{display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:2px}
+  .ctitle{font-size:13.5px; font-weight:700; letter-spacing:-.01em}
+  .csub{font-size:11px; color:var(--faint); margin-top:1px; font-weight:600}
+  .cval{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap}
+  .cval .num{font-size:16px; font-weight:800; letter-spacing:-.02em}
+  .cval .word{font-size:10.5px; color:var(--muted); font-weight:600; display:block; margin-top:1px}
+  .cval .tdiff{display:block; font-size:10.5px; font-weight:700; color:#dc2626; margin-top:2px; font-variant-numeric:tabular-nums}
+  .cval .stn{font-weight:600; color:var(--muted); font-size:10px; font-variant-numeric:tabular-nums}
+  #zoomVal{white-space:normal; max-width:380px}
+  .zfc{margin:6px 0 9px; padding:9px 12px 8px; border:1px solid var(--line); border-radius:12px;
+       background:linear-gradient(180deg,#f7f9ff,#eef1fd); box-shadow:var(--shadow); font-size:12.5px; line-height:1.55}
+  .zfc[hidden]{display:none}
+  .zfc-h{font-size:10px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:3px}
+  .zfc-row{color:var(--ink); font-variant-numeric:tabular-nums}
+  .zfc-k{display:inline-block; min-width:62px; color:var(--muted); font-weight:700; font-size:11px}
+  .zfc b{font-weight:800}
+  canvas{display:block; width:100%; cursor:crosshair}
+  #zoomTempPanel{margin-top:8px; padding-top:9px; border-top:1px dashed var(--line)}
+  #zoomTempPanel[hidden]{display:none}
+  .tpanel-label{font-size:11px; font-weight:700; letter-spacing:.01em; color:#dc2626; opacity:.85; margin:0 0 1px}
+  .zoomhead{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px;padding-right:36px}
+  .zoomdate{font-size:12px;font-weight:700;color:var(--accent);margin-top:3px}
+  .zoomctl{display:flex;align-items:center;gap:12px}
+  .tgl{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);cursor:pointer;user-select:none;
+       background:var(--card);border:1px solid var(--line);border-radius:9px;padding:5px 11px;box-shadow:var(--shadow)}
+  .tgl input{accent-color:#dc2626;width:15px;height:15px;cursor:pointer;margin:0}
+  .legend{display:flex;flex-wrap:wrap;gap:14px 18px;align-items:center;color:var(--muted);font-size:12px;margin:18px 2px 0}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .sw{width:22px;height:0;border-top-width:2px;border-top-style:solid;display:inline-block}
+  .swdot{width:8px;height:8px;border-radius:50%;background:var(--ink);display:inline-block}
+  .swbox{width:13px;height:13px;border-radius:3px;display:inline-block}
+  #tip{position:fixed;pointer-events:none;z-index:200;background:rgba(15,23,42,.94);color:#fff;
+       font-size:11.5px;line-height:1.4;padding:7px 9px;border-radius:8px;opacity:0;transition:opacity .08s;
+       box-shadow:0 4px 16px rgba(0,0,0,.25);white-space:nowrap;font-variant-numeric:tabular-nums}
+  #tip b{font-weight:700}
+  details{margin-top:22px;font-size:12.5px;color:var(--muted);max-width:820px}
+  summary{cursor:pointer;color:var(--ink);font-weight:700}
+  details p{line-height:1.6}
+  code{background:#eef2f7;padding:1px 5px;border-radius:4px;font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Columbia Gorge &mdash; Pressure Gradient</h1>
+    <span class="tag" id="viewTag">Live</span>
+    <span class="date" id="todayDate">&nbsp;</span>
+  </header>
+  <p class="lede">Sea-level pressure difference along the river, west&rarr;east. When pressure stacks higher to the
+     west, air accelerates down the Gorge &mdash; the summer westerly. <b style="color:var(--pos)">Green</b> favors
+     wind; <b style="color:var(--neg)">red</b> is offshore/east.</p>
+
+  <div class="statusbar">
+    <span class="pill"><span class="dot load" id="dot"></span><b id="statusText">Loading&hellip;</b></span>
+    <span id="updated"></span>
+    <span id="nextRefresh"></span>
+    <span class="hist">
+      <button id="prevDay" title="Previous day">&lsaquo; Prev day</button>
+      <button id="todayBtn" title="Jump to today">Today</button>
+      <button id="nextDay" title="Next day">Next &rsaquo;</button>
+    </span>
+    <button id="refreshBtn">Refresh</button>
+  </div>
+
+  <div class="seclabel" style="margin-top:8px">Primary gradients &middot; click any chart to open it in high-res</div>
+  <div class="grid3" id="overviewMain"></div>
+  <div class="seclabel">Secondary gradients</div>
+  <div class="grid-sec" id="overviewSecondary"></div>
+
+  <div class="modal" id="zoomModal" hidden>
+    <div class="modal-backdrop" id="zoomBackdrop"></div>
+    <div class="modal-body">
+      <button class="modal-close" id="zoomClose" aria-label="Close">&times;</button>
+      <div class="card zoom" id="zoomCard">
+        <div class="zoomhead">
+          <div>
+            <div class="ctitle">High-resolution view</div>
+            <div class="csub" id="zoomSub">&minus;5h to +12h &middot; observed every 15 min &middot; airport hourly &amp; temperature toggle</div>
+            <div class="zoomdate" id="zoomDate">&nbsp;</div>
+          </div>
+          <div class="zoomctl">
+            <span class="hist">
+              <button id="zPrevDay" title="Previous day">&lsaquo;</button>
+              <button id="zToday" title="Today">Today</button>
+              <button id="zNextDay" title="Next day">&rsaquo;</button>
+            </span>
+            <label class="tgl"><input type="checkbox" id="tempToggle"> Temperature</label>
+            <select id="zoomSelect" title="Choose a segment"></select>
+            <button id="zoomDownload" class="dlbtn" title="Download pressure-difference time series (CSV)">&#8595; CSV</button>
+          </div>
+        </div>
+        <div class="chead" style="margin-top:2px">
+          <div class="csub" id="zoomPlaces">&nbsp;</div>
+          <div class="cval" id="zoomVal"></div>
+        </div>
+        <div id="zoomForecast" class="zfc" hidden></div>
+        <canvas id="zoomCanvas"></canvas>
+        <div id="zoomTempPanel" hidden>
+          <div class="tpanel-label">Thermal gradient &middot; warmer inland (east) drives the wind &middot; &deg;F</div>
+          <canvas id="zoomTempCanvas"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><span class="swdot"></span>Observed (airport hourly + nearby station, sub-hourly)</span>
+    <span><span class="sw" style="border-top-style:dashed;border-color:var(--accent)"></span>Forecast (model)</span>
+    <span><span class="swbox" style="background:#d97706;border:1px solid #b45309"></span>Airport only &middot; hourly (zoom)</span>
+    <span><span class="sw" style="border-top-color:#dc2626"></span>Thermal gradient &middot; warmer inland drives wind &middot; separate &deg;F panel (zoom)</span>
+    <span><span class="swbox" style="background:rgba(16,185,129,.22);border:1px solid rgba(16,185,129,.5)"></span>Westerly (sailable)</span>
+    <span><span class="swbox" style="background:rgba(244,63,94,.20);border:1px solid rgba(244,63,94,.5)"></span>Easterly (offshore)</span>
+  </div>
+
+  <details>
+    <summary>About &amp; data sources</summary>
+    <p>Each chart plots the <b>sea-level pressure difference</b> (inches of mercury) between two points,
+      first&nbsp;&minus;&nbsp;second. Positive means the western point sits higher &mdash; the gradient that drives the
+      Gorge westerlies. The overview charts span ~39&nbsp;hours (&minus;12h to +27h around now, Pacific); the zoom shows
+      &minus;5h&rarr;+5h at 15-minute resolution, with an optional <b>temperature-difference</b> overlay (right axis, &deg;F)
+      &mdash; the thermal contrast that actually creates the pressure gradient.</p>
+    <p><b>Observed</b> dots blend official hourly METAR (<code>KAST</code>, <code>KPDX</code>, <code>KDLS</code>,
+      <code>KHRI</code>) with sub-hourly readings from the nearest personal weather station, bias-corrected to the
+      airport. <b>Forecast</b> (dashed) is Open-Meteo model sea-level pressure. Station data via
+      <code>api.aerisapi.com</code> (PWSWeather), forecast via <code>api.open-meteo.com</code> &mdash; fetched
+      directly in the browser. <span id="srcLine"></span></p>
+  </details>
+
+  <div class="seclabel">The Gorge &middot; west &rarr; east</div>
+  <figure class="gorgefig">
+    <div class="gorgefig-inner">
+      <img src="refs/gorge.png" alt="Satellite view of the Columbia River Gorge from the Pacific mouth (west) to the Tri-Cities (east)">
+      <div class="towns" id="towns"></div>
+    </div>
+    <figcaption>Columbia River Gorge &mdash; Pacific mouth (west) &rarr; Tri-Cities (east). Dark markers: pressure-gradient stations &middot; <span style="color:#0f766e;font-style:italic">teal: windsurf spots</span>.</figcaption>
+  </figure>
+</div>
+<div id="tip"></div>
+
+<script>
+"use strict";
+
+/* ============================ Config ============================ */
+const AERIS = { id:"wgE96YE3scTQLKjnqiMsv", secret:"xNXIFQQtESG7YLIbSOb5eHLrt2DwtBCU8519KhSj" };
+const IN_PER_MB = 0.0295299830714;
+const TZ = "America/Los_Angeles";
+const OVERVIEW_BACK_H = 12, OVERVIEW_FWD_H = 27;  // overview window: −12h … +27h around now
+const OVERVIEW_STEP = 30;       // observed spacing (min) for overview
+const ZOOM_BACK_H = 5, ZOOM_FWD_H = 12;
+const ZOOM_STEP = 15;           // observed spacing (min) for zoom
+const OBS_SMOOTH_MS = 7.5*60e3; // ±window for the median used when sampling observed onto a grid
+const REFRESH_MS = 5*60*1000;
+
+const LOCS = {
+  AST:{ name:"Astoria",    short:"Astoria",  airport:"KAST", pws:"PWS_KORASTOR27",  lat:46.158, lon:-123.883 },
+  PDX:{ name:"Portland",   short:"PDX",      airport:"KPDX", pws:"PWS_KORPORTL1880",lat:45.589, lon:-122.597 },
+  DLS:{ name:"The Dalles", short:"The Dalles",airport:"KDLS",pws:"PWS_WINDYHILLWEST",lat:45.618, lon:-121.167 },
+  HER:{ name:"Hermiston",  short:"Hermiston",airport:"KHRI", pws:"PWS_KORHERMI2",   lat:45.833, lon:-119.267 },
+  PSC:{ name:"Pasco",      short:"Pasco",    airport:"KPSC", pws:"PWS_GW3765",      lat:46.265, lon:-119.119 },
+  VAN:{ name:"Vancouver",  short:"Vancouver",airport:"KVUO", pws:"PWS_KORPORTL2555",lat:45.617, lon:-122.656 },
+  HR: { name:"Hood River", short:"Hood River",airport:"K4S2",pws:"PWS_HOODRIVER",   lat:45.683, lon:-121.536 },
+};
+const FC_ORDER = ["AST","PDX","DLS","HER","PSC","VAN","HR"];
+
+// Prominent (large) gradients, west -> east
+const PROMINENT = [
+  { a:"AST", b:"PDX" },
+  { a:"PDX", b:"DLS" },
+  { a:"DLS", b:"PSC" },
+];
+// Secondary (small) gradients
+const SECONDARY = [
+  { a:"DLS", b:"HER" },
+  { a:"VAN", b:"HR" },
+];
+const SEGMENTS = [...PROMINENT, ...SECONDARY];
+const ZOOM_OPTIONS = [
+  ...SEGMENTS,
+  { a:"AST", b:"HER", overall:true },
+];
+let zoomIdx = 1;          // default: Portland -> The Dalles
+let daysBack = 0;         // 0 = today (live); 1 = yesterday; ...
+const MAX_DAYS_BACK = 7;
+
+/* ============================ Palette ============================ */
+const C = {
+  ink:"#0f172a", muted:"#64748b", faint:"#94a3b8",
+  grid:"#eef2f6", zero:"#cbd5e1", axis:"#94a3b8",
+  accent:"#6366f1", obs:"#1e293b", air:"#d97706", temp:"#dc2626",
+  pos:"#10b981", neg:"#f43f5e",
+};
+const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+/* ============================ Time helpers ============================ */
+function tzOffsetMs(tz, atMs){
+  const d=new Date(atMs);
+  const utc=new Date(d.toLocaleString("en-US",{timeZone:"UTC"}));
+  const loc=new Date(d.toLocaleString("en-US",{timeZone:tz}));
+  return loc.getTime()-utc.getTime();
+}
+// Pacific midnight for the day `daysBack` days before today.
+function computeAnchor(daysBack){
+  daysBack=daysBack||0;
+  const now=Date.now(), offNow=tzOffsetMs(TZ,now);
+  const wallNow=new Date(now+offNow);
+  const y=wallNow.getUTCFullYear(), mo=wallNow.getUTCMonth(), d=wallNow.getUTCDate()-daysBack;
+  const off=tzOffsetMs(TZ, Date.UTC(y,mo,d,12,0,0));        // offset for that day (noon dodges DST edges)
+  const midWallUTC=Date.UTC(y,mo,d,0,0,0);
+  const w=new Date(midWallUTC);
+  const pad=n=>String(n).padStart(2,"0");
+  const anchorDate=`${w.getUTCFullYear()}-${pad(w.getUTCMonth()+1)}-${pad(w.getUTCDate())}`;
+  return { anchorMs:midWallUTC-off, offMs:off, dowIdx:w.getUTCDay(), anchorDate };
+}
+function omTime(s, offMs){
+  const [d,t]=s.split("T"); const [Y,M,D]=d.split("-").map(Number); const [h,m]=t.split(":").map(Number);
+  return Date.UTC(Y,M-1,D,h,m)-offMs;
+}
+function localHM(t, offMs){ const d=new Date(t+offMs); return { h:d.getUTCHours(), m:d.getUTCMinutes() }; }
+function fmtHour(h){ const x=h%12===0?12:h%12; return x+(h<12?"a":"p"); }
+function fmtClock(t, offMs){ const {h,m}=localHM(t,offMs); const x=h%12===0?12:h%12; return `${x}:${String(m).padStart(2,"0")}${h<12?"am":"pm"}`; }
+function fmtDate(ms){ return new Date(ms).toLocaleDateString("en-US",{timeZone:TZ,weekday:"long",month:"long",day:"numeric",year:"numeric"}); }
+
+/* ============================ Math ============================ */
+function median(a){ if(!a.length) return null; const s=[...a].sort((x,y)=>x-y); const m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; }
+function interp(series, t, maxGapMs){
+  if(series.length<2) return null;
+  if(t<series[0].t||t>series[series.length-1].t) return null;
+  let lo=0,hi=series.length-1;
+  while(hi-lo>1){ const mid=(lo+hi)>>1; if(series[mid].t<=t) lo=mid; else hi=mid; }
+  const a=series[lo],b=series[hi];
+  if(b.t-a.t>maxGapMs) return null;
+  return a.p+(b.p-a.p)*((t-a.t)/(b.t-a.t||1));
+}
+// Sample a series at time t, smoothed: median of readings within ±half. This kills the
+// per-minute jitter of consumer PWS sensors (±~0.01 inHg) so that a coarse 30-min grid and a
+// fine 15-min grid don't land on different noise peaks/troughs and disagree. Falls back to
+// linear interpolation where readings are sparse (e.g. hourly airport data) — fewer than 3 in
+// the window.
+function sampleSmooth(series, t, half, maxGapMs){
+  if(!series || !series.length) return null;
+  const lo=t-half, hi=t+half, vals=[];
+  for(const o of series){ if(o.t<lo) continue; if(o.t>hi) break; vals.push(o.p); }
+  if(vals.length>=3) return median(vals);
+  return interp(series, t, maxGapMs);
+}
+// Same idea for difference series, which carry a `.v` field instead of `.p`.
+function sampleV(series, t, maxGapMs){
+  if(series.length<2) return null;
+  if(t<series[0].t||t>series[series.length-1].t) return null;
+  let lo=0,hi=series.length-1;
+  while(hi-lo>1){ const mid=(lo+hi)>>1; if(series[mid].t<=t) lo=mid; else hi=mid; }
+  const a=series[lo],b=series[hi];
+  if(b.t-a.t>maxGapMs) return null;
+  return a.v+(b.v-a.v)*((t-a.t)/(b.t-a.t||1));
+}
+
+/* ============================ Fetch ============================ */
+// Aeris archive: relative "from=-Nhours" is unreliable (returns the previous full day);
+// a calendar date "from=YYYY-MM-DD" + "to=now" correctly returns that day's intraday obs.
+async function fetchArchive(id, fromDate, toSpec){
+  const url=`https://api.aerisapi.com/observations/archive/${id}`
+    +`?from=${fromDate}&to=${toSpec||"now"}&limit=3000`
+    +`&fields=periods.ob.dateTimeISO,periods.ob.pressureIN,periods.ob.pressureMB,periods.ob.tempF`
+    +`&client_id=${AERIS.id}&client_secret=${AERIS.secret}`;
+  const r=await fetch(url); if(!r.ok) throw new Error(`Aeris ${id} ${r.status}`);
+  const j=await r.json(); if(!j.success||!j.response) return [];
+  return (j.response.periods||[]).map(p=>{
+    const ob=p.ob||{};
+    const pin=ob.pressureIN!=null?ob.pressureIN:(ob.pressureMB!=null?ob.pressureMB*IN_PER_MB:null);
+    return { t:new Date(ob.dateTimeISO).getTime(), p:pin, tF:(ob.tempF!=null?ob.tempF:null) };
+  }).filter(o=>o.p!=null&&isFinite(o.t)).sort((a,b)=>a.t-b.t);
+}
+async function fetchForecast(offMs, pastDays){
+  const lat=FC_ORDER.map(k=>LOCS[k].lat).join(","), lon=FC_ORDER.map(k=>LOCS[k].lon).join(",");
+  const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+    +`&hourly=pressure_msl,temperature_2m&temperature_unit=fahrenheit&daily=sunrise,sunset`
+    +`&forecast_days=3&past_days=${pastDays||1}&timezone=America%2FLos_Angeles`;
+  const r=await fetch(url); if(!r.ok) throw new Error(`Open-Meteo ${r.status}`);
+  let j=await r.json(); if(!Array.isArray(j)) j=[j];
+  const pres={}, temp={}, sun={};
+  j.forEach((loc,i)=>{ const H=loc.hourly||{}, ts=H.time||[], pr=H.pressure_msl||[], tp=H.temperature_2m||[];
+    pres[FC_ORDER[i]]=ts.map((s,k)=>({t:omTime(s,offMs), p:pr[k]!=null?pr[k]*IN_PER_MB:null})).filter(o=>o.p!=null);
+    temp[FC_ORDER[i]]=ts.map((s,k)=>({t:omTime(s,offMs), p:tp[k]!=null?tp[k]:null})).filter(o=>o.p!=null);
+    const D=loc.daily||{}, sr=D.sunrise||[], ss=D.sunset||[];
+    sun[FC_ORDER[i]]=sr.map((s,k)=>({rise:omTime(s,offMs), set:(ss[k]!=null?omTime(ss[k],offMs):null)}))
+                       .filter(d=>isFinite(d.rise)&&d.set!=null);
+  });
+  return { pres, temp, sun };
+}
+// Per-location observed: bias-corrected sub-hourly PWS, MERGED with the hourly airport so a stale
+// or dead PWS never truncates the line — the airport backfills any time the PWS doesn't cover
+// (gaps, and everything after the PWS stops reporting).
+function buildObserved(airport, pws){
+  if(pws.length<5) return { series:airport.slice(), source:"airport" };
+  const mAir=median(airport.map(o=>o.p)), mPws=median(pws.map(o=>o.p));
+  if(mAir==null||mPws==null||Math.abs(mAir-mPws)>0.5) return { series:airport.slice(), source:"airport" };
+  const diffs=[];
+  for(const a of airport){ const pv=interp(pws,a.t,40*60e3); if(pv!=null) diffs.push(a.p-pv); }
+  const off=diffs.length>=2?median(diffs):(mAir-mPws);
+  const merged=pws.map(o=>({t:o.t, p:o.p+off}));           // bias-corrected PWS (sub-hourly detail)
+  let filled=0;                                            // backfill airport obs where the PWS has no nearby reading
+  for(const a of airport){ if(interp(pws,a.t,25*60e3)==null){ merged.push({t:a.t, p:a.p}); filled++; } }
+  merged.sort((x,y)=>x.t-y.t);
+  return { series:merged, source: filled? "pws+airport" : "pws" };
+}
+/* =============== Resilience: substitute a nearby reporting station =============== */
+const SUBSTITUTE_STALE_MS = 120*60e3;   // a location whose newest ob is older than this (live) is "dark"
+// Nearest currently-reporting METARs around a point. NOTE: a `fields=` param breaks this endpoint.
+async function fetchClosest(lat, lon){
+  const url=`https://api.aerisapi.com/observations/closest?p=${lat},${lon}`
+    +`&radius=90mi&limit=12&filter=metar&client_id=${AERIS.id}&client_secret=${AERIS.secret}`;
+  const r=await fetch(url); if(!r.ok) return [];
+  const j=await r.json(); if(!j.success||!Array.isArray(j.response)) return [];
+  return j.response.map(o=>({ id:o.id, name:(o.place&&o.place.name)||o.id,
+    distKM:(o.relativeTo&&o.relativeTo.distanceKM)||null,
+    obT:(o.ob&&o.ob.dateTimeISO)?new Date(o.ob.dateTimeISO).getTime():-Infinity }));
+}
+// Pick the nearest reporting station (not one of ours) that has fresh archive for the viewed day.
+async function findSubstitute(lat, lon, exclude, fromDate, toSpec, nowMs){
+  let cands; try{ cands=await fetchClosest(lat, lon); }catch(e){ return null; }
+  cands=cands.filter(c=> c.id && !exclude.includes(c.id) && (nowMs-c.obT)<SUBSTITUTE_STALE_MS);
+  for(const c of cands){
+    let arch; try{ arch=await fetchArchive(c.id, fromDate, toSpec); }catch(e){ continue; }
+    if(arch.length && (nowMs-arch[arch.length-1].t)<SUBSTITUTE_STALE_MS)
+      return { id:c.id, name:c.name, distKM:c.distKM, series:arch,
+               airT:arch.filter(o=>o.tF!=null).map(o=>({t:o.t,p:o.tF})) };
+  }
+  return null;
+}
+
+/* ===================== Difference series builder ===================== */
+function diffSeries(a, b, obs, fc, startMs, endMs, nowMs, stepMin){
+  const maxGap=90*60e3, step=stepMin*60e3, half=OBS_SMOOTH_MS;
+  const observed=[];
+  for(let t=startMs; t<=Math.min(nowMs,endMs); t+=step){
+    const va=sampleSmooth(obs[a],t,half,maxGap), vb=sampleSmooth(obs[b],t,half,maxGap);
+    if(va!=null&&vb!=null) observed.push({t, v:va-vb});
+  }
+  const fa=fc[a]||[], fb=fc[b]||[], fbMap=new Map(fb.map(o=>[o.t,o.p]));
+  const forecast=fa.filter(o=>o.t>=startMs-3600e3&&o.t<=endMs+3600e3&&fbMap.has(o.t))
+                   .map(o=>({t:o.t, v:o.p-fbMap.get(o.t)}));
+  return { observed, forecast };
+}
+// Airport-only difference at the airports' native (hourly) timestamps — raw METAR,
+// no PWS blend — for side-by-side comparison on the zoom chart.
+function airportDiff(a, b, air, startMs, endMs, nowMs){
+  const A=air[a]||[], B=air[b]||[], maxGap=75*60e3, lim=Math.min(nowMs,endMs), out=[];
+  for(const pt of A){
+    if(pt.t<startMs||pt.t>lim) continue;
+    const vb=interp(B, pt.t, maxGap);
+    if(vb!=null) out.push({ t:pt.t, v:pt.p-vb });
+  }
+  return out;
+}
+
+/* ============================ Rendering ============================ */
+function niceMax(absmax, floor, cands){
+  const C2=cands||[0.05,0.1,0.15,0.2,0.25,0.3,0.4,0.5,0.75,1.0];
+  const m=Math.max(floor, (absmax||0)*1.25);
+  for(const s of C2) if(m<=s) return s;
+  return C2[C2.length-1]*Math.ceil(m/C2[C2.length-1]);
+}
+function catmull(ctx, pts){
+  if(pts.length<2){ if(pts.length){ctx.moveTo(pts[0].x,pts[0].y);} return; }
+  ctx.moveTo(pts[0].x,pts[0].y);
+  for(let i=0;i<pts.length-1;i++){
+    const p0=pts[i-1]||pts[i], p1=pts[i], p2=pts[i+1], p3=pts[i+2]||p2;
+    ctx.bezierCurveTo(p1.x+(p2.x-p0.x)/6, p1.y+(p2.y-p0.y)/6,
+                      p2.x-(p3.x-p1.x)/6, p2.y-(p3.y-p1.y)/6, p2.x, p2.y);
+  }
+}
+
+// Draw one chart from a stored render-state R. hoverPx optional (screen x within canvas).
+function drawChart(chart, R, hoverPx){
+  const cv=chart.canvas, ctx=chart.ctx;
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const W=cv.clientWidth||520, H=chart.h;
+  cv.width=W*dpr; cv.height=H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+
+  const PAD={l:40,r:14,t:12,b:22};
+  const pl=PAD.l, pr=W-PAD.r, pt=PAD.t, pb=H-PAD.b, pw=pr-pl, ph=pb-pt;
+  const {startMs,endMs,nowMs,offMs,yMax,observed,forecast,type,dowIdx}=R;
+  const X=t=>pl+(t-startMs)/(endMs-startMs)*pw;
+  const Y=v=>pt+(yMax-v)/(2*yMax)*ph;
+  const zeroY=Y(0);
+
+  // night shading (high-res only): medium shadow over sunset→sunrise
+  if(type==="zoom" && R.nightSpans && R.nightSpans.length){
+    ctx.fillStyle="rgba(30,41,70,0.13)";
+    for(const ns of R.nightSpans){
+      const x1=Math.max(pl,X(ns.s)), x2=Math.min(pr,X(ns.e));
+      if(x2>x1) ctx.fillRect(x1, pt, x2-x1, ph);
+    }
+  }
+
+  // gridlines + y labels
+  ctx.lineWidth=1; ctx.font="10px -apple-system,Segoe UI,Arial,sans-serif"; ctx.textBaseline="middle";
+  const yticks=[yMax,yMax/2,0,-yMax/2,-yMax];
+  for(const v of yticks){
+    const y=Math.round(Y(v))+0.5;
+    ctx.strokeStyle=v===0?C.zero:C.grid;
+    ctx.beginPath(); ctx.moveTo(pl,y); ctx.lineTo(pr,y); ctx.stroke();
+    ctx.fillStyle=C.faint; ctx.textAlign="right";
+    ctx.fillText((v>0?"+":"")+v.toFixed(2), pl-6, y);
+  }
+
+  // x ticks
+  ctx.fillStyle=C.muted; ctx.textAlign="center"; ctx.textBaseline="top";
+  if(type==="overview"){
+    // ticks on local 6-hour boundaries; day-of-week shown at local midnight (window may start anywhere)
+    const first=localHM(startMs,offMs);
+    let t=startMs + ((60-first.m)%60)*60e3;                 // next hour boundary
+    while(localHM(t,offMs).h % 6 !== 0) t+=3600e3;          // advance to a 6h-aligned local hour
+    for(; t<=endMs; t+=6*3600e3){
+      const {h}=localHM(t,offMs);
+      if(h===0){ ctx.fillStyle=C.ink; ctx.fillText(DOW[new Date(t+offMs).getUTCDay()], X(t), pb+5); }
+      else { ctx.fillStyle=C.muted; ctx.fillText(fmtHour(h), X(t), pb+5); }
+    }
+  } else {
+    const first=localHM(startMs,offMs);
+    let t0=startMs + ((60-first.m)%60)*60e3;                 // first hour boundary
+    for(let t=t0; t<=endMs; t+=3600e3){ const {h}=localHM(t,offMs); ctx.fillStyle=C.muted; ctx.fillText(fmtHour(h), X(t), pb+5); }
+  }
+
+  ctx.save(); ctx.beginPath(); ctx.rect(pl,pt,pw,ph); ctx.clip();
+
+  // ---- diverging area fill under the forecast curve ----
+  const fc=forecast.filter(p=>p.t>=startMs&&p.t<=endMs).map(p=>({x:X(p.t),y:Y(p.v)}));
+  if(fc.length>1){
+    ctx.beginPath(); catmull(ctx,fc);
+    ctx.lineTo(fc[fc.length-1].x, zeroY); ctx.lineTo(fc[0].x, zeroY); ctx.closePath();
+    ctx.save(); ctx.clip();
+    ctx.fillStyle="rgba(16,185,129,.16)"; ctx.fillRect(pl,pt,pw,zeroY-pt);          // above 0 = positive
+    ctx.fillStyle="rgba(244,63,94,.15)";  ctx.fillRect(pl,zeroY,pw,pb-zeroY);        // below 0 = negative
+    ctx.restore();
+    // forecast curve (dashed accent)
+    ctx.beginPath(); catmull(ctx,fc);
+    ctx.setLineDash([5,4]); ctx.lineWidth=2; ctx.strokeStyle=C.accent;
+    ctx.lineJoin="round"; ctx.lineCap="round"; ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // ---- airport-only hourly (zoom comparison: amber line + square markers) ----
+  const ap=(R.airport||[]).filter(p=>p.t>=startMs&&p.t<=endMs).map(p=>({x:X(p.t),y:Y(p.v)}));
+  if(ap.length){
+    ctx.beginPath(); ap.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+    ctx.lineWidth=1.5; ctx.strokeStyle=C.air; ctx.lineJoin="round"; ctx.stroke();
+    ctx.fillStyle=C.air;
+    for(const p of ap){ ctx.fillRect(p.x-2.6,p.y-2.6,5.2,5.2); }
+  }
+
+  // ---- observed (solid ink line + dots) ----
+  const ob=observed.map(p=>({x:X(p.t),y:Y(p.v),v:p.v}));
+  if(ob.length>1){
+    ctx.beginPath(); ob.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+    ctx.lineWidth=2; ctx.strokeStyle=C.obs; ctx.lineJoin="round"; ctx.stroke();
+  }
+  const dotR=type==="zoom"?2.6:2.1;
+  ctx.fillStyle=C.obs;
+  for(const p of ob){ ctx.beginPath(); ctx.arc(p.x,p.y,dotR,0,7); ctx.fill(); }
+
+  ctx.restore();
+
+  // ---- now divider ----
+  if(nowMs>=startMs&&nowMs<=endMs){
+    const nx=Math.round(X(nowMs))+0.5;
+    ctx.setLineDash([3,3]); ctx.strokeStyle=C.axis; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(nx,pt); ctx.lineTo(nx,pb); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle=C.faint; ctx.font="9px -apple-system,Segoe UI,Arial,sans-serif";
+    ctx.textAlign= nx>pr-26?"right":"left"; ctx.textBaseline="top";
+    ctx.fillText("now", nx>pr-26?nx-3:nx+3, pt+1);
+  }
+
+  // ---- hover crosshair + tooltip ----
+  if(hoverPx!=null && hoverPx>=pl && hoverPx<=pr){
+    const t=startMs+(hoverPx-pl)/pw*(endMs-startMs);
+    const obsGap=(type==="zoom"?ZOOM_STEP:OVERVIEW_STEP+5)*60e3*2;
+    const ov=sampleV(observed,t,obsGap), fv=sampleV(forecast,t,2*3600e3);
+    const av=R.airport?sampleV(R.airport,t,75*60e3):null;
+    const hx=Math.round(hoverPx)+0.5;
+    ctx.strokeStyle="rgba(99,102,241,.5)"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(hx,pt); ctx.lineTo(hx,pb); ctx.stroke();
+    const mark=(v,col)=>{ if(v==null) return; ctx.fillStyle=col; ctx.beginPath(); ctx.arc(hx,Y(v),3.2,0,7); ctx.fill();
+      ctx.strokeStyle="#fff"; ctx.lineWidth=1.5; ctx.stroke(); };
+    mark(fv,C.accent); mark(av,C.air); mark(ov,C.obs);
+    showTip(chart, hoverPx, t, offMs, ov, fv, av);
+  }
+  chart._R=R;
+}
+
+/* ============================ Tooltip ============================ */
+const tip=document.getElementById("tip");
+function fmtVal(v){ return (v>=0?"+":"−")+Math.abs(v).toFixed(3); }
+function fmtTemp(v){ return (v>=0?"+":"−")+Math.abs(v).toFixed(1)+"°F"; }
+function placeTip(rect, px){
+  let x=rect.left+px+14, y=rect.top+12;
+  if(x+150>window.innerWidth) x=rect.left+px-150;
+  tip.style.left=x+"px"; tip.style.top=y+"px";
+}
+function showTip(chart, px, t, offMs, ov, fv, av){
+  const rect=chart.canvas.getBoundingClientRect();
+  let html=`<b>${fmtClock(t,offMs)}</b>`;
+  if(ov!=null) html+=`<br><span style="color:#cbd5e1">obs</span> ${fmtVal(ov)} inHg`;
+  if(av!=null) html+=`<br><span style="color:#fbbf24">airport</span> ${fmtVal(av)} inHg`;
+  if(fv!=null) html+=`<br><span style="color:#a5b4fc">fcst</span> ${fmtVal(fv)} inHg`;
+  tip.innerHTML=html; tip.style.opacity="1"; placeTip(rect, px);
+}
+function showTempTip(chart, px, t, offMs, ov, fv){
+  const rect=chart.canvas.getBoundingClientRect();
+  let html=`<b>${fmtClock(t,offMs)}</b>`;
+  if(ov!=null) html+=`<br><span style="color:#fca5a5">Δtemp</span> ${fmtTemp(ov)} <span style="color:#94a3b8">inland−coast</span>`;
+  if(fv!=null) html+=`<br><span style="color:#fca5a5">Δtemp fcst</span> ${fmtTemp(fv)}`;
+  tip.innerHTML=html; tip.style.opacity="1"; placeTip(rect, px);
+}
+function hideTip(){ tip.style.opacity="0"; }
+
+// Thermal-gradient panel (east−west °F), drawn below the pressure chart when Temperature is on.
+function drawTempPanel(chart, R, hoverPx){
+  const cv=chart.canvas, ctx=chart.ctx;
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const W=cv.clientWidth||520, H=chart.h;
+  cv.width=W*dpr; cv.height=H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+  const PAD={l:40,r:14,t:8,b:20};
+  const pl=PAD.l, pr=W-PAD.r, pt=PAD.t, pb=H-PAD.b, pw=pr-pl, ph=pb-pt;
+  const {startMs,endMs,nowMs,offMs,tMax,observed,forecast,nightSpans}=R;
+  const X=t=>pl+(t-startMs)/(endMs-startMs)*pw;
+  const Y=v=>pt+(tMax-v)/(2*tMax)*ph;
+  const zeroY=Y(0);
+
+  // night shading
+  if(nightSpans&&nightSpans.length){ ctx.fillStyle="rgba(30,41,70,0.13)";
+    for(const ns of nightSpans){ const x1=Math.max(pl,X(ns.s)), x2=Math.min(pr,X(ns.e)); if(x2>x1) ctx.fillRect(x1,pt,x2-x1,ph); } }
+
+  // gridlines + °F labels
+  ctx.lineWidth=1; ctx.font="10px -apple-system,Segoe UI,Arial,sans-serif"; ctx.textBaseline="middle";
+  for(const v of [tMax,tMax/2,0,-tMax/2,-tMax]){
+    const y=Math.round(Y(v))+0.5;
+    ctx.strokeStyle=v===0?C.zero:C.grid;
+    ctx.beginPath(); ctx.moveTo(pl,y); ctx.lineTo(pr,y); ctx.stroke();
+    ctx.fillStyle=C.faint; ctx.textAlign="right";
+    ctx.fillText((v>0?"+":"")+Math.round(v)+(v===tMax?"°F":"°"), pl-6, y);
+  }
+  // x ticks (hour labels)
+  ctx.fillStyle=C.muted; ctx.textAlign="center"; ctx.textBaseline="top";
+  const first=localHM(startMs,offMs);
+  for(let t=startMs+((60-first.m)%60)*60e3; t<=endMs; t+=3600e3){ const {h}=localHM(t,offMs); ctx.fillText(fmtHour(h), X(t), pb+4); }
+
+  ctx.save(); ctx.beginPath(); ctx.rect(pl,pt,pw,ph); ctx.clip();
+  // subtle diverging fill (green = inland warmer, favorable; red = reversed)
+  const fillSrc=(forecast&&forecast.length>1?forecast:observed).filter(p=>p.t>=startMs&&p.t<=endMs).map(p=>({x:X(p.t),y:Y(p.v)}));
+  if(fillSrc.length>1){
+    ctx.beginPath(); catmull(ctx,fillSrc);
+    ctx.lineTo(fillSrc[fillSrc.length-1].x, zeroY); ctx.lineTo(fillSrc[0].x, zeroY); ctx.closePath();
+    ctx.save(); ctx.clip();
+    ctx.fillStyle="rgba(16,185,129,.10)"; ctx.fillRect(pl,pt,pw,zeroY-pt);
+    ctx.fillStyle="rgba(244,63,94,.09)";  ctx.fillRect(pl,zeroY,pw,pb-zeroY);
+    ctx.restore();
+  }
+  // observed (solid red) + forecast (dashed red)
+  ctx.strokeStyle=C.temp; ctx.lineJoin="round"; ctx.lineCap="round";
+  const ob=observed.filter(p=>p.t>=startMs&&p.t<=endMs).map(p=>({x:X(p.t),y:Y(p.v)}));
+  if(ob.length>1){ ctx.beginPath(); catmull(ctx,ob); ctx.lineWidth=1.9; ctx.stroke(); }
+  const fc=forecast.filter(p=>p.t>=startMs&&p.t<=endMs).map(p=>({x:X(p.t),y:Y(p.v)}));
+  if(fc.length>1){ ctx.beginPath(); catmull(ctx,fc); ctx.setLineDash([5,4]); ctx.lineWidth=1.7; ctx.stroke(); ctx.setLineDash([]); }
+  ctx.restore();
+
+  // now line
+  if(nowMs>=startMs&&nowMs<=endMs){
+    const nx=Math.round(X(nowMs))+0.5;
+    ctx.setLineDash([3,3]); ctx.strokeStyle=C.axis; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(nx,pt); ctx.lineTo(nx,pb); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // hover crosshair + tooltip
+  if(hoverPx!=null && hoverPx>=pl && hoverPx<=pr){
+    const t=startMs+(hoverPx-pl)/pw*(endMs-startMs);
+    const ov=sampleV(observed,t,ZOOM_STEP*60e3*2), fv=sampleV(forecast,t,2*3600e3);
+    const hx=Math.round(hoverPx)+0.5;
+    ctx.strokeStyle="rgba(220,38,38,.45)"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(hx,pt); ctx.lineTo(hx,pb); ctx.stroke();
+    const mark=v=>{ if(v==null) return; ctx.fillStyle=C.temp; ctx.beginPath(); ctx.arc(hx,Y(v),3.2,0,7); ctx.fill();
+      ctx.strokeStyle="#fff"; ctx.lineWidth=1.5; ctx.stroke(); };
+    mark(fv); mark(ov);
+    showTempTip(chart, hoverPx, t, offMs, ov, fv);
+  }
+  chart._R=R;
+}
+
+/* ============================ Wind read ============================ */
+// Great-circle distance between two stations (km) — used to make wind labels distance-aware.
+function haversineKm(lat1,lon1,lat2,lon2){
+  const R=6371, toR=Math.PI/180;
+  const dLat=(lat2-lat1)*toR, dLon=(lon2-lon1)*toR;
+  const a=Math.sin(dLat/2)**2 + Math.cos(lat1*toR)*Math.cos(lat2*toR)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+function segKm(a,b){ const A=LOCS[a], B=LOCS[b]; return haversineKm(A.lat,A.lon,B.lat,B.lon); }
+const REF_KM = segKm("PDX","DLS");   // calibration baseline: the classic Portland→The Dalles leg (~110 km)
+// Classify by gradient STEEPNESS: scale the raw inHg difference to the reference-length leg, so a
+// given label means the same pressure-per-distance on a short leg (e.g. Vancouver→Hood River) as on
+// a long one (e.g. The Dalles→Pasco). Pass distKm=0/undefined to classify the raw value.
+function interpret(v, distKm){
+  const g = distKm ? v*REF_KM/distKm : v;
+  if(g>=0.20) return ["raging westerly",C.pos];
+  if(g>=0.12) return ["strong westerly",C.pos];
+  if(g>=0.05) return ["moderate westerly",C.pos];
+  if(g>-0.02) return ["light / slack",C.muted];
+  if(g>-0.08) return ["light easterly",C.neg];
+  if(g>-0.15) return ["moderate easterly",C.neg];
+  return ["strong easterly",C.neg];
+}
+
+/* ============================ DOM build ============================ */
+const REG=[]; // chart registry
+function makeCard(parent, h, seg, zoomIndex, mini){
+  const card=document.createElement("div"); card.className="card click"+(mini?" mini":"");
+  const head=document.createElement("div"); head.className="chead";
+  const ltxt=document.createElement("div");
+  const title=document.createElement("div"); title.className="ctitle";
+  const sub=document.createElement("div"); sub.className="csub";
+  ltxt.append(title,sub);
+  const right=document.createElement("div"); right.style.textAlign="right";
+  const val=document.createElement("div"); val.className="cval";
+  const exp=document.createElement("div"); exp.className="expand"; exp.textContent="open high-res ↗";
+  right.append(val,exp);
+  head.append(ltxt,right);
+  const cv=document.createElement("canvas");
+  card.append(head,cv); parent.append(card);
+  const chart={ canvas:cv, ctx:cv.getContext("2d"), type:"overview", h, title, sub, val, seg, zoomIndex, _R:null };
+  attachHover(chart);
+  card.addEventListener("click", ()=>openZoom(zoomIndex));
+  const dl=document.createElement("button"); dl.className="dlbtn cardz"; dl.innerHTML="&#8595; CSV";
+  dl.title="Download pressure-difference time series (CSV)";
+  dl.addEventListener("click", e=>{ e.stopPropagation(); downloadDiffCSV(seg); });
+  card.append(dl);
+  REG.push(chart);
+  return chart;
+}
+function attachHover(chart){
+  const draw=chart.draw||drawChart;
+  chart.canvas.addEventListener("mousemove", e=>{
+    if(!chart._R) return;
+    const r=chart.canvas.getBoundingClientRect();
+    draw(chart, chart._R, e.clientX-r.left);
+  });
+  chart.canvas.addEventListener("mouseleave", ()=>{ hideTip(); if(chart._R) draw(chart, chart._R, null); });
+}
+
+const mainEl=document.getElementById("overviewMain");
+const secEl=document.getElementById("overviewSecondary");
+const mainCharts = PROMINENT.map((seg,i)=> makeCard(mainEl, 190, seg, i, false));
+const secCharts  = SECONDARY.map((seg,j)=> makeCard(secEl, 122, seg, PROMINENT.length+j, true));
+const segCharts = [...mainCharts, ...secCharts];
+
+const zoomCard=document.getElementById("zoomCard");
+// zoom chart uses the pre-placed canvas
+const zoomChart = (()=>{
+  const cv=document.getElementById("zoomCanvas");
+  const ch={ canvas:cv, ctx:cv.getContext("2d"), type:"zoom", h:250,
+             title:null, sub:null, val:document.getElementById("zoomVal"), _R:null };
+  attachHover(ch); REG.push(ch); return ch;
+})();
+// separate thermal-gradient panel below the pressure chart (shown only when Temperature is on)
+const tempChart = (()=>{
+  const cv=document.getElementById("zoomTempCanvas");
+  const ch={ canvas:cv, ctx:cv.getContext("2d"), type:"temp", h:130, draw:drawTempPanel, _R:null };
+  attachHover(ch); return ch;
+})();
+const zoomModal=document.getElementById("zoomModal");
+let modalOpen=false;
+function openZoom(idx){
+  zoomIdx=idx; if(zoomSelect) zoomSelect.value=idx;
+  zoomModal.hidden=false; modalOpen=true;
+  if(LAST) renderZoom();
+}
+function closeZoom(){ zoomModal.hidden=true; modalOpen=false; }
+document.getElementById("zoomClose").addEventListener("click", closeZoom);
+document.getElementById("zoomBackdrop").addEventListener("click", closeZoom);
+document.addEventListener("keydown", e=>{ if(e.key==="Escape" && modalOpen) closeZoom(); });
+
+// zoom selector
+const zoomSelect=document.getElementById("zoomSelect");
+ZOOM_OPTIONS.forEach((o,i)=>{
+  const opt=document.createElement("option"); opt.value=i;
+  opt.textContent=(o.overall?"Overall: ":"")+`${LOCS[o.a].name} → ${LOCS[o.b].name}`;
+  zoomSelect.append(opt);
+});
+zoomSelect.value=zoomIdx;
+zoomSelect.addEventListener("change", ()=>{ zoomIdx=+zoomSelect.value; if(LAST) renderZoom(); });
+
+const tempToggle=document.getElementById("tempToggle");
+tempToggle.addEventListener("change", ()=>{ if(LAST) renderZoom(); });
+document.getElementById("zoomDownload").addEventListener("click", ()=>{ if(LAST) downloadDiffCSV(ZOOM_OPTIONS[zoomIdx]); });
+
+/* ============================ Orchestration ============================ */
+const elDot=document.getElementById("dot"), elStatus=document.getElementById("statusText");
+const elUpdated=document.getElementById("updated"), elNext=document.getElementById("nextRefresh");
+const elSrc=document.getElementById("srcLine"), elDate=document.getElementById("todayDate");
+let LAST=null, tick=null, nextAt=0;
+
+function setStatus(cls,txt){ elDot.className="dot "+cls; elStatus.textContent=txt; }
+function valHTML(v, distKm, tdiff, pStn, tStn){ const [word,col]=interpret(v, distKm); const s=v>=0?"+":"−";
+  let wline=`inHg &middot; ${word}`;
+  if(pStn) wline+=` <span class="stn">(${pStn})</span>`;
+  let h=`<span class="num" style="color:${col}">${s}${Math.abs(v).toFixed(2)}</span>`
+       +`<span class="word">${wline}</span>`;
+  if(tdiff!=null && isFinite(tdiff)){ const ts=tdiff>=0?"+":"−", tc=tdiff>=0?"#059669":"#dc2626"; // green=east warmer, red=west warmer
+    let tline=`&Delta;temp ${ts}${Math.abs(tdiff).toFixed(0)}&deg;F`;
+    if(tStn) tline+=` <span class="stn">(${tStn})</span>`;
+    h+=`<span class="tdiff" style="color:${tc}">${tline}</span>`; }
+  return h; }
+// Latest airport temperature difference (°F), east − west: positive means the inland (eastern)
+// station is warmer, i.e. the thermal contrast is feeding the pressure gradient.
+function currentTempDiff(a,b){
+  const A=LAST.airT[a], B=LAST.airT[b];
+  if(!A||!A.length||!B||!B.length) return null;
+  return B[B.length-1].p - A[A.length-1].p;
+}
+function currentPressure(k){ const a=LAST.obs[k]; return (a&&a.length)? a[a.length-1].p : null; }   // inHg
+function currentTemp(k){ const a=LAST.airT[k]; return (a&&a.length)? a[a.length-1].p : null; }        // °F
+// Averaged daytime intervals for a station pair, per day.
+function pairDays(a,b){
+  const A=(LAST.sun&&LAST.sun[a])||[], B=(LAST.sun&&LAST.sun[b])||[], n=Math.min(A.length,B.length), out=[];
+  for(let i=0;i<n;i++) out.push({ rise:(A[i].rise+B[i].rise)/2, set:(A[i].set+B[i].set)/2 });
+  return out;
+}
+// Night intervals within [startMs,endMs] = the window minus daytime (sunrise→sunset).
+function computeNight(startMs, endMs, days){
+  if(!days.length) return [];
+  const day=days.filter(d=>d.set>startMs && d.rise<endMs).sort((a,b)=>a.rise-b.rise);
+  const night=[]; let cursor=startMs;
+  for(const d of day){
+    const r=Math.max(d.rise,startMs);
+    if(r>cursor) night.push({ s:cursor, e:Math.min(r,endMs) });
+    cursor=Math.max(cursor, Math.min(d.set,endMs));
+  }
+  if(cursor<endMs) night.push({ s:cursor, e:endMs });
+  return night;
+}
+
+/* ============================ CSV export ============================ */
+function isoPacific(t){
+  const off=LAST.anchor.offMs, d=new Date(t+off), pad=n=>String(n).padStart(2,"0"), ao=Math.abs(off);
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:00`
+       + `${off<0?"-":"+"}${pad(Math.floor(ao/3600e3))}:${pad(Math.floor(ao/60e3)%60)}`;
+}
+// Full-resolution observed difference: every native observation timestamp from either
+// station (no fixed-grid downsampling), so the export never drops data and is identical
+// whether it comes from a small overview chart or the high-res view.
+function fullObservedDiff(a, b, obs, startMs, endMs, nowMs){
+  const A=obs[a]||[], B=obs[b]||[], maxGap=90*60e3, lim=Math.min(nowMs,endMs);
+  const times=[];
+  for(const o of A) if(o.t>=startMs&&o.t<=lim) times.push(o.t);
+  for(const o of B) if(o.t>=startMs&&o.t<=lim) times.push(o.t);
+  times.sort((x,y)=>x-y);
+  const out=[]; let prev=null;
+  for(const t of times){
+    if(t===prev) continue; prev=t;
+    const va=interp(A,t,maxGap), vb=interp(B,t,maxGap);
+    if(va!=null&&vb!=null) out.push({t, v:va-vb});
+  }
+  return out;
+}
+// Export the pressure-difference time series for a pair as CSV. Computed straight from the raw
+// data over the full day window (not from a chart's down-sampled render state), so the small
+// and high-res downloads contain the same pressure-difference values.
+function downloadDiffCSV(pair){
+  if(!pair || !LAST) return;
+  const {anchorMs}=LAST.anchor, nowMs=LAST.nowMs;
+  const startMs=anchorMs;                                                          // from local midnight: all observed
+  const endMs=LAST.isToday ? nowMs+OVERVIEW_FWD_H*3600e3 : anchorMs+24*3600e3;     // out to the forecast's right edge
+  const observed=fullObservedDiff(pair.a,pair.b,LAST.obs,startMs,endMs,nowMs);
+  const fa=LAST.fc[pair.a]||[], fb=LAST.fc[pair.b]||[], fbMap=new Map(fb.map(o=>[o.t,o.p]));
+  const forecast=fa.filter(o=>o.t>=startMs-3600e3&&o.t<=endMs+3600e3&&fbMap.has(o.t))
+                   .map(o=>({t:o.t, v:o.p-fbMap.get(o.t)}));
+  const airport=airportDiff(pair.a,pair.b,LAST.air,startMs,endMs,nowMs);
+  const cols=[["observed",observed],["forecast",forecast],["airport_only",airport]];
+  const map=new Map();
+  for(const [name,arr] of cols) for(const p of (arr||[])){ if(!map.has(p.t)) map.set(p.t,{}); map.get(p.t)[name]=p.v; }
+  const times=[...map.keys()].sort((a,b)=>a-b);
+  if(!times.length) return;
+  const header=["time_pacific", ...cols.map(c=>`${c[0]}_diff_inHg`)];
+  const rows=[header.join(",")];
+  for(const t of times){ const r=map.get(t); rows.push([isoPacific(t), ...cols.map(c=> r[c[0]]!=null? r[c[0]].toFixed(3):"")].join(",")); }
+  const csv="﻿"+rows.join("\r\n")+"\r\n";
+  const a=LOCS[pair.a].short.replace(/\s+/g,""), b=LOCS[pair.b].short.replace(/\s+/g,"");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement("a"); link.href=url; link.download=`pressure-diff_${a}-${b}_${LAST.anchor.anchorDate}.csv`;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1500);
+}
+
+function renderSeg(chart, seg){
+  const {offMs,anchorMs,dowIdx}=LAST.anchor, nowMs=LAST.nowMs;
+  let startMs, endMs;
+  if(LAST.isToday){ startMs=nowMs-OVERVIEW_BACK_H*3600e3; endMs=nowMs+OVERVIEW_FWD_H*3600e3; } // −12h … +27h around now
+  else { startMs=anchorMs; endMs=anchorMs+24*3600e3; }                                          // history: full calendar day
+  const d=diffSeries(seg.a,seg.b,LAST.obs,LAST.fc,startMs,endMs,nowMs,OVERVIEW_STEP);
+  chart.title.textContent=`${LOCS[seg.a].name} → ${LOCS[seg.b].name}`;
+  chart.sub.textContent=`${LOCS[seg.a].short} − ${LOCS[seg.b].short}`;
+  if(LAST.isToday){                                       // current values only on today's view
+    const last=d.observed[d.observed.length-1];
+    chart.val.innerHTML=last?valHTML(last.v, segKm(seg.a,seg.b), currentTempDiff(seg.a,seg.b)):`<span class="word">no obs</span>`;
+  } else {
+    chart.val.innerHTML="";                               // history: no current values
+  }
+  return { startMs,endMs,nowMs,offMs,dowIdx,type:"overview",
+           observed:d.observed, forecast:d.forecast };
+}
+// Basic forecast model for the prominent legs: model outlook (Open-Meteo), actual-vs-forecast, and
+// last-hour pressure & thermal trends. Shown at the top of the high-res pop-up for the top 3 only.
+function renderForecast(o){
+  const el=document.getElementById("zoomForecast"); if(!el) return;
+  if(!LAST.isToday || zoomIdx>=PROMINENT.length){ el.hidden=true; el.innerHTML=""; return; }
+  const a=o.a, b=o.b, offMs=LAST.anchor.offMs, gap=90*60e3, dist=segKm(a,b);
+  const sgn=v=>`${v>=0?"+":"−"}${Math.abs(v).toFixed(2)}`;
+  const obsAt=t=>{ const x=interp(LAST.obs[a]||[],t,gap), y=interp(LAST.obs[b]||[],t,gap); return (x!=null&&y!=null)?x-y:null; };
+  const fcAt =t=>{ const x=interp(LAST.fc[a]||[],t,gap),  y=interp(LAST.fc[b]||[],t,gap);  return (x!=null&&y!=null)?x-y:null; };
+  const tAt  =t=>{ const x=interp(LAST.airT[a]||[],t,gap), y=interp(LAST.airT[b]||[],t,gap); return (x!=null&&y!=null)?y-x:null; }; // east−west
+
+  // latest time both stations have data, for a fair actual↔forecast comparison and the trend baseline
+  const la=(LAST.obs[a]||[]).slice(-1)[0], lb=(LAST.obs[b]||[]).slice(-1)[0];
+  const tNow=(la&&lb)?Math.min(la.t,lb.t):LAST.nowMs;
+  const actual=obsAt(tNow), fcNow=fcAt(tNow), pPrev=obsAt(tNow-3600e3);
+  const lat=(LAST.airT[a]||[]).slice(-1)[0], lbt=(LAST.airT[b]||[]).slice(-1)[0];
+  const tT=(lat&&lbt)?Math.min(lat.t,lbt.t):tNow;
+  const tNowV=tAt(tT), tPrev=tAt(tT-3600e3);
+
+  // model peak for the rest of today
+  const fa=LAST.fc[a]||[], fb=LAST.fc[b]||[], fbMap=new Map(fb.map(p=>[p.t,p.p])), dayEnd=LAST.anchor.anchorMs+24*3600e3;
+  let peak=null;
+  for(const p of fa){ if(p.t>=tNow && p.t<=dayEnd && fbMap.has(p.t)){ const v=p.p-fbMap.get(p.t); if(peak==null||v>peak.v) peak={t:p.t,v}; } }
+
+  const trend=(d,thr)=> d==null?{g:"·",w:"—",c:C.muted} : d>thr?{g:"▲",w:"rising",c:C.pos} : d<-thr?{g:"▼",w:"falling",c:C.neg} : {g:"→",w:"steady",c:C.muted};
+  const pt=trend((actual!=null&&pPrev!=null)?actual-pPrev:null, 0.01);
+  const tt=trend((tNowV!=null&&tPrev!=null)?tNowV-tPrev:null, 0.5);
+
+  let html=`<div class="zfc-h">Forecast model &middot; ${LOCS[a].short} → ${LOCS[b].short}</div>`;
+  if(peak){ const [pw,pc]=interpret(peak.v,dist);
+    html+=`<div class="zfc-row"><span class="zfc-k">Peak today</span> <b style="color:${pc}">${sgn(peak.v)}</b> inHg &middot; ${pw} &middot; ~${fmtHour(localHM(peak.t,offMs).h)}</div>`; }
+  if(actual!=null&&fcNow!=null){ const d=actual-fcNow;
+    const cmp = d>0.02?{t:"exceeding forecast",c:C.pos} : d<-0.02?{t:"below forecast",c:C.neg} : {t:"matching forecast",c:C.muted};
+    html+=`<div class="zfc-row"><span class="zfc-k">Now</span> actual <b>${sgn(actual)}</b> vs <b>${sgn(fcNow)}</b> forecast — <b style="color:${cmp.c}">${cmp.t}</b></div>`;
+  } else html+=`<div class="zfc-row"><span class="zfc-k">Now</span> <span style="color:var(--muted)">comparison unavailable</span></div>`;
+  html+=`<div class="zfc-row"><span class="zfc-k">Last hour</span> pressure &Delta; <b style="color:${pt.c}">${pt.g} ${pt.w}</b> &middot; thermal &Delta; <b style="color:${tt.c}">${tt.g} ${tt.w}</b></div>`;
+  // next-3h wind prediction: project the forecast trajectory from the current actual (bias-corrected).
+  // change over 3h = forecast(now+3h) − forecast(now); the current model bias cancels out of the delta.
+  const fNow=fcAt(tNow), f3=fcAt(tNow+3*3600e3);
+  if(fNow!=null && f3!=null){
+    const change=f3-fNow, predicted=(actual!=null?actual:fNow)+change, gd=change*REF_KM/(dist||REF_KM);
+    const dir = gd>0.02?{g:"▲",w:"building",c:C.pos} : gd<-0.02?{g:"▼",w:"easing",c:C.neg} : {g:"→",w:"holding steady",c:C.muted};
+    const [pw3,pc3]=interpret(predicted,dist);
+    html+=`<div class="zfc-row"><span class="zfc-k">Next 3h</span> wind <b style="color:${dir.c}">${dir.g} ${dir.w}</b> &middot; ~<b style="color:${pc3}">${sgn(predicted)}</b> inHg &middot; ${pw3}</div>`;
+  }
+  el.innerHTML=html; el.hidden=false;
+}
+function renderZoom(){
+  const o=ZOOM_OPTIONS[zoomIdx], {offMs,anchorMs}=LAST.anchor, nowMs=LAST.nowMs;
+  let startMs, endMs;
+  if(LAST.isToday){                                       // live: a ±5h window around now
+    startMs=nowMs-ZOOM_BACK_H*3600e3; endMs=nowMs+ZOOM_FWD_H*3600e3;
+    document.getElementById("zoomSub").innerHTML=`&minus;${ZOOM_BACK_H}h to +${ZOOM_FWD_H}h &middot; observed every 15 min &middot; airport hourly &amp; temperature toggle`;
+  } else {                                                // history: the full viewed day, high-res
+    startMs=anchorMs; endMs=anchorMs+24*3600e3;
+    document.getElementById("zoomSub").innerHTML=`full day &middot; observed every 15 min &middot; airport hourly &amp; temperature toggle`;
+  }
+  document.getElementById("zoomDate").textContent=(LAST.isToday?"Today — ":"")+fmtDate(anchorMs);
+  const d=diffSeries(o.a,o.b,LAST.obs,LAST.fc,startMs,endMs,nowMs,ZOOM_STEP);
+  const ad=airportDiff(o.a,o.b,LAST.air,startMs,endMs,nowMs);
+  highlightMap(o.a,o.b);
+  document.getElementById("zoomPlaces").textContent=`${LOCS[o.a].name} − ${LOCS[o.b].name}`;
+  if(LAST.isToday){
+    const last=d.observed[d.observed.length-1];
+    if(last){
+      const pa=currentPressure(o.a), pb=currentPressure(o.b), ta=currentTemp(o.a), tb=currentTemp(o.b);
+      const pStn=(pa!=null&&pb!=null)?`${LOCS[o.a].short} ${pa.toFixed(2)} &middot; ${LOCS[o.b].short} ${pb.toFixed(2)}`:null;
+      const tStn=(ta!=null&&tb!=null)?`${LOCS[o.a].short} ${Math.round(ta)}&deg; &middot; ${LOCS[o.b].short} ${Math.round(tb)}&deg;`:null;
+      zoomChart.val.innerHTML=valHTML(last.v, segKm(o.a,o.b), currentTempDiff(o.a,o.b), pStn, tStn);
+    } else zoomChart.val.innerHTML=`<span class="word">no obs</span>`;
+  } else {
+    zoomChart.val.innerHTML="";
+  }
+  renderForecast(o);
+  // shared y-scale with a tighter floor for detail
+  const all=[...d.observed,...d.forecast,...ad].map(p=>Math.abs(p.v));
+  const yMax=niceMax(Math.max(0,...all),0.05);
+  const nightSpans=computeNight(startMs,endMs,pairDays(o.a,o.b));
+  drawChart(zoomChart,{ startMs,endMs,nowMs,offMs,yMax,type:"zoom",
+    observed:d.observed, forecast:d.forecast, airport:ad, nightSpans },null);
+
+  // temperature: a separate thermal-gradient panel below the pressure chart, only when toggled on
+  const tempOn=tempToggle.checked;
+  const tpanel=document.getElementById("zoomTempPanel");
+  tpanel.hidden=!tempOn;
+  if(tempOn){
+    // east − west thermal gradient (inland warmth builds the west→east pressure gradient),
+    // so this panel rises and falls in step with the pressure chart above it.
+    const td=diffSeries(o.b,o.a,LAST.airT,LAST.fcT,startMs,endMs,nowMs,ZOOM_STEP);
+    const tall=[...td.observed,...td.forecast].map(p=>Math.abs(p.v));
+    const tMax=niceMax(Math.max(0,...tall),5,[5,10,15,20,25,30,40,50,60]);
+    drawTempPanel(tempChart,{ startMs,endMs,nowMs,offMs,tMax,
+      observed:td.observed, forecast:td.forecast, nightSpans },null);
+  }
+}
+function renderAll(){
+  if(!LAST) return;
+  // overview: shared y-scale across the three segments for comparability
+  const states=segCharts.map(c=>renderSeg(c,c.seg));
+  let absmax=0;
+  states.forEach(s=>[...s.observed,...s.forecast].forEach(p=>{ absmax=Math.max(absmax,Math.abs(p.v)); }));
+  const yMax=niceMax(absmax,0.15);
+  segCharts.forEach((c,i)=>drawChart(c,{...states[i],yMax},null));
+  const zo=ZOOM_OPTIONS[zoomIdx]; highlightMap(zo.a, zo.b);   // keep map in sync with the selected pair
+  if(modalOpen) renderZoom();        // only refresh the popup while it's open
+}
+
+async function refresh(){
+  if(tick){ clearInterval(tick); tick=null; }
+  setStatus("load","Updating…");
+  const isToday=daysBack===0;
+  const anchor=computeAnchor(daysBack), nowMs=Date.now();
+  const toSpec=isToday?"now":anchor.anchorDate;          // history: pull just the viewed calendar day
+  const pastDays=Math.max(1, daysBack+1);
+  elDate.textContent=fmtDate(anchor.anchorMs);
+  document.getElementById("viewTag").textContent=isToday?"Live":"History";
+  updateHistButtons();
+
+  const jobs={ forecast:fetchForecast(anchor.offMs, pastDays) };
+  for(const k of FC_ORDER){ jobs["air_"+k]=fetchArchive(LOCS[k].airport,anchor.anchorDate,toSpec);
+                            jobs["pws_"+k]=fetchArchive(LOCS[k].pws,anchor.anchorDate,toSpec); }
+  const keys=Object.keys(jobs);
+  const res=await Promise.allSettled(keys.map(k=>jobs[k]));
+  const R={}, fails=[];
+  keys.forEach((k,i)=>{ if(res[i].status==="fulfilled") R[k]=res[i].value;
+                        else { fails.push(k); R[k]=(k==="forecast")?{pres:{},temp:{},sun:{}}:[]; } });
+
+  const obs={}, air={}, airT={}, srcLabel={}, subs={};
+  for(const k of FC_ORDER){
+    air[k]=R["air_"+k]||[];
+    airT[k]=(air[k]||[]).filter(o=>o.tF!=null).map(o=>({t:o.t,p:o.tF}));   // airport temperature (°F)
+    const b=buildObserved(R["air_"+k]||[],R["pws_"+k]||[]); obs[k]=b.series;
+    srcLabel[k]= b.source==="airport" ? `${LOCS[k].airport} (hourly)`
+              : b.source==="pws+airport" ? `${LOCS[k].pws}+${LOCS[k].airport}`
+              : `${LOCS[k].pws} (sub-hourly)`;
+  }
+  // resilience: if a location is "dark" (no recent obs), substitute the nearest reporting station
+  if(isToday){
+    const dark=FC_ORDER.filter(k=>{ const s=obs[k], last=s&&s.length?s[s.length-1].t:-Infinity;
+                                    return nowMs-last>SUBSTITUTE_STALE_MS; });
+    if(dark.length) await Promise.all(dark.map(async k=>{
+      const sub=await findSubstitute(LOCS[k].lat, LOCS[k].lon, [LOCS[k].airport, LOCS[k].pws], anchor.anchorDate, toSpec, nowMs);
+      if(sub){ obs[k]=sub.series; air[k]=sub.series; airT[k]=sub.airT; subs[k]=sub;
+               srcLabel[k]=`→ ${sub.name}${sub.distKM?` (${Math.round(sub.distKM)}km)`:""} — ${LOCS[k].short} offline`; }
+    }));
+  }
+  const srcInfo=FC_ORDER.map(k=>`${LOCS[k].name}: ${srcLabel[k]}`);
+  LAST={ obs, air, airT, fc:R.forecast.pres, fcT:R.forecast.temp, sun:R.forecast.sun, anchor, nowMs, isToday, subs };
+  renderAll();
+
+  const stamp=new Date().toLocaleTimeString("en-US",{timeZone:TZ,hour:"2-digit",minute:"2-digit"});
+  elUpdated.innerHTML=isToday?`Updated <b>${stamp} PT</b>`:`Viewing <b>${fmtDate(anchor.anchorMs)}</b>`;
+  elSrc.textContent=(isToday?"This refresh — ":"This day — ")+srcInfo.join(" · ")+".";
+  elNext.textContent="";
+  const nSub=Object.keys(subs).length;
+  if(fails.length>=keys.length) setStatus("err","All sources failed");
+  else if(fails.length) setStatus("warn",`Partial (${fails.length} source${fails.length>1?"s":""} down)`);
+  else if(nSub) setStatus("warn",`Live · ${nSub} station${nSub>1?"s":""} substituted`);
+  else setStatus(isToday?"ok":"warn", isToday?"Live":"History · past day");
+
+  if(isToday){
+    nextAt=Date.now()+REFRESH_MS;
+    tick=setInterval(()=>{ const left=Math.max(0,nextAt-Date.now());
+      const m=Math.floor(left/60000), s=Math.floor((left%60000)/1000);
+      elNext.textContent=`next in ${m}:${String(s).padStart(2,"0")}`;
+      if(left<=0) refresh(); },1000);
+  }
+}
+
+/* ============================ Gorge image — town overlay ============================ */
+// gorge.png is a satellite banner of the Columbia, Pacific mouth (west) -> Tri-Cities (east).
+// IMG_GEO is the image's geographic extent, calibrated by fitting a linear lat/lon->pixel
+// transform through three snow peaks visible in the frame (Mt St Helens, Mt Hood, Mt Adams).
+// Tweak these four bounds if any label drifts off its town.
+const IMG_GEO = { west:-124.51, east:-118.48, north:46.38, south:45.15 };
+function geoToPct(lat, lon){
+  return { x:(lon-IMG_GEO.west)/(IMG_GEO.east-IMG_GEO.west)*100,
+           y:(IMG_GEO.north-lat)/(IMG_GEO.north-IMG_GEO.south)*100 };
+}
+// Per-town label side, nudged so close pairs (Portland/Vancouver) don't collide.
+const TOWN_DIR = { AST:"below", VAN:"above", PDX:"below", HR:"above", DLS:"below", HER:"above", PSC:"below" };
+// Reference windsurf spots (no weather data), styled teal to set them apart from the stations.
+const SPOTS = [
+  { short:"Jones Beach", lat:46.158,  lon:-123.290,  dir:"below" },
+  { short:"Stevenson",   lat:45.696,  lon:-121.886,  dir:"below" },
+  { short:"Rufus",       lat:45.6955, lon:-120.7355, dir:"below" },
+  { short:"Arlington",   lat:45.7168, lon:-120.2009, dir:"above" },
+];
+const townEls = {};
+function buildTowns(){
+  const host=document.getElementById("towns"); if(!host) return;
+  host.innerHTML="";
+  Object.keys(LOCS).forEach(k=>{
+    const s=LOCS[k], p=geoToPct(s.lat,s.lon);
+    const el=document.createElement("div");
+    el.className="town"+(TOWN_DIR[k]==="below"?" below":"");
+    el.style.left=p.x+"%"; el.style.top=p.y+"%";
+    el.innerHTML=`<span class="pin"></span><span class="lbl">${s.short}</span>`;
+    host.appendChild(el);
+    townEls[k]=el;
+  });
+  SPOTS.forEach(s=>{
+    const p=geoToPct(s.lat,s.lon);
+    const el=document.createElement("div");
+    el.className="town spot"+(s.dir==="below"?" below":"");
+    el.style.left=p.x+"%"; el.style.top=p.y+"%";
+    el.innerHTML=`<span class="pin"></span><span class="lbl">${s.short}</span>`;
+    host.appendChild(el);
+  });
+}
+// Light up the two towns of the currently-selected gradient pair.
+function highlightMap(a,b){
+  Object.keys(townEls).forEach(k=>{ townEls[k].classList.toggle("on", k===a||k===b); });
+}
+
+/* ============================ History nav ============================ */
+function goPrev(){ if(daysBack<MAX_DAYS_BACK){ daysBack++; refresh(); } }
+function goNext(){ if(daysBack>0){ daysBack--; refresh(); } }
+function goToday(){ if(daysBack!==0){ daysBack=0; refresh(); } }
+// wire both button sets: the page status bar and the popup header
+const HIST_BTNS=[["prevDay","todayBtn","nextDay"],["zPrevDay","zToday","zNextDay"]]
+  .map(ids=>ids.map(id=>document.getElementById(id)));
+function updateHistButtons(){
+  HIST_BTNS.forEach(([p,t,n])=>{ if(p)p.disabled=(daysBack>=MAX_DAYS_BACK); if(t)t.disabled=(daysBack===0); if(n)n.disabled=(daysBack<=0); });
+}
+[["prevDay","zPrevDay",goPrev],["todayBtn","zToday",goToday],["nextDay","zNextDay",goNext]].forEach(([a,b,fn])=>{
+  const ea=document.getElementById(a); if(ea) ea.addEventListener("click",fn);
+  const eb=document.getElementById(b); if(eb) eb.addEventListener("click",fn);
+});
+
+let rsz; window.addEventListener("resize",()=>{ clearTimeout(rsz); rsz=setTimeout(renderAll,150); });
+document.getElementById("refreshBtn").addEventListener("click",refresh);
+buildTowns();
+refresh();
+</script>
+</body>
+</html>

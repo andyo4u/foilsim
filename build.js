@@ -163,6 +163,13 @@ function copyAssets() {
     console.log('  favicon.ico copied');
   }
 
+  // Standalone WotW gorge pressure-gradient page, served at /pres (self-contained,
+  // not part of the Three.js bundle). Copied verbatim so its relative refs/ paths work.
+  if (fs.existsSync(path.join(SRC, 'pres'))) {
+    copyDir(path.join(SRC, 'pres'), path.join(DIST, 'pres'));
+    console.log('  pres/ copied (gorge pressure page)');
+  }
+
   // Music (exclude originals/)
   if (fs.existsSync(path.join(SRC, 'music'))) {
     mkdirp(path.join(DIST, 'music'));

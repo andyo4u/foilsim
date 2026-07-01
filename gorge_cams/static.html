@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Gorge Cams — Static Snapshots</title>
+<meta name="description" content="Static snapshots of Columbia River Gorge webcams, west to east. Live HLS feeds are sampled into still frames." />
+<meta name="theme-color" content="#0b2030" />
+<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text x='50%' y='58%' font-size='72' text-anchor='middle' dominant-baseline='middle'>🌬️</text></svg>" />
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js" defer></script>
+
+<style>
+  :root {
+    --bg-0: #050d15;
+    --bg-1: #0b2030;
+    --bg-2: #102b3f;
+    --panel: rgba(14, 32, 48, 0.72);
+    --panel-edge: rgba(120, 200, 230, 0.14);
+    --ink: #eaf4fb;
+    --ink-mute: #94b3c4;
+    --ink-dim: #5e7a8c;
+    --accent: #6ad1ff;
+    --accent-warm: #ffb86b;
+    --accent-evergreen: #5fc28a;
+    --danger: #ff6b6b;
+    --shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+    --radius: 14px;
+    --radius-sm: 8px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg-0);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(1200px 700px at 75% -10%, rgba(106, 209, 255, 0.18), transparent 60%),
+      radial-gradient(900px 500px at 10% 0%, rgba(255, 184, 107, 0.10), transparent 65%),
+      linear-gradient(180deg, #061320 0%, #0a1f30 35%, #07182a 100%);
+    z-index: -2;
+  }
+  body::after {
+    content: "";
+    position: fixed; left: 0; right: 0; bottom: 0; height: 32vh;
+    background:
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'><path fill='%23071a2a' d='M0,128L40,144C80,160,160,192,240,186.7C320,181,400,139,480,138.7C560,139,640,181,720,170.7C800,160,880,96,960,90.7C1040,85,1120,139,1200,165.3C1280,192,1360,192,1400,192L1440,192L1440,320L0,320Z'/></svg>") bottom/cover no-repeat,
+      linear-gradient(180deg, transparent, #050d15 80%);
+    z-index: -1;
+    opacity: 0.85;
+    pointer-events: none;
+  }
+
+  header.site {
+    padding: 28px clamp(16px, 3vw, 40px) 8px;
+    display: flex; flex-wrap: wrap; align-items: end; gap: 20px;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand-mark {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #6ad1ff, #2c89c7 60%, #0b3f5e);
+    display: grid; place-items: center;
+    box-shadow: 0 6px 24px rgba(106, 209, 255, 0.35), inset 0 0 0 1px rgba(255,255,255,0.15);
+    font-size: 22px;
+  }
+  h1 {
+    font-size: clamp(24px, 3vw, 34px);
+    margin: 0;
+    letter-spacing: -0.01em;
+    background: linear-gradient(180deg, #ffffff 30%, #94c8e0 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .tagline { color: var(--ink-mute); font-size: 13px; margin-top: 2px; }
+
+  .page-nav {
+    display: flex; gap: 4px;
+    background: rgba(7, 18, 30, 0.65);
+    border: 1px solid var(--panel-edge);
+    border-radius: 999px;
+    padding: 4px;
+    backdrop-filter: blur(8px);
+  }
+  .page-nav a {
+    padding: 6px 14px;
+    border-radius: 999px;
+    text-decoration: none;
+    font-size: 13px;
+    color: var(--ink-mute);
+    letter-spacing: 0.02em;
+  }
+  .page-nav a:hover { color: var(--ink); }
+  .page-nav a[aria-current="page"] {
+    background: linear-gradient(135deg, rgba(106,209,255,0.18), rgba(44,137,199,0.18));
+    color: var(--ink);
+    box-shadow: inset 0 0 0 1px rgba(106,209,255,0.25);
+  }
+
+  .clock {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-mute);
+    font-size: 13px;
+    display: flex; gap: 14px; align-items: center;
+  }
+  .clock .pulse {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent-evergreen);
+    box-shadow: 0 0 0 0 rgba(95, 194, 138, 0.8);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(95, 194, 138, 0.8); }
+    70% { box-shadow: 0 0 0 10px rgba(95, 194, 138, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(95, 194, 138, 0); }
+  }
+
+  main { padding: 12px clamp(16px, 3vw, 40px) 60px; }
+
+  .section-title {
+    display: flex; align-items: baseline; gap: 14px;
+    margin: 28px 0 14px;
+  }
+  .section-title h2 {
+    margin: 0;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    font-weight: 600;
+  }
+  .section-title .rule {
+    flex: 1; height: 1px;
+    background: linear-gradient(90deg, var(--panel-edge), transparent);
+  }
+
+  .grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+  .cam {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: var(--radius);
+    overflow: hidden;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: var(--shadow);
+    transition: transform 0.18s ease, border-color 0.18s ease;
+    cursor: zoom-in;
+  }
+  .cam:hover {
+    transform: translateY(-2px);
+    border-color: rgba(106, 209, 255, 0.35);
+  }
+  .cam-frame {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    background: #000;
+    overflow: hidden;
+  }
+  .cam-frame img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: opacity 0.4s ease;
+  }
+  .cam-frame canvas {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    background: #000;
+    display: block;
+    transition: opacity 0.4s ease;
+  }
+  .cam-frame.loading img,
+  .cam-frame.loading canvas { opacity: 0.4; }
+  .cam-frame.crop-tl-quarter img {
+    object-position: 0 0;
+    transform: scale(2);
+    transform-origin: 0 0;
+  }
+  .cam-frame video[data-video] {
+    position: absolute;
+    width: 2px; height: 2px;
+    opacity: 0;
+    pointer-events: none;
+    top: 0; left: 0;
+  }
+  .cam-frame.error::after {
+    content: "Cam offline";
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    background: linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.85));
+    color: var(--danger);
+    font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .cam-frame.stale::after {
+    content: "Stale";
+    position: absolute; top: 10px; right: 10px;
+    background: rgba(255, 184, 107, 0.9);
+    color: #1a0e02;
+    padding: 3px 8px; border-radius: 999px;
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    font-weight: 600;
+  }
+  .cam-frame .spinner {
+    position: absolute; inset: 0;
+    display: none;
+    place-items: center;
+    pointer-events: none;
+  }
+  .cam-frame.loading .spinner { display: grid; }
+  .spinner-ring {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.15);
+    border-top-color: var(--accent);
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .cam-meta {
+    padding: 12px 14px 14px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .cam-meta .name { font-weight: 600; font-size: 14px; line-height: 1.25; }
+  .cam-meta .where { color: var(--ink-mute); font-size: 12px; margin-top: 2px; }
+  .cam-meta .age {
+    color: var(--ink-dim);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .cam-tag {
+    position: absolute;
+    top: 10px; left: 10px;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    color: var(--accent);
+    padding: 3px 8px; border-radius: 999px;
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    text-decoration: none;
+    z-index: 2;
+  }
+  a.cam-tag:hover { background: rgba(106, 209, 255, 0.28); color: var(--ink); }
+  .cam-tag.snapshot { color: #fff; background: rgba(255, 59, 59, 0.8); }
+  a.cam-tag.snapshot:hover { background: rgba(255, 59, 59, 0.95); color: #fff; }
+
+  .lightbox {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.92);
+    display: none;
+    place-items: center;
+    z-index: 100;
+    padding: 24px;
+  }
+  .lightbox.open { display: grid; }
+  .lightbox img, .lightbox canvas {
+    max-width: 96vw; max-height: 90vh;
+    border-radius: 8px;
+    box-shadow: 0 20px 80px rgba(0,0,0,0.7);
+  }
+  .lightbox-close {
+    position: absolute; top: 18px; right: 18px;
+    background: rgba(255,255,255,0.1);
+    border: none; color: #fff;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    font-size: 22px;
+    cursor: pointer;
+    display: grid; place-items: center;
+  }
+  .lightbox-caption {
+    position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+    color: var(--ink-mute);
+    font-size: 13px;
+    background: rgba(0,0,0,0.6);
+    padding: 6px 12px; border-radius: 6px;
+  }
+
+  .cam-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .cam-list li { margin: 0; }
+  .cam-list a {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink-mute);
+    text-decoration: none;
+    font-size: 13px;
+    backdrop-filter: blur(6px);
+    transition: border-color 0.18s ease, color 0.18s ease;
+  }
+  .cam-list a:hover {
+    color: var(--ink);
+    border-color: rgba(106, 209, 255, 0.35);
+  }
+  .cam-list a strong { color: var(--ink); font-weight: 600; }
+  .cam-list a .where { color: var(--ink-mute); }
+  .cam-list a .src {
+    color: var(--accent);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  footer.site {
+    text-align: center;
+    color: var(--ink-dim);
+    font-size: 12px;
+    padding: 20px;
+    line-height: 1.6;
+  }
+  footer.site a { color: var(--ink-mute); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .clock .pulse, .spinner-ring { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">🌬️</div>
+    <div>
+      <h1>Gorge Cams</h1>
+      <div class="tagline">Static snapshots · west → east · live streams sampled into still frames</div>
+    </div>
+  </div>
+  <nav class="page-nav" aria-label="Mode">
+    <a href="index.html">Combined</a>
+    <a href="static.html" aria-current="page">Static</a>
+    <a href="live.html">Live video</a>
+    <a href="map.html">Map</a>
+  </nav>
+  <div class="clock">
+    <span class="pulse" aria-hidden="true"></span>
+    <span id="clock"></span>
+  </div>
+</header>
+
+<main>
+
+  <div class="section-title">
+    <h2>West Gorge</h2><div class="rule"></div>
+  </div>
+  <div class="grid" id="grid-west"></div>
+
+  <div class="section-title">
+    <h2>Hood River &amp; White Salmon</h2><div class="rule"></div>
+  </div>
+  <div class="grid" id="grid-mid"></div>
+
+  <div class="section-title">
+    <h2>East Gorge</h2><div class="rule"></div>
+  </div>
+  <div class="grid" id="grid-east"></div>
+
+  <div class="section-title">
+    <h2>Cams not connecting</h2><div class="rule"></div>
+  </div>
+  <ul class="cam-list" id="cam-list-other" aria-label="Cams not currently connecting"></ul>
+
+</main>
+
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Enlarged cam">
+  <button class="lightbox-close" id="lightboxClose" aria-label="Close">×</button>
+  <img id="lightboxImg" alt="" />
+  <canvas id="lightboxCanvas"></canvas>
+  <div class="lightbox-caption" id="lightboxCaption"></div>
+</div>
+
+<footer class="site">
+  Cam feeds courtesy of
+  <a href="https://www.sailworks.com/bp/Gorge_Wind_Cams.html" target="_blank" rel="noopener">Sailworks</a>,
+  <a href="https://www.portofhoodriver.com/live-cam-viewer" target="_blank" rel="noopener">Port of Hood River</a>,
+  Visit Stevenson WA, GorgeNet, Skyline Health, WSDOT &amp; ODOT TripCheck.
+</footer>
+
+<script>
+  // ---------- Port of Hood River HLS handshake (shared with live.html) ----------
+  const PORT_HR = {
+    systemId: 'de6e1346-6c40-4956-923b-365b6ad83393',
+    user:     'info@portofhoodriver.com',
+    pass:     'nX*TyCKJg*G+6_$F',
+  };
+  let portAuth = null;
+  let portAuthAt = 0;
+
+  async function getPortAuth(force = false) {
+    if (!force && portAuth && Date.now() - portAuthAt < 3 * 60 * 1000) return portAuth;
+    const base = `https://${PORT_HR.systemId}.relay.vmsproxy.com`;
+    const r = await fetch(`${base}/api/getNonce`);
+    if (!r.ok) throw new Error('getNonce ' + r.status);
+    const { reply: { realm, nonce } } = await r.json();
+    const digest = CryptoJS.MD5(`${PORT_HR.user}:${realm}:${PORT_HR.pass}`).toString();
+    const ha2    = CryptoJS.MD5('GET:').toString();
+    const simple = CryptoJS.MD5(`${digest}:${nonce}:${ha2}`).toString();
+    portAuth = btoa(`${PORT_HR.user}:${nonce}:${simple}`);
+    portAuthAt = Date.now();
+    return portAuth;
+  }
+
+  function portCamUrl(cameraId, auth) {
+    return `https://${PORT_HR.systemId}.relay.vmsproxy.com/hls/${cameraId}.m3u8?lo&auth=${auth}`;
+  }
+
+  // ---------- Cam catalog ----------
+  const SAILWORKS = 'https://www.sailworks.com/bp/Gorge_Wind_Cams.html';
+  const PORT_HR_VIEWER = 'https://www.portofhoodriver.com/live-cam-viewer';
+  const TRIPCHECK = 'https://tripcheck.com/';
+
+  const KATU_HOODRIVER   = 'https://d237lhmlzpreh2.cloudfront.net/KATUB/hoodriver/m3u8/KATUB-HoodRiver_live.m3u8';
+  const KATU_THEDALLES   = 'https://d237lhmlzpreh2.cloudfront.net/KATUB/TheDalles/m3u8/TheDalles_live.m3u8';
+  const KATU_STACKERBUTTE = 'https://d237lhmlzpreh2.cloudfront.net/KATUB/SawtoothCam/m3u8/Sawtooth_live.m3u8';
+  const CRG_AGGREGATOR = 'https://www.columbiarivergorge.info/webcams';
+
+  const cams = [
+    // West
+    { region: 'west', name: 'Camas-Washougal Marina', where: 'Washougal, WA',            url: 'https://live6.brownrice.com/cam-images/washougalmarina.jpg',               source: 'Port of Camas-Washougal', sourceUrl: 'https://portcw.com/marina/marina-webcam/' },
+    { region: 'west', name: 'Rooster Rock State Park', where: 'Corbett, OR — west end of the Gorge', url: 'https://sauviewind.net/rooster/camera0.jpg',                  source: 'sauviewind.net',   sourceUrl: 'https://sauviewind.net/' },
+    { region: 'west', name: 'Stevenson Kite Beach', where: 'Stevenson, WA',            url: 'https://g1.ipcamlive.com/player/snapshot.php?alias=kite',                  source: 'Visit Stevenson',  sourceUrl: 'https://www.visitstevensonwa.com/live-kite-cam/' },
+    { region: 'west', name: "Bob's Beach",           where: 'Stevenson, WA',            url: 'https://g1.ipcamlive.com/player/snapshot.php?alias=61f8358c542e7',         source: 'Visit Stevenson',  sourceUrl: 'https://www.visitstevensonwa.com/live-bobs-beach-cam/' },
+    { region: 'west', name: 'City of Stevenson',    where: 'Stevenson, WA',            url: 'https://g1.ipcamlive.com/player/snapshot.php?alias=63190408cec88',         source: 'Visit Stevenson',  sourceUrl: 'https://www.visitstevensonwa.com/live-city-cam/' },
+    { region: 'west', name: 'Cascade Boat Ramp',    where: 'Stevenson, WA — boat launch near the Bridge of the Gods', url: 'https://g1.ipcamlive.com/player/snapshot.php?alias=stevensonboatlaunch',   source: 'Visit Stevenson',  sourceUrl: 'https://www.visitstevensonwa.com/cascade-boat-ramp-live-cam/', crop: 'tl-quarter' },
+
+    // Mid (Hood River / White Salmon) — live HLS sampled as snapshots
+    { region: 'mid',  name: 'The Sandbar',              where: 'Hood River, OR — sandbar at the mouth of the Hood River',           url: 'https://i.ytimg.com/vi/vg0MPeVsGPo/maxresdefault_live.jpg',                 source: 'thesandbar.cam',   sourceUrl: 'https://thesandbar.cam/' },
+    { region: 'mid',  name: 'Wells Island',            where: 'Niknas — between Stevenson &amp; Hood River',    url: 'https://niknas.net/webcam1.jpg',                          source: 'niknas.net',       sourceUrl: 'https://niknas.net/' },
+    { region: 'mid',  name: 'Hood River',              where: 'Hood River, OR — KATU news cam',                 live: true, streamUrl: KATU_HOODRIVER,                       source: 'KATU News',          sourceUrl: `https://sinclairstoryline.com/resources/embeds/jw8-embed.html?file=${KATU_HOODRIVER}?resize=true&autostart=true` },
+    { region: 'mid',  name: 'Hood River Spit',         where: 'Hood River, OR — sand spit at the mouth of the Hood River',                    url: 'https://g1.ipcamlive.com/player/snapshot.php?alias=5a45712fd58a3',                  source: 'ipcamlive',           sourceUrl: 'https://g1.ipcamlive.com/player/player.php?alias=5a45712fd58a3&autoplay=1' },
+    { region: 'mid',  name: 'Hood River Bridge North', where: 'Hood River, OR — looking north to White Salmon', live: true, cameraId: 'f265991e-469e-82ae-37a3-bad6dd6b65c5', source: 'Port of Hood River', sourceUrl: PORT_HR_VIEWER },
+    { region: 'mid',  name: 'Hood River Marina',       where: 'Hood River, OR',                                 live: true, cameraId: 'bccf45ad-2ef0-f28b-0f3c-2ce3ae8ad180', source: 'Port of Hood River', sourceUrl: PORT_HR_VIEWER },
+    { region: 'mid',  name: 'Hood River Boat Launch',  where: 'Hood River, OR',                                 live: true, cameraId: '3d35c2ca-324b-8b39-e57b-3ce7f14145b6', source: 'Port of Hood River', sourceUrl: PORT_HR_VIEWER },
+    { region: 'mid',  name: 'Hood River Airport FBO',  where: 'Hood River, OR',                                 live: true, cameraId: '1e213db5-1d6a-b4f4-57b1-6bfa782666bb', source: 'Port of Hood River', sourceUrl: PORT_HR_VIEWER },
+    { region: 'mid',  name: 'Event Site',              where: 'Hood River, OR',           url: 'http://209.216.188.4:81/axis-cgi/jpg/image.cgi',                            source: 'GorgeNet',          sourceUrl: SAILWORKS, listOnly: true },
+    { region: 'mid',  name: 'Skyline Hospital',        where: 'White Salmon, WA',         url: 'https://myskylinehealth.org/gorgecam/Gorgecam.jpg',                         source: 'Skyline Health',    sourceUrl: 'https://myskylinehealth.org/', listOnly: true },
+
+    // East
+    { region: 'east', name: 'The Dalles',             where: 'The Dalles, OR — KATU news cam',                live: true, streamUrl: KATU_THEDALLES,                       source: 'KATU News',          sourceUrl: `https://sinclairstoryline.com/resources/embeds/jw8-embed.html?file=${KATU_THEDALLES}?resize=true&autostart=true` },
+    { region: 'east', name: 'Stacker Butte',          where: 'Columbia Hills, WA — overlooking The Dalles',   live: true, streamUrl: KATU_STACKERBUTTE,                    source: 'KATU News',          sourceUrl: `https://sinclairstoryline.com/resources/video/players/prod/src/scripts/v1/dist/embed.html?file=${KATU_STACKERBUTTE}?resize=true&autostart=true&advertising=false` },
+    { region: 'east', name: 'WSDOT Dallesport',       where: 'Dallesport, WA',           url: 'http://images.wsdot.wa.gov/airports/Dalles.jpg',                            source: 'WSDOT',             sourceUrl: 'https://wsdot.com/travel/real-time/airport-cameras', listOnly: true },
+    { region: 'east', name: 'I-84 @ Celilo',          where: 'Celilo, OR',               url: 'http://tripcheck.com/RoadCams/cams/I-84%20at%20Celilo_pid2748.JPG',          source: 'ODOT TripCheck',    sourceUrl: TRIPCHECK },
+    { region: 'east', name: 'I-84 @ Biggs Junction',  where: 'Biggs, OR',                url: 'http://tripcheck.com/RoadCams/cams/I-84%20at%20US97%20Biggs%20Jct._pid3097.JPG', source: 'ODOT TripCheck',    sourceUrl: TRIPCHECK },
+    { region: 'east', name: 'I-84 @ Arlington',       where: 'Arlington, OR',            url: 'https://tripcheck.com/RoadCams/cams/Arlington_pid600.jpg',                  source: 'ODOT TripCheck',    sourceUrl: TRIPCHECK },
+  ];
+
+  const JPG_REFRESH_MS  = 30_000;
+  const LIVE_REFRESH_MS = 60_000;
+
+  const grids = {
+    west: document.getElementById('grid-west'),
+    mid:  document.getElementById('grid-mid'),
+    east: document.getElementById('grid-east'),
+  };
+
+  function makeCard(cam, idx) {
+    const card = document.createElement('article');
+    card.className = 'cam';
+    card.dataset.idx = idx;
+    const tagClass = cam.live ? 'snapshot' : '';
+    const tagText  = cam.live ? `Live · ${cam.source}` : cam.source;
+    const tagHtml  = cam.sourceUrl
+      ? `<a class="cam-tag ${tagClass}" href="${cam.sourceUrl}" target="_blank" rel="noopener" data-sourcelink>${tagText} ↗</a>`
+      : `<div class="cam-tag ${tagClass}">${tagText}</div>`;
+    const mediaHtml = cam.live
+      ? `<canvas data-canvas></canvas><video data-video muted playsinline></video>`
+      : `<img alt="${cam.name} — ${cam.where}" decoding="async" referrerpolicy="no-referrer" />`;
+    const cropClass = cam.crop ? ` crop-${cam.crop}` : '';
+    card.innerHTML = `
+      ${tagHtml}
+      <div class="cam-frame loading${cropClass}" data-frame>
+        ${mediaHtml}
+        <div class="spinner"><div class="spinner-ring"></div></div>
+      </div>
+      <div class="cam-meta">
+        <div>
+          <div class="name">${cam.name}</div>
+          <div class="where">${cam.where}</div>
+        </div>
+        <div class="age" data-age>—</div>
+      </div>
+    `;
+    const frame = card.querySelector('[data-frame]');
+    const ageEl = card.querySelector('[data-age]');
+    cam._lastLoaded = null;
+    cam._everLoaded = false;
+
+    if (cam.live) {
+      const canvas = card.querySelector('[data-canvas]');
+      const video  = card.querySelector('[data-video]');
+      cam._el = { card, frame, video, canvas, ageEl };
+    } else {
+      const img = frame.querySelector('img');
+      img.addEventListener('load', () => {
+        frame.classList.remove('loading', 'error', 'stale');
+        cam._lastLoaded = Date.now();
+        cam._everLoaded = true;
+        updateAge(cam);
+      });
+      img.addEventListener('error', () => {
+        frame.classList.remove('loading');
+        if (cam._everLoaded) frame.classList.add('stale');
+        else                 frame.classList.add('error');
+      });
+      cam._el = { card, frame, img, ageEl };
+    }
+
+    const sourceLink = card.querySelector('[data-sourcelink]');
+    if (sourceLink) sourceLink.addEventListener('click', e => e.stopPropagation());
+
+    card.addEventListener('click', () => openLightbox(cam));
+    return card;
+  }
+
+  cams.forEach((cam, i) => {
+    if (cam.listOnly) return;
+    grids[cam.region].appendChild(makeCard(cam, i));
+  });
+
+  // Render listOnly cams as plain text links at the bottom
+  const listOnlyEl = document.getElementById('cam-list-other');
+  cams.filter(c => c.listOnly).forEach(cam => {
+    const li = document.createElement('li');
+    const where = cam.where.replace(/&amp;/g, '&');
+    const href = cam.sourceUrl || cam.url;
+    li.innerHTML = `<a href="${href}" target="_blank" rel="noopener"><strong>${cam.name}</strong> <span class="where">${where}</span> <span class="src">${cam.source}</span> ↗</a>`;
+    listOnlyEl.appendChild(li);
+  });
+
+  function snapshotLive(cam) {
+    return new Promise(async (resolve, reject) => {
+      const { video, canvas, frame } = cam._el;
+      frame.classList.add('loading');
+      frame.classList.remove('error');
+
+      let hls = cam._hls;
+      if (hls) { hls.destroy(); cam._hls = null; }
+
+      let url;
+      if (cam.streamUrl) {
+        url = cam.streamUrl;
+      } else {
+        let auth;
+        try { auth = await getPortAuth(); }
+        catch (e) {
+          frame.classList.remove('loading');
+          if (cam._everLoaded) frame.classList.add('stale');
+          else                 frame.classList.add('error');
+          return reject(e);
+        }
+        url = portCamUrl(cam.cameraId, auth);
+      }
+
+      let done = false;
+      const fail = (err) => {
+        if (done) return; done = true;
+        clearTimeout(timer);
+        if (cam._hls) { cam._hls.destroy(); cam._hls = null; }
+        frame.classList.remove('loading');
+        if (cam._everLoaded) frame.classList.add('stale');
+        else                 frame.classList.add('error');
+        reject(err);
+      };
+      const capture = () => {
+        if (done) return;
+        if (!video.videoWidth || video.readyState < 2) return;
+        done = true;
+        clearTimeout(timer);
+        const w = video.videoWidth, h = video.videoHeight;
+        if (canvas.width !== w)  canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+        canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+        frame.classList.remove('loading', 'error', 'stale');
+        cam._lastLoaded = Date.now();
+        cam._everLoaded = true;
+        updateAge(cam);
+        if (cam._hls) { cam._hls.destroy(); cam._hls = null; }
+        try { video.pause(); } catch {}
+        resolve();
+      };
+      const timer = setTimeout(() => fail(new Error('snapshot timeout')), 15000);
+
+      if (window.Hls && Hls.isSupported()) {
+        hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+        cam._hls = hls;
+        hls.loadSource(url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(()=>{}));
+        hls.on(Hls.Events.FRAG_BUFFERED, () => setTimeout(capture, 250));
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (data.fatal) {
+            // Auth may have expired — invalidate so next attempt re-handshakes
+            portAuth = null;
+            fail(new Error(data.type + (data.details ? ':' + data.details : '')));
+          }
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = url;
+        video.addEventListener('loadeddata', () => setTimeout(capture, 250), { once: true });
+        video.addEventListener('error', () => fail(new Error('native HLS error')), { once: true });
+        video.play().catch(()=>{});
+      } else {
+        fail(new Error('no HLS support'));
+      }
+    });
+  }
+
+  function refreshCam(cam) {
+    if (!cam._el) return;
+    if (cam.live) {
+      snapshotLive(cam).catch(err => console.warn(cam.name, 'snapshot failed:', err.message));
+    } else {
+      const sep = cam.url.includes('?') ? '&' : '?';
+      cam._el.frame.classList.add('loading');
+      cam._el.frame.classList.remove('error');
+      cam._el.img.src = `${cam.url}${sep}t=${Date.now()}`;
+    }
+  }
+
+  function updateAge(cam) {
+    if (!cam._el) return;
+    if (!cam._lastLoaded) { cam._el.ageEl.textContent = '—'; return; }
+    const s = Math.round((Date.now() - cam._lastLoaded) / 1000);
+    cam._el.ageEl.textContent = s < 60 ? `${s}s ago` : `${Math.round(s/60)}m ago`;
+  }
+
+  // Stagger initial loads so we don't hammer
+  function bootCams() {
+    cams.forEach((cam, i) => setTimeout(() => refreshCam(cam), i * 120));
+  }
+
+  // Per-cam refresh timers (different cadence for live snapshots vs JPGs)
+  function startTimers() {
+    cams.forEach(cam => {
+      const period = cam.live ? LIVE_REFRESH_MS : JPG_REFRESH_MS;
+      setInterval(() => { if (document.visibilityState === 'visible') refreshCam(cam); }, period);
+    });
+  }
+
+  setInterval(() => cams.forEach(updateAge), 1000);
+
+  // Clock
+  function tickClock() {
+    const d = new Date();
+    const opts = { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' };
+    document.getElementById('clock').textContent = d.toLocaleString(undefined, opts);
+  }
+  tickClock(); setInterval(tickClock, 1000 * 30);
+
+  // Lightbox
+  const lb       = document.getElementById('lightbox');
+  const lbImg    = document.getElementById('lightboxImg');
+  const lbCanvas = document.getElementById('lightboxCanvas');
+  const lbCap    = document.getElementById('lightboxCaption');
+  const lbX      = document.getElementById('lightboxClose');
+
+  function openLightbox(cam) {
+    if (cam.live) {
+      const src = cam._el.canvas;
+      lbCanvas.width  = src.width  || 1280;
+      lbCanvas.height = src.height || 720;
+      if (src.width) lbCanvas.getContext('2d').drawImage(src, 0, 0);
+      lbImg.style.display = 'none';
+      lbCanvas.style.display = '';
+      lbCap.textContent = `${cam.name} — ${cam.where.replace(/&amp;/g, '&')} (live snapshot)`;
+    } else {
+      const sep = cam.url.includes('?') ? '&' : '?';
+      lbImg.src = `${cam.url}${sep}t=${Date.now()}`;
+      lbImg.style.display = '';
+      lbCanvas.style.display = 'none';
+      lbCap.textContent = `${cam.name} — ${cam.where.replace(/&amp;/g, '&')}`;
+    }
+    lb.classList.add('open');
+  }
+  function closeLightbox() {
+    lb.classList.remove('open');
+    lbImg.src = '';
+  }
+  lbX.addEventListener('click', closeLightbox);
+  lb.addEventListener('click', e => { if (e.target === lb) closeLightbox(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+  // Boot once both CDN scripts have loaded
+  window.addEventListener('load', () => {
+    const ready = () => window.CryptoJS && (window.Hls || document.createElement('video').canPlayType('application/vnd.apple.mpegurl'));
+    if (ready()) { bootCams(); startTimers(); }
+    else setTimeout(() => { bootCams(); startTimers(); }, 1500);
+  });
+</script>
+
+</body>
+</html>

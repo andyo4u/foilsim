@@ -7,3 +7,12 @@ terrain-data/*.tif
 # Build output
 dist/
 node_modules/
+
+# Leaderboard exports (contain player IP/geolocation PII)
+leaderboard/
+misc/fixed leaderboard.csv
+misc/fixed_leaderboard.sql
+
+# Claude Code session artifacts from the gorge_cams side project
+gorge_cams/.claude/
+gorge_cams/.playwright-mcp/

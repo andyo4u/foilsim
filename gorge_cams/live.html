@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Gorge Cams — Live Video</title>
+<meta name="description" content="Live HLS streams from the Port of Hood River — Bridge North, Marina, Boat Launch and Airport FBO." />
+<meta name="theme-color" content="#0b2030" />
+<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text x='50%' y='58%' font-size='72' text-anchor='middle' dominant-baseline='middle'>🌬️</text></svg>" />
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js" defer></script>
+
+<style>
+  :root {
+    --bg-0: #050d15;
+    --panel: rgba(14, 32, 48, 0.72);
+    --panel-edge: rgba(120, 200, 230, 0.14);
+    --ink: #eaf4fb;
+    --ink-mute: #94b3c4;
+    --ink-dim: #5e7a8c;
+    --accent: #6ad1ff;
+    --accent-evergreen: #5fc28a;
+    --danger: #ff6b6b;
+    --shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+    --radius: 14px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg-0);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(1200px 700px at 75% -10%, rgba(106, 209, 255, 0.18), transparent 60%),
+      radial-gradient(900px 500px at 10% 0%, rgba(255, 184, 107, 0.10), transparent 65%),
+      linear-gradient(180deg, #061320 0%, #0a1f30 35%, #07182a 100%);
+    z-index: -2;
+  }
+  body::after {
+    content: "";
+    position: fixed; left: 0; right: 0; bottom: 0; height: 32vh;
+    background:
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'><path fill='%23071a2a' d='M0,128L40,144C80,160,160,192,240,186.7C320,181,400,139,480,138.7C560,139,640,181,720,170.7C800,160,880,96,960,90.7C1040,85,1120,139,1200,165.3C1280,192,1360,192,1400,192L1440,192L1440,320L0,320Z'/></svg>") bottom/cover no-repeat,
+      linear-gradient(180deg, transparent, #050d15 80%);
+    z-index: -1;
+    opacity: 0.85;
+    pointer-events: none;
+  }
+
+  header.site {
+    padding: 28px clamp(16px, 3vw, 40px) 8px;
+    display: flex; flex-wrap: wrap; align-items: end; gap: 20px;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand-mark {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #6ad1ff, #2c89c7 60%, #0b3f5e);
+    display: grid; place-items: center;
+    box-shadow: 0 6px 24px rgba(106, 209, 255, 0.35), inset 0 0 0 1px rgba(255,255,255,0.15);
+    font-size: 22px;
+  }
+  h1 {
+    font-size: clamp(24px, 3vw, 34px);
+    margin: 0;
+    letter-spacing: -0.01em;
+    background: linear-gradient(180deg, #ffffff 30%, #94c8e0 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .tagline { color: var(--ink-mute); font-size: 13px; margin-top: 2px; }
+
+  .page-nav {
+    display: flex; gap: 4px;
+    background: rgba(7, 18, 30, 0.65);
+    border: 1px solid var(--panel-edge);
+    border-radius: 999px;
+    padding: 4px;
+    backdrop-filter: blur(8px);
+  }
+  .page-nav a {
+    padding: 6px 14px;
+    border-radius: 999px;
+    text-decoration: none;
+    font-size: 13px;
+    color: var(--ink-mute);
+    letter-spacing: 0.02em;
+  }
+  .page-nav a:hover { color: var(--ink); }
+  .page-nav a[aria-current="page"] {
+    background: linear-gradient(135deg, rgba(106,209,255,0.18), rgba(44,137,199,0.18));
+    color: var(--ink);
+    box-shadow: inset 0 0 0 1px rgba(106,209,255,0.25);
+  }
+
+  .clock {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-mute);
+    font-size: 13px;
+    display: flex; gap: 14px; align-items: center;
+  }
+  .clock .pulse {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent-evergreen);
+    box-shadow: 0 0 0 0 rgba(95, 194, 138, 0.8);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(95, 194, 138, 0.8); }
+    70% { box-shadow: 0 0 0 10px rgba(95, 194, 138, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(95, 194, 138, 0); }
+  }
+
+  main { padding: 12px clamp(16px, 3vw, 40px) 60px; }
+
+  .live-grid {
+    display: grid;
+    gap: 18px;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 900px) {
+    .live-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  .live-card {
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: var(--radius);
+    overflow: hidden;
+    backdrop-filter: blur(10px) saturate(1.1);
+    -webkit-backdrop-filter: blur(10px) saturate(1.1);
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column;
+  }
+  .live-video {
+    position: relative;
+    background: #000;
+    aspect-ratio: 16 / 9;
+    min-height: 200px;
+  }
+  .live-video video,
+  .live-video iframe,
+  .live-video img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    display: block;
+    background: #000;
+    border: 0;
+  }
+  /* For cams that embed a publisher's page (iframe type), crop out branding so
+     only the video player shows. Measured for thesandbar.cam at typical card
+     widths: their page renders ~84px of header above the 16:9 YouTube video. */
+  .live-video.iframe-crop { overflow: hidden; }
+  .live-video.iframe-crop iframe {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: calc(100% + 84px);
+    top: -84px;
+  }
+  .live-overlay {
+    position: absolute;
+    top: 12px; left: 12px;
+    display: flex; gap: 8px; align-items: center;
+    background: rgba(0,0,0,0.55);
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase;
+    backdrop-filter: blur(6px);
+  }
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #ff3b3b;
+    box-shadow: 0 0 8px #ff3b3b;
+    animation: pulse-red 1.4s infinite;
+  }
+  @keyframes pulse-red {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.85); }
+  }
+  .live-meta { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .live-meta h2 { margin: 0; font-size: 17px; letter-spacing: -0.01em; }
+  .live-meta .where { color: var(--ink-mute); font-size: 13px; }
+  .live-meta .status {
+    font-size: 12px; color: var(--ink-dim);
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 4px;
+  }
+  .live-meta .source-link {
+    color: var(--accent);
+    font-size: 12px;
+    text-decoration: none;
+    align-self: flex-start;
+    margin-top: 2px;
+  }
+  .live-meta .source-link:hover { text-decoration: underline; }
+
+  footer.site {
+    text-align: center;
+    color: var(--ink-dim);
+    font-size: 12px;
+    padding: 20px;
+    line-height: 1.6;
+  }
+  footer.site a { color: var(--ink-mute); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .live-dot, .clock .pulse { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">🌬️</div>
+    <div>
+      <h1>Gorge Cams</h1>
+      <div class="tagline">Live HLS streams · Port of Hood River</div>
+    </div>
+  </div>
+  <nav class="page-nav" aria-label="Mode">
+    <a href="index.html">Combined</a>
+    <a href="static.html">Static</a>
+    <a href="live.html" aria-current="page">Live video</a>
+    <a href="map.html">Map</a>
+  </nav>
+  <div class="clock">
+    <span class="pulse" aria-hidden="true"></span>
+    <span id="clock"></span>
+  </div>
+</header>
+
+<main>
+  <div class="live-grid" id="liveGrid"></div>
+</main>
+
+<footer class="site">
+  Streams courtesy of
+  <a href="https://www.portofhoodriver.com/live-cam-viewer" target="_blank" rel="noopener">Port of Hood River</a>,
+  KATU News, Port of Camas-Washougal — aggregated via
+  <a href="https://www.columbiarivergorge.info/webcams" target="_blank" rel="noopener">columbiarivergorge.info</a>.
+</footer>
+
+<script>
+  // ---------- Port of Hood River HLS handshake ----------
+  const PORT_HR = {
+    systemId: 'de6e1346-6c40-4956-923b-365b6ad83393',
+    user:     'info@portofhoodriver.com',
+    pass:     'nX*TyCKJg*G+6_$F',
+  };
+  let portAuth = null;
+  let portAuthAt = 0;
+
+  async function getPortAuth(force = false) {
+    if (!force && portAuth && Date.now() - portAuthAt < 3 * 60 * 1000) return portAuth;
+    const base = `https://${PORT_HR.systemId}.relay.vmsproxy.com`;
+    const r = await fetch(`${base}/api/getNonce`);
+    if (!r.ok) throw new Error('getNonce ' + r.status);
+    const { reply: { realm, nonce } } = await r.json();
+    const digest = CryptoJS.MD5(`${PORT_HR.user}:${realm}:${PORT_HR.pass}`).toString();
+    const ha2    = CryptoJS.MD5('GET:').toString();
+    const simple = CryptoJS.MD5(`${digest}:${nonce}:${ha2}`).toString();
+    portAuth = btoa(`${PORT_HR.user}:${nonce}:${simple}`);
+    portAuthAt = Date.now();
+    return portAuth;
+  }
+
+  function portCamUrl(cameraId, auth) {
+    return `https://${PORT_HR.systemId}.relay.vmsproxy.com/hls/${cameraId}.m3u8?lo&auth=${auth}`;
+  }
+
+  // ---------- Live cams ----------
+  const PORT_HR_VIEWER = 'https://www.portofhoodriver.com/live-cam-viewer';
+  const CRG_AGGREGATOR = 'https://www.columbiarivergorge.info/webcams';
+  const liveCams = [
+    { type: 'hls', streamUrl: 'https://live6.brownrice.com:444/washougalmarina/washougalmarina.stream/main_playlist.m3u8', name: 'Camas-Washougal Marina', where: 'Washougal, WA',                                          source: 'Port of Camas-Washougal', sourceUrl: 'https://portcw.com/marina/marina-webcam/' },
+    { type: 'hls', streamUrl: 'https://d237lhmlzpreh2.cloudfront.net/KATUB/hoodriver/m3u8/KATUB-HoodRiver_live.m3u8',     name: 'Hood River',             where: 'Hood River, OR — KATU news cam',                         source: 'KATU News',          sourceUrl: 'https://sinclairstoryline.com/resources/embeds/jw8-embed.html?file=https://d237lhmlzpreh2.cloudfront.net/KATUB/hoodriver/m3u8/KATUB-HoodRiver_live.m3u8?resize=true&autostart=true' },
+    { type: 'image', imageUrl: 'https://i.ytimg.com/vi/vg0MPeVsGPo/maxresdefault_live.jpg', refreshMs: 5000, name: 'The Sandbar',  where: 'Hood River, OR — sandbar at the mouth of the Hood River', source: 'thesandbar.cam',     sourceUrl: 'https://thesandbar.cam/' },
+    { type: 'hls', cameraId: 'f265991e-469e-82ae-37a3-bad6dd6b65c5', name: 'Bridge North', where: 'Hood River Bridge — looking north to White Salmon, WA', source: 'Port of Hood River', sourceUrl: PORT_HR_VIEWER },
+    { type: 'hls', cameraId: 'bccf45ad-2ef0-f28b-0f3c-2ce3ae8ad180', name: 'Marina',       where: 'Hood River Marina — boat basin &amp; sandbar',          source: 'Port of Hood River', sourceUrl: PORT_HR_VIEWER },
+    { type: 'hls', cameraId: '3d35c2ca-324b-8b39-e57b-3ce7f14145b6', name: 'Boat Launch',  where: 'Hood River — Nichols Boat Basin launch ramp',           source: 'Port of Hood River', sourceUrl: PORT_HR_VIEWER },
+    { type: 'hls', cameraId: '1e213db5-1d6a-b4f4-57b1-6bfa782666bb', name: 'Airport FBO',  where: 'Ken Jernstedt Airfield — Hood River, OR',               source: 'Port of Hood River', sourceUrl: PORT_HR_VIEWER },
+    { type: 'hls', streamUrl: 'https://d237lhmlzpreh2.cloudfront.net/KATUB/TheDalles/m3u8/TheDalles_live.m3u8',           name: 'The Dalles',             where: 'The Dalles, OR — KATU news cam',                         source: 'KATU News',          sourceUrl: 'https://sinclairstoryline.com/resources/embeds/jw8-embed.html?file=https://d237lhmlzpreh2.cloudfront.net/KATUB/TheDalles/m3u8/TheDalles_live.m3u8?resize=true&autostart=true' },
+    { type: 'hls', streamUrl: 'https://d237lhmlzpreh2.cloudfront.net/KATUB/SawtoothCam/m3u8/Sawtooth_live.m3u8',          name: 'Stacker Butte',          where: 'Columbia Hills, WA — overlooking The Dalles',            source: 'KATU News',          sourceUrl: 'https://sinclairstoryline.com/resources/video/players/prod/src/scripts/v1/dist/embed.html?file=https://d237lhmlzpreh2.cloudfront.net/KATUB/SawtoothCam/m3u8/Sawtooth_live.m3u8?resize=true&autostart=true&advertising=false' },
+  ];
+
+  const grid = document.getElementById('liveGrid');
+
+  function makeCard(cam) {
+    const card = document.createElement('article');
+    card.className = 'live-card';
+    const mediaHtml =
+      (cam.type === 'youtube' || cam.type === 'iframe') ? `<iframe data-iframe src="" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen scrolling="no"></iframe>` :
+      (cam.type === 'image')                            ? `<img data-image alt="${cam.name}" referrerpolicy="no-referrer" />` :
+                                                          `<video data-video muted playsinline controls preload="metadata"></video>`;
+    const videoCls = cam.type === 'iframe' ? ' iframe-crop' : '';
+    card.innerHTML = `
+      <div class="live-video${videoCls}">
+        <div class="live-overlay"><span class="live-dot"></span> Live</div>
+        ${mediaHtml}
+      </div>
+      <div class="live-meta">
+        <h2>${cam.name}</h2>
+        <div class="where">${cam.where}</div>
+        <a class="source-link" href="${cam.sourceUrl}" target="_blank" rel="noopener">View on ${cam.source} ↗</a>
+        <div class="status" data-status>Connecting…</div>
+      </div>
+    `;
+    cam._el = {
+      card,
+      video:  card.querySelector('[data-video]'),
+      iframe: card.querySelector('[data-iframe]'),
+      image:  card.querySelector('[data-image]'),
+      status: card.querySelector('[data-status]'),
+    };
+    return card;
+  }
+  liveCams.forEach(cam => grid.appendChild(makeCard(cam)));
+
+  function setStatus(cam, msg, level) {
+    cam._el.status.textContent = msg;
+    cam._el.status.style.color =
+      level === 'err' ? 'var(--danger)' :
+      level === 'ok'  ? 'var(--accent-evergreen)' :
+                        'var(--ink-dim)';
+  }
+
+  async function startStream(cam) {
+    if (cam.type === 'iframe' || cam.type === 'youtube') {
+      if (cam._loaded) return;
+      cam._el.iframe.src = cam.embedUrl
+        || (cam.videoId ? `https://www.youtube.com/embed/${cam.videoId}?autoplay=1&mute=1&playsinline=1&rel=0` : '');
+      cam._loaded = true;
+      setStatus(cam, 'Live · streaming', 'ok');
+      return;
+    }
+    if (cam.type === 'image') {
+      if (cam._loaded) return;
+      cam._loaded = true;
+      const refresh = () => {
+        const sep = cam.imageUrl.includes('?') ? '&' : '?';
+        cam._el.image.src = `${cam.imageUrl}${sep}t=${Date.now()}`;
+      };
+      refresh();
+      const period = cam.refreshMs || 5000;
+      setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, period);
+      setStatus(cam, `Live · thumbnail refresh ${Math.round(period/1000)}s`, 'ok');
+      return;
+    }
+
+    if (cam.streamUrl && cam._loaded) return;
+    setStatus(cam, 'Negotiating stream…');
+    let url;
+    if (cam.streamUrl) {
+      url = cam.streamUrl;
+      cam._loaded = true;
+    } else {
+      let auth;
+      try { auth = await getPortAuth(); }
+      catch (e) {
+        console.error(cam.name, e);
+        return setStatus(cam, 'Stream unavailable', 'err');
+      }
+      url = portCamUrl(cam.cameraId, auth);
+    }
+
+    if (cam._hls) { cam._hls.destroy(); cam._hls = null; }
+
+    if (window.Hls && Hls.isSupported()) {
+      const hls = new Hls({ liveDurationInfinity: true, lowLatencyMode: true });
+      cam._hls = hls;
+      hls.loadSource(url);
+      hls.attachMedia(cam._el.video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setStatus(cam, 'Live · streaming', 'ok');
+        cam._el.video.play().catch(()=>{});
+      });
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        if (data.fatal) {
+          setStatus(cam, 'Reconnecting…', 'err');
+          // Force-refresh auth on next attempt
+          portAuth = null;
+          setTimeout(() => startStream(cam), 4000);
+        }
+      });
+    } else if (cam._el.video.canPlayType('application/vnd.apple.mpegurl')) {
+      cam._el.video.src = url;
+      cam._el.video.addEventListener('loadedmetadata', () => setStatus(cam, 'Live · streaming', 'ok'), { once: true });
+      cam._el.video.addEventListener('error', () => setStatus(cam, 'Stream error', 'err'), { once: true });
+    } else {
+      setStatus(cam, 'Your browser does not support HLS playback', 'err');
+    }
+  }
+
+  function tickClock() {
+    const d = new Date();
+    const opts = { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' };
+    document.getElementById('clock').textContent = d.toLocaleString(undefined, opts);
+  }
+  tickClock(); setInterval(tickClock, 1000 * 30);
+
+  window.addEventListener('load', () => {
+    const ready = () => window.CryptoJS && (window.Hls || document.createElement('video').canPlayType('application/vnd.apple.mpegurl'));
+    if (ready()) liveCams.forEach(startStream);
+    else setTimeout(() => liveCams.forEach(startStream), 1500);
+  });
+
+  // Re-handshake every 4 min for Port of Hood River cams (nonces expire).
+  // Skip cams using a raw streamUrl or non-HLS types — they don't need re-init.
+  setInterval(() => {
+    if (document.visibilityState !== 'visible') return;
+    liveCams.forEach(cam => {
+      if (cam.streamUrl || cam.type === 'youtube' || cam.type === 'iframe' || cam.type === 'image') return;
+      startStream(cam);
+    });
+  }, 4 * 60 * 1000);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Gorge Cams — Map</title>
+<meta name="description" content="Position and orient each Gorge cam on a map. Drag to move, slider to rotate, copy as JSON." />
+<meta name="theme-color" content="#0b2030" />
+<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text x='50%' y='58%' font-size='72' text-anchor='middle' dominant-baseline='middle'>🗺️</text></svg>" />
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<style>
+  :root {
+    --bg-0: #050d15;
+    --panel: rgba(14, 32, 48, 0.78);
+    --panel-edge: rgba(120, 200, 230, 0.18);
+    --ink: #eaf4fb;
+    --ink-mute: #94b3c4;
+    --ink-dim: #5e7a8c;
+    --accent: #6ad1ff;
+    --accent-warm: #ffb86b;
+    --accent-evergreen: #5fc28a;
+    --danger: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg-0);
+    display: flex; flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  header.site {
+    flex: 0 0 auto;
+    padding: 12px clamp(12px, 2vw, 24px);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--panel-edge);
+    backdrop-filter: blur(10px);
+    z-index: 500;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark {
+    width: 34px; height: 34px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #6ad1ff, #2c89c7 60%, #0b3f5e);
+    display: grid; place-items: center;
+    box-shadow: 0 4px 16px rgba(106, 209, 255, 0.3), inset 0 0 0 1px rgba(255,255,255,0.15);
+    font-size: 16px;
+  }
+  h1 {
+    font-size: 18px;
+    margin: 0;
+    letter-spacing: -0.01em;
+    background: linear-gradient(180deg, #ffffff 30%, #94c8e0 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .page-nav {
+    display: flex; gap: 4px;
+    background: rgba(7, 18, 30, 0.65);
+    border: 1px solid var(--panel-edge);
+    border-radius: 999px;
+    padding: 4px;
+  }
+  .page-nav a {
+    padding: 6px 12px;
+    border-radius: 999px;
+    text-decoration: none;
+    font-size: 12px;
+    color: var(--ink-mute);
+  }
+  .page-nav a:hover { color: var(--ink); }
+  .page-nav a[aria-current="page"] {
+    background: linear-gradient(135deg, rgba(106,209,255,0.18), rgba(44,137,199,0.18));
+    color: var(--ink);
+    box-shadow: inset 0 0 0 1px rgba(106,209,255,0.25);
+  }
+
+  .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .btn {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--panel-edge);
+    background: rgba(14, 32, 48, 0.6);
+    color: var(--ink);
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease;
+  }
+  .btn:hover { border-color: rgba(106, 209, 255, 0.4); background: rgba(14, 32, 48, 0.85); }
+  .btn-primary {
+    background: linear-gradient(135deg, #6ad1ff, #2c89c7);
+    color: #04111c;
+    font-weight: 600;
+    border-color: transparent;
+  }
+  .btn-primary:hover { filter: brightness(1.05); border-color: transparent; }
+  .btn-danger { color: var(--danger); }
+  .btn-danger:hover { border-color: rgba(255, 107, 107, 0.5); }
+
+  #map { flex: 1 1 auto; background: #07182a; }
+  .leaflet-container { background: #07182a; font-family: inherit; }
+  .leaflet-control-attribution { background: rgba(7, 18, 30, 0.75); color: var(--ink-dim); }
+  .leaflet-control-attribution a { color: var(--ink-mute); }
+
+  /* Cam marker */
+  .cam-marker { background: transparent; border: none; }
+  .cam-icon {
+    width: 48px; height: 48px;
+    transform-origin: center center;
+    transition: filter 0.18s ease;
+    will-change: transform;
+  }
+  .cam-icon svg { width: 100%; height: 100%; overflow: visible; display: block; }
+  .cam-marker:hover .cam-icon { filter: drop-shadow(0 0 6px rgba(106,209,255,0.7)); }
+  .cam-icon.selected { filter: drop-shadow(0 0 10px rgba(255, 184, 107, 0.9)); }
+  .cam-icon.selected .cam-body { stroke: var(--accent-warm); }
+  .cam-icon.selected .cam-lens { fill: var(--accent-warm); }
+  .cam-icon.selected .cam-cone { fill: rgba(255, 184, 107, 0.22); stroke: rgba(255, 184, 107, 0.75); }
+
+  .leaflet-tooltip {
+    background: rgba(7, 18, 30, 0.92);
+    color: var(--ink);
+    border: 1px solid var(--panel-edge);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+  .leaflet-tooltip-top:before,
+  .leaflet-tooltip-bottom:before,
+  .leaflet-tooltip-left:before,
+  .leaflet-tooltip-right:before { display: none; }
+
+  /* Rotation panel */
+  #rotationPanel {
+    position: absolute;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 14px;
+    padding: 14px 18px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    display: none;
+    align-items: center;
+    gap: 16px;
+    z-index: 1000;
+    max-width: calc(100% - 32px);
+  }
+  #rotationPanel.open { display: flex; }
+  #rotationPanel .sel-thumb {
+    flex: 0 0 auto;
+    width: 140px; height: 100px;
+    background: #000;
+    border: 1px solid var(--panel-edge);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    display: block;
+    text-decoration: none;
+    transition: border-color 0.15s ease;
+  }
+  #rotationPanel .sel-thumb:hover { border-color: rgba(106, 209, 255, 0.45); }
+  #rotationPanel .sel-thumb img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  #rotationPanel .sel-thumb-placeholder {
+    position: absolute; inset: 0;
+    display: none;
+    place-items: center;
+    color: var(--ink-dim);
+    font-size: 11px;
+    text-align: center;
+    padding: 8px;
+  }
+  #rotationPanel .sel-thumb.no-image img { display: none; }
+  #rotationPanel .sel-thumb.no-image .sel-thumb-placeholder { display: grid; }
+  #rotationPanel .sel-info { min-width: 180px; max-width: 240px; }
+  #rotationPanel .sel-name {
+    font-weight: 600;
+    font-size: 14px;
+  }
+  #rotationPanel .sel-coords {
+    font-size: 11px;
+    color: var(--ink-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  #rotationPanel .sel-links {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+  }
+  #rotationPanel .sel-link {
+    font-size: 11px;
+    color: var(--accent);
+    text-decoration: none;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(106, 209, 255, 0.25);
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  #rotationPanel .sel-link:hover { background: rgba(106, 209, 255, 0.15); color: var(--ink); }
+  #rotationPanel label {
+    font-size: 12px;
+    color: var(--ink-mute);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  #headingSlider {
+    width: 220px;
+    accent-color: var(--accent);
+  }
+  #headingValue {
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    min-width: 42px;
+    text-align: right;
+    color: var(--ink);
+  }
+  #rotationPanel .nudge {
+    display: flex; gap: 4px;
+  }
+  #rotationPanel .nudge button {
+    background: rgba(7, 18, 30, 0.6);
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    display: grid; place-items: center;
+  }
+  #rotationPanel .nudge button:hover { border-color: rgba(106,209,255,0.5); }
+  #rotationPanel .close-btn {
+    background: transparent;
+    border: none;
+    color: var(--ink-mute);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 0 4px;
+  }
+
+  #toast {
+    position: absolute;
+    top: 80px; left: 50%; transform: translateX(-50%);
+    background: var(--accent-evergreen);
+    color: #04111c;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index: 2000;
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translate(-50%, 8px);
+  }
+
+  @media (max-width: 700px) {
+    #rotationPanel { flex-wrap: wrap; gap: 10px; padding: 12px; }
+    #rotationPanel .sel-name { min-width: 0; flex-basis: 100%; }
+    #headingSlider { width: 160px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">🗺️</div>
+    <h1>Gorge Cams · Map</h1>
+  </div>
+  <nav class="page-nav" aria-label="Mode">
+    <a href="index.html">Combined</a>
+    <a href="static.html">Static</a>
+    <a href="live.html">Live video</a>
+    <a href="map.html" aria-current="page">Map</a>
+  </nav>
+  <div class="actions">
+    <button class="btn" id="resetDefaults" title="Reset all cam positions to built-in defaults">Reset</button>
+    <button class="btn btn-primary" id="copyJson">Copy cam locations</button>
+  </div>
+</header>
+
+<div id="map"></div>
+
+<div id="rotationPanel">
+  <a id="selThumbLink" class="sel-thumb" target="_blank" rel="noopener" title="Open live cam">
+    <img id="selThumb" alt="" />
+    <div class="sel-thumb-placeholder">No snapshot</div>
+  </a>
+  <div class="sel-info">
+    <div class="sel-name" id="selName">—</div>
+    <div class="sel-coords" id="selCoords">—</div>
+    <div class="sel-links">
+      <a id="selSourceLink" class="sel-link" target="_blank" rel="noopener">Open live cam ↗</a>
+    </div>
+  </div>
+  <label for="headingSlider">Heading</label>
+  <input type="range" id="headingSlider" min="0" max="359" value="0" />
+  <span id="headingValue">0°</span>
+  <div class="nudge">
+    <button id="nudgeMinus" title="Rotate -1° (left arrow)">−</button>
+    <button id="nudgePlus" title="Rotate +1° (right arrow)">+</button>
+  </div>
+  <button class="close-btn" id="closeRotation" title="Deselect">×</button>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  // ----- Default cam locations -----
+  // Approximate lat/lon and rough heading (degrees from north, clockwise).
+  // Drag markers to refine; use slider to set viewing direction.
+  const KATU_HOODRIVER     = 'https://d237lhmlzpreh2.cloudfront.net/KATUB/hoodriver/m3u8/KATUB-HoodRiver_live.m3u8';
+  const KATU_THEDALLES     = 'https://d237lhmlzpreh2.cloudfront.net/KATUB/TheDalles/m3u8/TheDalles_live.m3u8';
+  const KATU_STACKERBUTTE  = 'https://d237lhmlzpreh2.cloudfront.net/KATUB/SawtoothCam/m3u8/Sawtooth_live.m3u8';
+  const SINCLAIR_JW8       = 'https://sinclairstoryline.com/resources/embeds/jw8-embed.html?file=';
+  const SINCLAIR_V1        = 'https://sinclairstoryline.com/resources/video/players/prod/src/scripts/v1/dist/embed.html?file=';
+  const PORT_HR_VIEWER     = 'https://www.portofhoodriver.com/live-cam-viewer';
+  const SAILWORKS          = 'https://www.sailworks.com/bp/Gorge_Wind_Cams.html';
+  const TRIPCHECK          = 'https://tripcheck.com/';
+
+  const defaultCams = [
+    // West
+    { name: 'Camas-Washougal Marina',  lat: 45.5697, lon: -122.4117, heading: 170, imageUrl: 'https://live6.brownrice.com/cam-images/washougalmarina.jpg',           sourceUrl: 'https://portcw.com/marina/marina-webcam/' },
+    { name: 'Rooster Rock State Park', lat: 45.5475, lon: -122.2295, heading: 90,  imageUrl: 'https://sauviewind.net/rooster/camera0.jpg',                           sourceUrl: 'https://sauviewind.net/' },
+    { name: 'Stevenson Kite Beach',    lat: 45.6935, lon: -121.8980, heading: 180, imageUrl: 'https://g1.ipcamlive.com/player/snapshot.php?alias=kite',              sourceUrl: 'https://www.visitstevensonwa.com/live-kite-cam/' },
+    { name: "Bob's Beach",             lat: 45.6943, lon: -121.8851, heading: 180, imageUrl: 'https://g1.ipcamlive.com/player/snapshot.php?alias=61f8358c542e7',     sourceUrl: 'https://www.visitstevensonwa.com/live-bobs-beach-cam/' },
+    { name: 'City of Stevenson',       lat: 45.6942, lon: -121.8810, heading: 180, imageUrl: 'https://g1.ipcamlive.com/player/snapshot.php?alias=63190408cec88',     sourceUrl: 'https://www.visitstevensonwa.com/live-city-cam/' },
+    { name: 'Cascade Boat Ramp',       lat: 45.6907, lon: -121.9015, heading: 180, imageUrl: 'https://g1.ipcamlive.com/player/snapshot.php?alias=stevensonboatlaunch', sourceUrl: 'https://www.visitstevensonwa.com/cascade-boat-ramp-live-cam/' },
+    // Hood River / White Salmon
+    { name: 'The Sandbar',             lat: 45.7224, lon: -121.5100, heading: 270, imageUrl: 'https://i.ytimg.com/vi/vg0MPeVsGPo/maxresdefault_live.jpg',            sourceUrl: 'https://thesandbar.cam/' },
+    { name: 'Wells Island',            lat: 45.6957, lon: -121.6890, heading: 180, imageUrl: 'https://niknas.net/webcam1.jpg',                                       sourceUrl: 'https://niknas.net/' },
+    { name: 'Hood River',              lat: 45.7275, lon: -121.4985, heading: 190,                                                                                   sourceUrl: `${SINCLAIR_JW8}${KATU_HOODRIVER}?resize=true&autostart=true` },
+    { name: 'Hood River Spit',         lat: 45.7140, lon: -121.5070, heading: 310, imageUrl: 'https://g1.ipcamlive.com/player/snapshot.php?alias=5a45712fd58a3',     sourceUrl: 'https://g1.ipcamlive.com/player/player.php?alias=5a45712fd58a3&autoplay=1' },
+    { name: 'Hood River Bridge North', lat: 45.7185, lon: -121.5050, heading: 0,                                                                                     sourceUrl: PORT_HR_VIEWER },
+    { name: 'Hood River Marina',       lat: 45.7170, lon: -121.5040, heading: 340,                                                                                   sourceUrl: PORT_HR_VIEWER },
+    { name: 'Hood River Boat Launch',  lat: 45.7158, lon: -121.5070, heading: 315,                                                                                   sourceUrl: PORT_HR_VIEWER },
+    { name: 'Hood River Airport FBO',  lat: 45.6720, lon: -121.5340, heading: 270,                                                                                   sourceUrl: PORT_HR_VIEWER },
+    // Cams currently in "not connecting" list — still positioned for completeness
+    { name: 'Event Site',              lat: 45.7165, lon: -121.5170, heading: 0,   imageUrl: 'http://209.216.188.4:81/axis-cgi/jpg/image.cgi',                       sourceUrl: SAILWORKS },
+    { name: 'Skyline Hospital',        lat: 45.7380, lon: -121.4870, heading: 180, imageUrl: 'https://myskylinehealth.org/gorgecam/Gorgecam.jpg',                    sourceUrl: 'https://myskylinehealth.org/' },
+    // East
+    { name: 'The Dalles',              lat: 45.6045, lon: -121.1761, heading: 180,                                                                                   sourceUrl: `${SINCLAIR_JW8}${KATU_THEDALLES}?resize=true&autostart=true` },
+    { name: 'Stacker Butte',           lat: 45.6817, lon: -121.1118, heading: 190,                                                                                   sourceUrl: `${SINCLAIR_V1}${KATU_STACKERBUTTE}?resize=true&autostart=true&advertising=false` },
+    { name: 'WSDOT Dallesport',        lat: 45.6165, lon: -121.1670, heading: 90,  imageUrl: 'http://images.wsdot.wa.gov/airports/Dalles.jpg',                       sourceUrl: 'https://wsdot.com/travel/real-time/airport-cameras' },
+    { name: 'I-84 @ Celilo',           lat: 45.6520, lon: -121.0050, heading: 90,  imageUrl: 'http://tripcheck.com/RoadCams/cams/I-84%20at%20Celilo_pid2748.JPG',    sourceUrl: TRIPCHECK },
+    { name: 'I-84 @ Biggs Junction',   lat: 45.6608, lon: -120.8366, heading: 90,  imageUrl: 'http://tripcheck.com/RoadCams/cams/I-84%20at%20US97%20Biggs%20Jct._pid3097.JPG', sourceUrl: TRIPCHECK },
+    { name: 'I-84 @ Arlington',        lat: 45.7165, lon: -120.1985, heading: 90,  imageUrl: 'https://tripcheck.com/RoadCams/cams/Arlington_pid600.jpg',             sourceUrl: TRIPCHECK },
+  ];
+
+  const STORAGE_KEY = 'gorge_cam_locations_v1';
+
+  function loadCams() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const saved = JSON.parse(raw);
+      // Merge: start from defaults, overwrite with any saved values matching by name.
+      // New cams that exist in defaults but not in saved are still added.
+      return defaultCams.map(d => {
+        const s = saved.find(x => x.name === d.name);
+        // Always carry forward all default fields (esp. sourceUrl); only override lat/lon/heading from saved.
+        return s ? { ...d, lat: s.lat ?? d.lat, lon: s.lon ?? d.lon, heading: s.heading ?? d.heading } : { ...d };
+      });
+    } catch { return null; }
+  }
+  function saveCams() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cams));
+  }
+
+  const cams = loadCams() || defaultCams.map(d => ({ ...d }));
+
+  // ----- Icon factory -----
+  const CAM_SVG = `
+    <svg viewBox="-50 -50 100 100">
+      <path class="cam-cone" d="M-30 -8 L0 -48 L30 -8 Z" fill="rgba(106,209,255,0.22)" stroke="rgba(106,209,255,0.75)" stroke-width="2" stroke-linejoin="round" />
+      <circle class="cam-body" cx="0" cy="0" r="14" fill="#0b2030" stroke="#6ad1ff" stroke-width="2.5" />
+      <circle class="cam-lens" cx="0" cy="0" r="6" fill="#6ad1ff" />
+      <circle cx="0" cy="0" r="2" fill="#0b2030" />
+    </svg>
+  `;
+
+  function makeIcon(heading) {
+    return L.divIcon({
+      className: 'cam-marker',
+      html: `<div class="cam-icon" style="transform: rotate(${heading}deg);">${CAM_SVG}</div>`,
+      iconSize: [48, 48],
+      iconAnchor: [24, 24],
+    });
+  }
+
+  // ----- Map setup -----
+  const map = L.map('map', { zoomControl: true }).setView([45.66, -121.55], 10);
+  // Dark tile layer (Carto) keeps the gorge cam aesthetic
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 19,
+  }).addTo(map);
+
+  // ----- Render markers -----
+  const markers = new Map(); // name -> { cam, marker }
+  cams.forEach(cam => {
+    const marker = L.marker([cam.lat, cam.lon], {
+      draggable: true,
+      icon: makeIcon(cam.heading),
+      autoPan: true,
+    }).addTo(map).bindTooltip(cam.name, { direction: 'top', offset: [0, -22] });
+
+    marker.on('dragend', e => {
+      const ll = e.target.getLatLng();
+      cam.lat = +ll.lat.toFixed(6);
+      cam.lon = +ll.lng.toFixed(6);
+      saveCams();
+      if (selected && selected.cam === cam) updateRotationPanel();
+    });
+    marker.on('click', () => selectCam(cam));
+
+    markers.set(cam.name, { cam, marker });
+  });
+
+  // ----- Selection / rotation -----
+  let selected = null;
+  const panel = document.getElementById('rotationPanel');
+  const selNameEl = document.getElementById('selName');
+  const selCoordsEl = document.getElementById('selCoords');
+  const selSourceLink = document.getElementById('selSourceLink');
+  const selThumbLink  = document.getElementById('selThumbLink');
+  const selThumb      = document.getElementById('selThumb');
+  const slider = document.getElementById('headingSlider');
+  const headingValueEl = document.getElementById('headingValue');
+
+  function setHeadingOnMarker(marker, heading) {
+    const el = marker.getElement();
+    if (!el) return;
+    const inner = el.querySelector('.cam-icon');
+    if (inner) inner.style.transform = `rotate(${heading}deg)`;
+  }
+  function highlightMarker(marker, on) {
+    const el = marker.getElement();
+    if (!el) return;
+    const inner = el.querySelector('.cam-icon');
+    if (inner) inner.classList.toggle('selected', !!on);
+  }
+
+  function selectCam(cam) {
+    if (selected) highlightMarker(selected.marker, false);
+    const entry = markers.get(cam.name);
+    selected = { cam, marker: entry.marker };
+    highlightMarker(entry.marker, true);
+    updateRotationPanel();
+    panel.classList.add('open');
+  }
+  function deselect() {
+    if (selected) highlightMarker(selected.marker, false);
+    selected = null;
+    panel.classList.remove('open');
+  }
+  function updateRotationPanel() {
+    if (!selected) return;
+    const { cam } = selected;
+    selNameEl.textContent = cam.name;
+    selCoordsEl.textContent = `${cam.lat.toFixed(5)}, ${cam.lon.toFixed(5)}`;
+    slider.value = cam.heading;
+    headingValueEl.textContent = `${cam.heading}°`;
+    if (cam.sourceUrl) {
+      selSourceLink.href = cam.sourceUrl;
+      selSourceLink.style.display = '';
+      selThumbLink.href = cam.sourceUrl;
+    } else {
+      selSourceLink.style.display = 'none';
+      selThumbLink.removeAttribute('href');
+    }
+    if (cam.imageUrl) {
+      selThumbLink.classList.remove('no-image');
+      const sep = cam.imageUrl.includes('?') ? '&' : '?';
+      selThumb.src = `${cam.imageUrl}${sep}t=${Date.now()}`;
+    } else {
+      selThumbLink.classList.add('no-image');
+      selThumb.removeAttribute('src');
+    }
+  }
+  function applyHeading(h) {
+    if (!selected) return;
+    h = ((h % 360) + 360) % 360;
+    selected.cam.heading = h;
+    slider.value = h;
+    headingValueEl.textContent = `${h}°`;
+    setHeadingOnMarker(selected.marker, h);
+    saveCams();
+  }
+
+  slider.addEventListener('input', e => applyHeading(+e.target.value));
+  document.getElementById('nudgeMinus').addEventListener('click', () => applyHeading((selected?.cam.heading ?? 0) - 1));
+  document.getElementById('nudgePlus').addEventListener('click',  () => applyHeading((selected?.cam.heading ?? 0) + 1));
+  document.getElementById('closeRotation').addEventListener('click', deselect);
+
+  document.addEventListener('keydown', e => {
+    if (!selected) return;
+    if (e.target.matches('input, textarea, button')) return;
+    if (e.key === 'ArrowLeft')  { applyHeading(selected.cam.heading - (e.shiftKey ? 10 : 1)); e.preventDefault(); }
+    if (e.key === 'ArrowRight') { applyHeading(selected.cam.heading + (e.shiftKey ? 10 : 1)); e.preventDefault(); }
+    if (e.key === 'Escape')     { deselect(); }
+  });
+
+  // Click on empty map deselects
+  map.on('click', () => deselect());
+
+  // ----- Copy / reset -----
+  function toast(msg, level = 'ok') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.style.background = level === 'err' ? 'var(--danger)' : 'var(--accent-evergreen)';
+    el.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => el.classList.remove('show'), 1800);
+  }
+
+  document.getElementById('copyJson').addEventListener('click', async () => {
+    const out = cams.map(c => ({
+      name: c.name,
+      lat: +c.lat.toFixed(6),
+      lon: +c.lon.toFixed(6),
+      heading: c.heading | 0,
+    }));
+    const text = JSON.stringify(out, null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(`Copied ${out.length} cam locations to clipboard`);
+    } catch {
+      // Fallback: open a prompt with the JSON
+      window.prompt('Copy this JSON:', text);
+    }
+  });
+
+  document.getElementById('resetDefaults').addEventListener('click', () => {
+    if (!confirm('Reset every cam back to its built-in default position and heading? Your edits will be lost.')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    location.reload();
+  });
+</script>
+
+</body>
+</html>
